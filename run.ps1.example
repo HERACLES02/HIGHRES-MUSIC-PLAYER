@@ -1,0 +1,15 @@
+.\.venv\Scripts\Activate.ps1
+$env:MUSIC_DIR="C:\path\to\your\music"
+$env:PLAYLIST_FILE="$PSScriptRoot\playlist.json"
+
+# Generate your own SECRET_KEY:
+#   python -c "import secrets; print(secrets.token_hex(32))"
+$env:SECRET_KEY="replace-with-a-random-secret-key"
+
+$env:ADMIN_USERNAME="admin"
+
+# Generate your own password hash (replace 'your-password' first):
+#   python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('your-password'))"
+$env:ADMIN_PASSWORD_HASH="replace-with-a-generated-hash"
+
+python app.py

@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      (function () {
+        try {
+          var stored = window.localStorage.getItem("theme");
+          if (stored) document.documentElement.setAttribute("data-theme", stored);
+        } catch (error) {
+          /* localStorage unavailable, default theme stays applied */
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      function withOpacity(variable) {
+        return function (helpers) {
+          if (helpers.opacityValue !== undefined) return "rgb(var(" + variable + ") / " + helpers.opacityValue + ")";
+          return "rgb(var(" + variable + "))";
+        };
+      }
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              black: withOpacity("--color-black"),
+              white: withOpacity("--color-white"),
+              zinc: {
+                50: withOpacity("--color-zinc-50"),
+                100: withOpacity("--color-zinc-100"),
+                200: withOpacity("--color-zinc-200"),
+                300: withOpacity("--color-zinc-300"),
+                400: withOpacity("--color-zinc-400"),
+                500: withOpacity("--color-zinc-500"),
+                600: withOpacity("--color-zinc-600"),
+                700: withOpacity("--color-zinc-700"),
+                800: withOpacity("--color-zinc-800"),
+                900: withOpacity("--color-zinc-900"),
+                950: withOpacity("--color-zinc-950"),
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
+    <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.svg') }}" />
+    <meta name="theme-color" content="#5b7cfa" />
+    <meta name="csrf-token" content="{{ csrf_token() }}" />
+    <title>{{ title }}</title>
+  </head>
+
+  <body class="min-h-screen text-zinc-100">
+    <video id="bgVideo" class="fixed inset-0 -z-20 hidden h-full w-full object-cover opacity-35" autoplay muted loop playsinline></video>
+    <div id="bg"></div>
+
+    <div class="app-shell mx-auto px-3 pb-40 pt-5 sm:px-5 lg:px-6">
+      <header class="flex flex-col gap-4 border-b border-zinc-800 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-center gap-3">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" />
+              <circle cx="18" cy="16" r="3" />
+            </svg>
+          </span>
+          <div>
+            <h1 class="text-lg font-semibold tracking-tight sm:text-xl">{{ title }}</h1>
+            <p class="text-xs text-zinc-500">Local high-resolution music library</p>
+          </div>
+        </div>
+
+        <div class="search-field w-full lg:mx-6 lg:max-w-xl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m21 21-4.34-4.34" />
+            <circle cx="11" cy="11" r="8" />
+          </svg>
+          <input
+            id="search"
+            type="search"
+            placeholder="Search title, artist, or album"
+            class="w-full rounded-xl border border-zinc-700 bg-black/70 px-4 py-3 text-sm outline-none focus:border-zinc-300"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="theme-switch" role="group" aria-label="App theme">
+            <button type="button" data-theme-btn="light" aria-pressed="true" title="Light">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
+            </button>
+            <button type="button" data-theme-btn="dark" aria-pressed="false" title="Dim dark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
+            </button>
+            <button type="button" data-theme-btn="amoled" aria-pressed="false" title="AMOLED black">
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="8" /></svg>
+            </button>
+          </div>
+          <button type="button" data-action="refresh-library" class="icon-btn" title="Refresh library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>
+          </button>
+          <button type="button" data-action="show-settings" class="icon-btn" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg>
+          </button>
+          <input id="backgroundInput" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" class="hidden" />
+          <input id="restoreInput" type="file" accept=".zip,application/zip" class="hidden" />
+          <span id="currentUsername" class="hidden text-xs text-zinc-500 sm:inline"></span>
+          <form method="post" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="icon-btn" title="Logout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg>
+            </button>
+          </form>
+        </div>
+      </header>
+
+      {% if tracks %}
+        <div class="content-grid grid gap-5 pt-5">
+          <aside class="space-y-4">
+            <section class="rounded-xl border border-zinc-800 bg-black/60 p-4">
+              <div class="nav-section-label mb-3">Library</div>
+              <div class="space-y-1">
+                <button id="view-home" type="button" data-action="show-home" class="view-button w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-900">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  <span>Home</span>
+                </button>
+                <button id="view-library" type="button" data-action="show-library" class="view-button w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-900">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h.01" /><path d="M3 12h.01" /><path d="M3 19h.01" /><path d="M8 5h13" /><path d="M8 12h13" /><path d="M8 19h13" /></svg>
+                  <span>All tracks</span>
+                  <span id="libraryCount" class="ml-auto text-zinc-500"></span>
+                </button>
+                <button id="view-liked" type="button" data-action="show-liked" class="view-button w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-900">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" /></svg>
+                  <span>Liked songs</span>
+                  <span id="likedCount" class="ml-auto text-zinc-500"></span>
+                </button>
+                <button id="view-settings" type="button" data-action="show-settings" class="view-button w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-900">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" /></svg>
+                  <span>Settings</span>
+                </button>
+              </div>
+              <div class="mt-4 border-t border-zinc-800 pt-3">
+                <div class="nav-section-label mb-2">Folders</div>
+                <div id="folderList" class="max-h-72 space-y-1 overflow-y-auto pr-1"></div>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-zinc-800 bg-black/60 p-4">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div class="nav-section-label">Playlists</div>
+                <button type="button" data-action="create-playlist" class="icon-btn !p-1.5" title="New playlist">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              </div>
+              <label for="playlistTarget" class="mb-2 block text-xs text-zinc-500">Add target</label>
+              <select
+                id="playlistTarget"
+                class="mb-3 w-full rounded-lg border border-zinc-700 bg-black px-3 py-2 text-sm outline-none focus:border-zinc-300"
+                data-action="playlist-target"
+              ></select>
+              <div id="playlistList" class="space-y-1"></div>
+            </section>
+          </aside>
+
+          <main>
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 id="viewTitle" class="text-xl font-semibold">Home</h2>
+                <p id="viewSubtitle" class="text-sm text-zinc-400"></p>
+              </div>
+              <button
+                id="deletePlaylistButton"
+                type="button"
+                data-action="delete-current-playlist"
+                class="hidden rounded-xl border border-red-900/70 bg-red-950/40 px-4 py-2 text-sm text-red-100 hover:bg-red-950/70"
+              >
+                Delete playlist
+              </button>
+              <button
+                id="coverUploadButton"
+                type="button"
+                data-action="choose-view-cover"
+                class="hidden rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm hover:bg-zinc-900"
+              >
+                Set cover
+              </button>
+              <button
+                id="exportPlaylistButton"
+                type="button"
+                data-action="export-playlist"
+                class="hidden rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm hover:bg-zinc-900"
+              >
+                Export M3U
+              </button>
+              <button
+                type="button"
+                data-action="select-visible"
+                class="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm hover:bg-zinc-900"
+              >
+                Select visible
+              </button>
+              <button
+                type="button"
+                data-action="clear-selection"
+                class="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm hover:bg-zinc-900"
+              >
+                Clear selection
+              </button>
+              <input id="coverUploadInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" />
+            </div>
+
+            <section id="homeContent" class="space-y-8">
+              <div id="continueSection" class="hidden">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Continue Listening</h3>
+                  <button type="button" data-action="show-smart-continue" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all</button>
+                </div>
+                <div id="continueTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+
+              <div id="recentSection" class="hidden">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Recently Played</h3>
+                  <button type="button" data-action="show-smart-recently" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all</button>
+                </div>
+                <div id="recentTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+
+              <div id="mostPlayedSection" class="hidden">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Most Played</h3>
+                  <button type="button" data-action="show-smart-most-played" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all</button>
+                </div>
+                <div id="mostPlayedTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Your Library</h3>
+                  <button type="button" data-action="show-library" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all tracks</button>
+                </div>
+                <div id="homeTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Playlists</h3>
+                  <button type="button" data-action="create-playlist" class="text-sm font-semibold text-zinc-400 hover:text-white">New playlist</button>
+                </div>
+                <div id="homePlaylistTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Artists</h3>
+                  <button type="button" data-action="show-all-artists" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all</button>
+                </div>
+                <div id="artistTiles" class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"></div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Albums</h3>
+                  <button type="button" data-action="show-all-albums" class="text-sm font-semibold text-zinc-400 hover:text-white">Show all</button>
+                </div>
+                <div id="albumTiles" class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"></div>
+              </div>
+
+              <div>
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h3 class="text-lg font-semibold">Smart Mixes</h3>
+                </div>
+                <div id="smartTiles" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
+              </div>
+            </section>
+
+            <div id="gridScroller" class="hidden relative">
+              <div id="grid" class="track-grid absolute inset-x-0 top-0 grid gap-3"></div>
+            </div>
+            <div id="gridControls" class="mt-4 hidden items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-black/50 px-4 py-3">
+              <div id="gridSummary" class="text-sm text-zinc-400"></div>
+            </div>
+
+            <div id="emptyState" class="mt-6 hidden rounded-xl border border-zinc-800 bg-black/60 p-6 text-zinc-300">
+              No tracks match this view.
+            </div>
+
+            <section id="detailContent" class="hidden rounded-xl border border-zinc-800 bg-black/60 p-5"></section>
+          </main>
+
+          <aside class="now-panel-fixed hidden 2xl:block">
+            <div class="now-panel-surface space-y-4 p-4">
+              <button
+                type="button"
+                data-action="show-home"
+                class="home-link w-full rounded-xl px-4 py-3 text-left text-sm font-semibold"
+              >
+                Home
+              </button>
+              <section class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+                <div class="mb-3 truncate text-sm font-semibold" id="sideAlbum">No track selected</div>
+                <div class="aspect-square overflow-hidden rounded-lg border border-zinc-800 bg-black">
+                  <img id="sideCover" class="hidden h-full w-full object-cover" alt="" />
+                  <div id="sideCoverFallback" class="flex h-full w-full items-center justify-center text-zinc-500">No art</div>
+                </div>
+                <div class="mt-5 flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div id="sideTitle" class="truncate text-2xl font-bold">Nothing playing</div>
+                    <div id="sideArtist" class="mt-1 truncate text-sm text-zinc-400">Choose a song</div>
+                  </div>
+                  <div id="sideLiked" class="hidden rounded-full bg-green-500 px-2 py-1 text-xs font-bold text-black">Liked</div>
+                </div>
+              </section>
+
+              <section class="rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+                <div class="mb-4 text-base font-semibold">About the artist</div>
+                <div class="flex items-center gap-3">
+                  <div class="h-20 w-20 overflow-hidden rounded-full border border-zinc-800 bg-black">
+                    <img id="artistAvatar" class="hidden h-full w-full object-cover" alt="" />
+                    <div id="artistAvatarFallback" class="flex h-full w-full items-center justify-center text-xs text-zinc-500">Artist</div>
+                  </div>
+                  <div class="min-w-0">
+                    <div id="artistName" class="truncate font-semibold">Unknown Artist</div>
+                    <div id="artistStats" class="mt-1 text-sm text-zinc-400">0 tracks in library</div>
+                  </div>
+                </div>
+                <p id="artistInfo" class="mt-4 line-clamp-4 text-sm leading-6 text-zinc-300">
+                  Play a track to see local library details for the artist.
+                </p>
+              </section>
+
+              <button type="button" data-action="open-queue" class="home-link w-full rounded-xl px-4 py-3 text-left text-sm font-semibold">
+                Open queue
+              </button>
+            </div>
+          </aside>
+        </div>
+      {% else %}
+        <section class="mt-6 rounded-xl border border-zinc-800 bg-black/60 p-6">
+          <h2 class="text-lg font-semibold">No audio found</h2>
+          <p class="mt-2 text-sm text-zinc-400">Set `MUSIC_DIR` in `run.ps1` to a folder that contains MP3, FLAC, M4A, AAC, OGG, or WAV files.</p>
+        </section>
+      {% endif %}
+    </div>
+
+    <div id="batchBar" class="fixed bottom-28 left-1/2 z-50 hidden w-[min(920px,calc(100vw-24px))] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-950/95 px-4 py-3 shadow-2xl backdrop-blur">
+      <div class="flex flex-wrap items-center gap-3">
+        <div id="batchCount" class="mr-auto text-sm font-semibold">0 selected</div>
+        <button type="button" data-action="batch-like" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Like</button>
+        <button type="button" data-action="batch-unlike" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Unlike</button>
+        <button type="button" data-action="batch-add-playlist" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Add to playlist</button>
+        <button type="button" data-action="batch-play-next" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Play next</button>
+        <button type="button" data-action="batch-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Queue</button>
+        <button type="button" data-action="batch-edit-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Metadata</button>
+        <button type="button" data-action="batch-derive-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Auto-fill tags</button>
+      </div>
+    </div>
+
+    <footer class="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-800 bg-black/90 backdrop-blur">
+      <div class="app-shell mx-auto flex flex-col gap-2 px-3 py-3 sm:px-5 lg:px-6">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+              <img id="nowCover" class="hidden h-full w-full object-cover" alt="" />
+              <span id="nowCoverFallback" class="flex h-full w-full items-center justify-center text-xs text-zinc-500">Music</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <div id="nowPlaying" class="truncate font-semibold">Nothing playing</div>
+              <div id="nowMeta" class="truncate text-xs text-zinc-400">Choose a song</div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1 sm:gap-2">
+            <button type="button" data-action="prev-track" class="transport-btn h-9 w-9" title="Previous">
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z" /><path d="M3 20V4" /></svg>
+            </button>
+            <button id="shuffleBtn" type="button" data-action="toggle-shuffle" class="transport-btn h-9 w-9" title="Shuffle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m18 14 4 4-4 4" /><path d="m18 2 4 4-4 4" /><path d="M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22" /><path d="M2 6h1.972a4 4 0 0 1 3.6 2.2" /><path d="M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45" /></svg>
+            </button>
+            <button id="playPauseBtn" type="button" data-action="toggle-play" class="flex h-11 w-11 items-center justify-center" title="Play">
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" /></svg>
+            </button>
+            <button type="button" data-action="next-track" class="transport-btn h-9 w-9" title="Next">
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4v16" /><path d="M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z" /></svg>
+            </button>
+            <button id="repeatBtn" type="button" data-action="cycle-repeat" class="transport-btn h-9 w-9" title="Repeat mode">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></svg>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-end gap-1 sm:gap-2">
+            <button type="button" data-action="open-lyrics" class="icon-btn" title="Lyrics">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12" /><path d="M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5" /><circle cx="16" cy="7" r="5" /></svg>
+            </button>
+            <button type="button" data-action="open-queue" class="icon-btn" title="Queue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5H3" /><path d="M11 12H3" /><path d="M11 19H3" /><path d="M21 16V5" /><circle cx="18" cy="16" r="3" /></svg>
+            </button>
+            <button type="button" data-action="open-fullscreen" class="icon-btn" title="Fullscreen">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" /></svg>
+            </button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="hidden h-4 w-4 shrink-0 text-zinc-400 sm:block"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></svg>
+            <input id="vol" type="range" min="0" max="1" step="0.01" value="1" class="hidden w-24 sm:block" />
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="tCur" class="w-10 text-right text-xs text-zinc-400">0:00</span>
+          <input id="seek" type="range" min="0" max="100" value="0" class="w-full" />
+          <span id="tDur" class="w-10 text-xs text-zinc-400">0:00</span>
+        </div>
+        <audio id="audio" preload="metadata"></audio>
+      </div>
+    </footer>
+
+    <div id="lyricsView" class="hidden fixed inset-0 z-30 bg-black pb-36 text-zinc-100">
+      <div id="lyricsViewBg" class="lyrics-backdrop absolute inset-0 bg-cover bg-center opacity-55 blur-3xl scale-110"></div>
+      <div class="absolute inset-0 bg-black/55"></div>
+      <div class="relative grid h-full gap-6 overflow-hidden p-3 sm:p-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+        <section class="overflow-y-auto rounded-xl bg-blue-950/55 px-8 py-8 backdrop-blur">
+          <div class="mb-6 flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm text-blue-200/80">Lyrics</div>
+              <div id="lyricsViewTitle" class="text-2xl font-bold">Nothing playing</div>
+            </div>
+            <button type="button" data-action="close-lyrics" class="rounded-lg border border-white/30 px-4 py-2 text-sm hover:bg-white/10">Close</button>
+          </div>
+          <div id="lyricsViewLines" class="space-y-6 text-3xl font-bold leading-tight text-blue-200/60 sm:text-4xl"></div>
+        </section>
+        <aside class="hidden overflow-y-auto rounded-xl bg-zinc-950/90 p-4 lg:block">
+          <div id="lyricsViewAlbum" class="mb-4 truncate text-sm font-semibold"></div>
+          <div class="aspect-square overflow-hidden rounded-lg border border-zinc-800 bg-black">
+            <img id="lyricsViewCover" class="hidden h-full w-full object-cover" alt="" />
+            <div id="lyricsViewCoverFallback" class="flex h-full w-full items-center justify-center text-zinc-500">No art</div>
+          </div>
+          <div class="mt-5 text-2xl font-bold" id="lyricsViewSong">Nothing playing</div>
+          <div class="mt-1 text-sm text-zinc-400" id="lyricsViewArtist">Choose a song</div>
+          <section class="mt-6 rounded-xl bg-zinc-900 p-4">
+            <div class="mb-4 font-semibold">About the artist</div>
+            <div class="flex items-center gap-3">
+              <div class="h-20 w-20 overflow-hidden rounded-full border border-zinc-800 bg-black">
+                <img id="lyricsArtistAvatar" class="hidden h-full w-full object-cover" alt="" />
+                <div id="lyricsArtistAvatarFallback" class="flex h-full w-full items-center justify-center text-xs text-zinc-500">Artist</div>
+              </div>
+              <div>
+                <div id="lyricsArtistName" class="font-semibold">Unknown Artist</div>
+                <div id="lyricsArtistStats" class="mt-1 text-sm text-zinc-400">0 tracks in library</div>
+              </div>
+            </div>
+            <p id="lyricsArtistInfo" class="mt-4 text-sm leading-6 text-zinc-300"></p>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <div id="nowFullscreen" class="hidden fixed inset-0 z-40 bg-black pb-36 text-zinc-100">
+      <div id="nowFullscreenBg" class="absolute inset-0 bg-cover bg-center opacity-50 blur-3xl scale-110"></div>
+      <div class="absolute inset-0 bg-black/60"></div>
+      <div class="relative flex h-full items-center justify-center p-6">
+        <button type="button" data-action="close-fullscreen" class="absolute right-6 top-6 rounded-lg border border-white/30 px-4 py-2 text-sm hover:bg-white/10">Close</button>
+        <div class="grid w-full max-w-5xl gap-8 md:grid-cols-[360px_1fr] md:items-center">
+          <div class="aspect-square overflow-hidden rounded-2xl border border-zinc-700 bg-black shadow-2xl">
+            <img id="fullCover" class="hidden h-full w-full object-cover" alt="" />
+            <div id="fullCoverFallback" class="flex h-full w-full items-center justify-center text-zinc-500">No art</div>
+          </div>
+          <div class="min-w-0">
+            <div id="fullAlbum" class="mb-3 truncate text-lg text-zinc-300">No track selected</div>
+            <h2 id="fullTitle" class="truncate text-5xl font-black leading-tight">Nothing playing</h2>
+            <div id="fullArtist" class="mt-4 truncate text-2xl text-zinc-300">Choose a song</div>
+            <p id="fullInfo" class="mt-8 max-w-2xl text-lg leading-8 text-zinc-300"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="queuePanel" class="hidden fixed inset-0 z-50 bg-black/75 px-4 pb-36 pt-8">
+      <section class="mx-auto flex h-full max-w-2xl flex-col rounded-xl border border-zinc-800 bg-black">
+        <div class="flex items-center justify-between border-b border-zinc-800 p-4">
+          <div>
+            <h2 class="text-lg font-semibold">Queue</h2>
+            <p id="queueCount" class="text-sm text-zinc-500">0 tracks</p>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" data-action="clear-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Clear</button>
+            <button type="button" data-action="close-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Close</button>
+          </div>
+        </div>
+        <div id="queueItems" class="min-h-0 flex-1 overflow-y-auto p-3"></div>
+      </section>
+    </div>
+
+    <div id="toastHost" class="fixed right-4 top-4 z-[70] space-y-2"></div>
+
+    <div id="metadataModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 px-4">
+      <form data-action="save-metadata" class="w-full max-w-md rounded-xl border border-zinc-800 bg-black p-5">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-lg font-semibold">Edit metadata</h2>
+          <button type="button" data-action="close-metadata" class="rounded-lg border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-900">Close</button>
+        </div>
+        <input id="metadataTrackId" type="hidden" />
+        <input id="metadataMode" type="hidden" value="single" />
+        <input id="trackCoverInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
+        <p id="metadataScope" class="mb-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300"></p>
+        <label class="block text-sm text-zinc-400" for="metadataTitle">Title</label>
+        <input id="metadataTitle" class="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-zinc-300" />
+        <label class="mt-4 block text-sm text-zinc-400" for="metadataArtist">Artist</label>
+        <input id="metadataArtist" class="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-zinc-300" />
+        <label class="mt-4 block text-sm text-zinc-400" for="metadataAlbum">Album</label>
+        <input id="metadataAlbum" class="mt-2 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 outline-none focus:border-zinc-300" />
+        <p id="metadataPath" class="mt-3 break-all text-xs text-zinc-500"></p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" data-action="fill-derived-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Preview from filename/folder</button>
+          <button type="button" data-action="apply-derived-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Apply auto-fill</button>
+        </div>
+        <p id="metadataError" class="mt-3 hidden rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-100"></p>
+        <button type="submit" class="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2 font-semibold text-black hover:bg-white">Save changes</button>
+      </form>
+    </div>
+
+    <div id="lyricsEditorModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 px-4">
+      <form data-action="save-lyrics" class="w-full max-w-2xl rounded-xl border border-zinc-800 bg-black p-5">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-lg font-semibold">Synced lyrics</h2>
+          <button type="button" data-action="close-lyrics-editor" class="rounded-lg border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-900">Close</button>
+        </div>
+        <input id="lyricsEditorTrackId" type="hidden" />
+        <div class="mb-3 flex flex-wrap items-center gap-3">
+          <label class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">
+            Upload .lrc
+            <input id="lyricsFileInput" type="file" accept=".lrc,text/plain" class="hidden" />
+          </label>
+          <button type="button" data-action="insert-lyrics-timestamp" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Insert current time</button>
+          <span id="lyricsEditorSource" class="text-sm text-zinc-500"></span>
+        </div>
+        <textarea
+          id="lyricsEditorText"
+          class="h-80 w-full resize-y rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm outline-none focus:border-zinc-300"
+          placeholder="[00:12.00] First lyric line"
+        ></textarea>
+        <p class="mt-2 text-xs text-zinc-500">Use LRC timestamps like [01:23.45]. Saving writes a .lrc file next to the audio file.</p>
+        <p id="lyricsEditorError" class="mt-3 hidden rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-100"></p>
+        <button type="submit" class="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2 font-semibold text-black hover:bg-white">Save lyrics</button>
+      </form>
+    </div>
+
+    <div id="artistMatchModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 px-4">
+      <section class="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-zinc-800 bg-black p-5">
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold">Choose artist match</h2>
+            <p id="artistMatchSubtitle" class="mt-1 text-sm text-zinc-500"></p>
+          </div>
+          <button type="button" data-action="close-artist-match" class="rounded-lg border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-900">Close</button>
+        </div>
+        <div id="artistMatchStatus" class="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-400">Loading matches...</div>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <div class="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">MusicBrainz</div>
+            <div id="musicBrainzMatches" class="space-y-2"></div>
+          </div>
+          <div>
+            <div class="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-500">Wikipedia</div>
+            <div id="wikipediaMatches" class="space-y-2"></div>
+          </div>
+        </div>
+        <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+          <p id="artistMatchChoice" class="text-sm text-zinc-400">Select one MusicBrainz match and/or one Wikipedia match.</p>
+          <button type="button" data-action="save-artist-match" class="rounded-lg bg-zinc-100 px-4 py-2 font-semibold text-black hover:bg-white">Save match</button>
+        </div>
+      </section>
+    </div>
+
+    <script id="tracks-data" type="application/json">{{ tracks|tojson }}</script>
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

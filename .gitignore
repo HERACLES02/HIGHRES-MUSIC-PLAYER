@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local app state - personal data, password hashes, cached artist info
+playlist.json
+playlist.json.tmp
+
+# User-uploaded artwork/backgrounds
+artwork/
+
+# Real local run config (contains SECRET_KEY / ADMIN_PASSWORD_HASH) - copy
+# run.ps1.example to run.ps1 and fill in your own values instead
+run.ps1
+
+# Logs and OS cruft
+*.log
+.DS_Store
+Thumbs.db
