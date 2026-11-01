@@ -1,0 +1,4 @@
+# Preserve upstream bytes covered by native-usb/*sources.json checksums.
+android/native-usb/vendor/** -text
+# Packaged license text must match its upstream source byte for byte.
+android/native-usb/notices/** -text

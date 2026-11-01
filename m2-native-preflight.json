@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.3.0-native-diagnostic",
+  "capturedAt": "2026-11-01T19:56:06.118Z",
+  "phone": {
+    "model": "CPH1937",
+    "sdk": 30,
+    "buildDisplay": "CPH1937_11_F.17"
+  },
+  "scope": "Native M2 ownership and GET-only preflight. No direct audio or volume\/rate\/alternate SET requests.",
+  "physicalPreset": "Standard (user confirmed before start)",
+  "native": {
+    "libusbVersion": "1.0.29",
+    "negotiatedSpeedEnum": 2,
+    "allowTemporaryDriverDetach": true,
+    "operations": [
+      {
+        "operation": "init_no_discovery",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "wrap_android_fd",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "device_descriptor",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "get_configuration",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_control_before",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_playback_before",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_1",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_2",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_3",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_4",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_1",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_2",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_3",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_4",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "configure_auto_detach",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "claim_control_0",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "claimed_volume_ch1_get_3",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_4",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "claimed_volume_ch2_get_1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch2_get_2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "claimed_volume_ch2_get_3",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch2_get_4",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "claim_playback_2",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "get_playback_alternate",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "get_endpoint_sample_rate",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "80bb00",
+        "rateHz": 48000
+      },
+      {
+        "operation": "release_playback_2",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "release_control_0",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_control_after",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_playback_after",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      }
+    ],
+    "audioSubmitted": false,
+    "volumeWritten": false,
+    "alternateWritten": false,
+    "sampleRateWritten": false,
+    "captureOrHidClaimed": false,
+    "clockingValidated": false,
+    "safeHardwareVolumeEstablished": false,
+    "errnoNote": "errnoAfterCall is supplementary; libusb return codes are authoritative. Positive kernel-driver results mean active, not a transfer byte count."
+  },
+  "speedEnumLegend": "0 unknown, 1 low, 2 full (12Mbps), 3 high (480Mbps), 4 super, 5 super-plus",
+  "volumeAttributeLegend": "get_1 CUR, get_2 MIN, get_3 MAX, get_4 RES; raw volume units are 1\/256 dB; CUR -32768 means silence",
+  "limitations": "GET sample rate at alternate zero may fail; no clocking or safe-volume result is established. Inspect release\/driver-after results; reconnect if normal audio is not restored."
+}

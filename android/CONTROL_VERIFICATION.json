@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "dateLocal": "2026-11-02",
+  "checkpoint": "Silent hardware-volume and rate/alternate SET-readback transaction",
+  "artifact": {
+    "path": "releases/music-usb-probe-0.4.0.apk",
+    "applicationId": "com.localmusic.diagnostics",
+    "versionCode": 4,
+    "versionName": "0.4.0-controls",
+    "bytes": 53875360,
+    "sha256": "c7f797e054e5a2d817b1d054f02cd186bf7d15abce27ee1092263644aeb477dc",
+    "abis": ["arm64-v8a", "armeabi-v7a"],
+    "apkV2SignatureVerified": true,
+    "sameSigningCertificateAsPreviousProbe": true,
+    "permanentReleaseSigningKey": false
+  },
+  "localChecks": {
+    "nativeBoundaryScenariosPassed": 28,
+    "simulatedOwnershipAndControlJsonParsed": true,
+    "distinctSimulatedConfigurationsVerified": 8,
+    "parserAssertionsPassed": 3052,
+    "fixtureRegressionTestsPassed": 2,
+    "packagedFixtureHashesVerified": 16,
+    "nativeLibrariesAndLicensePackaged": true,
+    "sourceToolAndGradleDependencyHashesVerified": true,
+    "assembleBothArmVariants": "passed",
+    "lint": { "errors": 0, "warnings": 11, "hints": 1 }
+  },
+  "implemented": {
+    "legacyOwnershipGetOnlyModeRetained": true,
+    "explicitSilentControlTestConfirmation": true,
+    "bothChannelSnapshotsBeforeWrites": true,
+    "lowHardwareLevelSetAndExactReadback": true,
+    "preserveQuieterOrSilentOriginalDuringTest": true,
+    "eightRateAlternateControlTests": true,
+    "volumeChecksAfterFormatChanges": true,
+    "restorationOnFailureAndException": true,
+    "blockOriginalVolumeRestoreIfIdleOrRateNotVerified": true,
+    "normalPlaybackRouteGateAndScopedClaims": true,
+    "audioSubmission": false,
+    "captureHidClaimsOrFirmwareWrites": false,
+    "asynchronousClockingSolution": false
+  },
+  "physicalValidation": {
+    "previousOwnershipAndVolumeGetEvidence": "NATIVE_PHONE_RESULTS.md",
+    "phoneAttachedDuringBuild": false,
+    "newApkInstalledAndLaunched": false,
+    "lowVolumeSetReadbackVerified": false,
+    "configurationMatrixVerified": false,
+    "settingsRestorationVerified": false,
+    "clockingValidated": false,
+    "directAudioValidated": false
+  },
+  "phoneInstructions": "CONTROL_TEST.md",
+  "scope": "Local compilation and simulated USB-boundary checks only. Stage A and the daily-use player remain incomplete."
+}

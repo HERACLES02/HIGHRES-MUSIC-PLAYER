@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "signal": "0-2s left 440Hz; 2-4s right 660Hz; 4-6s both; 20ms fades",
+  "encoder": "ffmpeg version 8.1.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+  "fixtures": [
+    {
+      "file": "stereo-16-44100.wav",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "dcab6a4d03775544aebbffb7e3a7ebb04d245dd65b6070788667a5ab50819fe6",
+      "fileSha256": "e4e6c8417051ddfaf8a0be7a1a6fe489336c9ef2807d37753aa9ccc002ae2fb8"
+    },
+    {
+      "file": "stereo-16-44100.flac",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "dcab6a4d03775544aebbffb7e3a7ebb04d245dd65b6070788667a5ab50819fe6",
+      "fileSha256": "d710d138d177e60bdd769b71aed8d226f6208a3ce1bc618d6e928256091a90e3"
+    },
+    {
+      "file": "stereo-16-48000.wav",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "46529e5563f6b79f203b7828c3a4d71d89a98e20a76cd55fa2dd0f2ebeab6c9c",
+      "fileSha256": "caf8d9b963fbaf2fb8ad269d7e9640f13e5db701e07417a493ad139c1cbffec4"
+    },
+    {
+      "file": "stereo-16-48000.flac",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "46529e5563f6b79f203b7828c3a4d71d89a98e20a76cd55fa2dd0f2ebeab6c9c",
+      "fileSha256": "13ec7b23249b760f4c25e64290ab3145116bcf45a6f5e2ab876953e3833d5810"
+    },
+    {
+      "file": "stereo-16-88200.wav",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "0eefec371f9deabd445ce75053629213f400dda248f4f7cbbc8c690e6253bc21",
+      "fileSha256": "5d7126a963567ee69328ec860e4ee7c892f41993c2f76d5a897b727fbb934709"
+    },
+    {
+      "file": "stereo-16-88200.flac",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "0eefec371f9deabd445ce75053629213f400dda248f4f7cbbc8c690e6253bc21",
+      "fileSha256": "88a8daf5545de02b0d6766441dae1f967dde2bfb433de481c4ac7c6a870ed3c5"
+    },
+    {
+      "file": "stereo-16-96000.wav",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "3ab9d58222d13b2fe599a972def5e45932eb29f70523d99ef2df9667f33ff7aa",
+      "fileSha256": "19d8bb8eb6b460a93bd1a21ff7660a1c2b74c5d1361cf14867bd391b8e31074d"
+    },
+    {
+      "file": "stereo-16-96000.flac",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "3ab9d58222d13b2fe599a972def5e45932eb29f70523d99ef2df9667f33ff7aa",
+      "fileSha256": "46efe34254972104c9ff02d6a9e4e753d3ecb24dda5e9c729584f79dbe4bf557"
+    },
+    {
+      "file": "stereo-24-44100.wav",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "ef66e41fd071a5f538657901ec00f756b4ed082ee14c4fdd1ec1df1f163069c1",
+      "fileSha256": "cad662e9746beb8e1fa9850c7ece5e19157264a6adecaae58abbf7a42ed819e8"
+    },
+    {
+      "file": "stereo-24-44100.flac",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "ef66e41fd071a5f538657901ec00f756b4ed082ee14c4fdd1ec1df1f163069c1",
+      "fileSha256": "21d27be5cdceff1063e8cd05acba98e08900de0fed1902e57dae0426c4c63951"
+    },
+    {
+      "file": "stereo-24-48000.wav",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "a19e6c0caff483a200c14a606e9c201910397da177a1429fc7c613b9ef70aa05",
+      "fileSha256": "f9a4d75e4c0668154a9f01abafef35f8508220dd97586f7085a068c106143494"
+    },
+    {
+      "file": "stereo-24-48000.flac",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "a19e6c0caff483a200c14a606e9c201910397da177a1429fc7c613b9ef70aa05",
+      "fileSha256": "204d6a178a5585d30797a31fa125019958f7c860ffc167f9cc2c8ac03f9ba55f"
+    },
+    {
+      "file": "stereo-24-88200.wav",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "3aac746ded80a1fd35fa71b122172542d42bd1fb9030205128a96ab88abf1a6e",
+      "fileSha256": "24b6d9a1b6f275e5c76cc4f1acfdc3f2224008487f9f76c3424b2aad46d9eb47"
+    },
+    {
+      "file": "stereo-24-88200.flac",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "3aac746ded80a1fd35fa71b122172542d42bd1fb9030205128a96ab88abf1a6e",
+      "fileSha256": "9528ad03d82745950037b25a788fd8d2ae5b30bae9bdb4368b684c5414c1fe2d"
+    },
+    {
+      "file": "stereo-24-96000.wav",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "a75ada174d4e8911f3bef5b4725ff0fea13b98dc48503afe730b0048745f2800",
+      "fileSha256": "7216510e724f3681d6f85020cfd58b69ff19a957fdf19ea327dee3b50d9a0286"
+    },
+    {
+      "file": "stereo-24-96000.flac",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pcmSha256": "a75ada174d4e8911f3bef5b4725ff0fea13b98dc48503afe730b0048745f2800",
+      "fileSha256": "ff31e203babc93cc1e6d2fbed2e9348d7c81c5c429fcd2a99a7b540f5694a796"
+    }
+  ]
+}

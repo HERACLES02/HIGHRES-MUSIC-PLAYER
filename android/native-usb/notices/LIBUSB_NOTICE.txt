@@ -1,0 +1,14 @@
+libusb 1.0.29
+https://github.com/libusb/libusb/tree/v1.0.29
+
+Copyright the libusb contributors; see upstream source file notices and AUTHORS.
+Licensed under the GNU Lesser General Public License, version 2.1 or later.
+The complete license is included in LIBUSB_COPYING.txt.
+
+libusb is linked as the separate shared library libusb-1.0.so. Unmodified source
+files, Android configuration, AUTHORS and per-file hashes are provided with this
+project under android/native-usb/vendor/libusb and android/native-usb/sources.json.
+The separate diagnostic JNI wrapper and CMake build recipe are in
+android/native-usb. Rebuild instructions are in android/NATIVE_USB_TEST.md.
+
+No libusb sample audio/firmware application is included or executed.

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "Stage A normal-route baseline and read-only UAC1 preflight",
+  "dateLocal": "2026-11-01",
+  "appVersion": "0.2.0-baseline",
+  "artifact": {
+    "path": "releases/music-usb-probe-0.2.0.apk",
+    "applicationId": "com.localmusic.diagnostics",
+    "versionCode": 2,
+    "minSdk": 30,
+    "targetSdk": 35,
+    "bytes": 51201984,
+    "sha256": "d6c9a15a577de0a500bc9b23f9c71ef597d69e655115241cbe93d0a553415a4d",
+    "apkSignatureV2Verified": true,
+    "sameSigningCertificateAsOriginalProbe": true,
+    "releaseSigningKey": false
+  },
+  "checks": {
+    "parserAssertionsPassed": 3052,
+    "malformedInputCasesIncluded": 3000,
+    "actualM2DescriptorRegression": "passed",
+    "fixtureSignalAndHashTestsPassed": 2,
+    "exactWavFlacReferenceComparisonsPassed": 16,
+    "packagedFixtureHashesVerified": 16,
+    "assembleDebug": "passed",
+    "lintDebug": { "errors": 0, "warnings": 10, "hints": 1 },
+    "strictDependencyChecksumBuild": "passed",
+    "apkManifestInspected": true
+  },
+  "physicalEvidence": {
+    "existingProbeReport": "../music-usb-probe (1).json",
+    "existingProbePhone": "OPPO CPH1937, Android 11, CPH1937_11_F.17",
+    "newApkInstalledOrLaunchedOnPhone": false,
+    "normalPlaybackVerified": false,
+    "hardwareVolumeGetResponses": null,
+    "safeHardwareVolumeSetAndReadbackVerified": false,
+    "directUsbStreamingImplemented": false,
+    "pcmSubmittedToUsbCompared": false,
+    "physicalUsbFormatsVerified": [],
+    "direct24Bit96000HzScreenOff60Minutes": "not run"
+  },
+  "directUsbGate": {
+    "clocking": "Asynchronous OUT 0x04, bSynchAddress 0, no explicit feedback in physical descriptors. Supported clocking arrangement remains unresolved; no fixed-packet pacing or microphone timing assumed.",
+    "volume": "Playback Feature Unit 7 advertises per-channel volume. GET-only diagnostic is implemented; safe low-volume SET/readback is not established.",
+    "nativeTransport": "Not implemented; unrooted interface ownership and transport scheduling need physical validation.",
+    "phoneAccess": "No device attached through ADB during this checkpoint.",
+    "infeasibilityEstablished": false
+  },
+  "remainingStages": ["A2 native USB transport and decoding", "A3 safe hardware volume", "A4 physical validation", "B offline player", "C storage and safe edits", "D artist/artwork/lyrics", "E proven USB integration and daily-use features", "F backup and personal release"],
+  "nextInstructions": "STAGE_A.md"
+}

@@ -1,0 +1,4395 @@
+{
+  "schemaVersion": 1,
+  "events": [
+    {
+      "startsPaused": true,
+      "fixture": null,
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": null,
+      "positionMs": 0,
+      "playing": false,
+      "state": 1,
+      "event": "service_started",
+      "at": "2026-11-01T18:04:47.560Z",
+      "elapsedRealtimeMs": 3631431132
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": null,
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": null,
+      "positionMs": 0,
+      "playing": false,
+      "state": 1,
+      "event": "outputs_changed",
+      "at": "2026-11-01T18:04:47.616Z",
+      "elapsedRealtimeMs": 3631431189
+    },
+    {
+      "source": "stereo-16-44100.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 44100,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": false,
+      "state": 1,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:05:08.182Z",
+      "elapsedRealtimeMs": 3631451755
+    },
+    {
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:08.196Z",
+      "elapsedRealtimeMs": 3631451768
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/raw",
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:05:08.361Z",
+      "elapsedRealtimeMs": 3631451933
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:05:08.409Z",
+      "elapsedRealtimeMs": 3631451981
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:05:08.551Z",
+      "elapsedRealtimeMs": 3631452123
+    },
+    {
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:08.600Z",
+      "elapsedRealtimeMs": 3631452173
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:08.628Z",
+      "elapsedRealtimeMs": 3631452200
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:08.630Z",
+      "elapsedRealtimeMs": 3631452203
+    },
+    {
+      "fixture": "stereo-16-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "e8b94ef1-af54-40ec-af8d-446d472f2c71",
+      "positionMs": 6004,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:14.710Z",
+      "elapsedRealtimeMs": 3631458282
+    },
+    {
+      "source": "stereo-16-44100.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 44100,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:05:27.411Z",
+      "elapsedRealtimeMs": 3631470983
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:27.417Z",
+      "elapsedRealtimeMs": 3631470990
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:05:27.801Z",
+      "elapsedRealtimeMs": 3631471373
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:05:27.803Z",
+      "elapsedRealtimeMs": 3631471376
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:27.844Z",
+      "elapsedRealtimeMs": 3631471416
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:05:27.879Z",
+      "elapsedRealtimeMs": 3631471451
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 4,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:05:27.924Z",
+      "elapsedRealtimeMs": 3631471496
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:27.984Z",
+      "elapsedRealtimeMs": 3631471557
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 6005,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:34.046Z",
+      "elapsedRealtimeMs": 3631477618
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:41.787Z",
+      "elapsedRealtimeMs": 3631485360
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:41.860Z",
+      "elapsedRealtimeMs": 3631485432
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:05:41.900Z",
+      "elapsedRealtimeMs": 3631485473
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:05:41.925Z",
+      "elapsedRealtimeMs": 3631485498
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:41.977Z",
+      "elapsedRealtimeMs": 3631485549
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 5621,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:05:47.657Z",
+      "elapsedRealtimeMs": 3631491229
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "383da5e5-9f8b-49c6-bcf2-4368cf5f5c15",
+      "positionMs": 6006,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:48.059Z",
+      "elapsedRealtimeMs": 3631491631
+    },
+    {
+      "source": "stereo-16-48000.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 48000,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:05:49.846Z",
+      "elapsedRealtimeMs": 3631493418
+    },
+    {
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:49.860Z",
+      "elapsedRealtimeMs": 3631493433
+    },
+    {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/raw",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:05:49.926Z",
+      "elapsedRealtimeMs": 3631493498
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:05:49.943Z",
+      "elapsedRealtimeMs": 3631493516
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:05:49.977Z",
+      "elapsedRealtimeMs": 3631493550
+    },
+    {
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:50.054Z",
+      "elapsedRealtimeMs": 3631493627
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "06d36f2f-e6f6-482d-86cc-52f59092f9b8",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:50.057Z",
+      "elapsedRealtimeMs": 3631493629
+    },
+    {
+      "source": "stereo-16-48000.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 48000,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:05:51.503Z",
+      "elapsedRealtimeMs": 3631495075
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:51.510Z",
+      "elapsedRealtimeMs": 3631495083
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:05:51.606Z",
+      "elapsedRealtimeMs": 3631495178
+    },
+    {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:05:51.608Z",
+      "elapsedRealtimeMs": 3631495181
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:51.626Z",
+      "elapsedRealtimeMs": 3631495199
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:05:51.629Z",
+      "elapsedRealtimeMs": 3631495201
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:05:51.633Z",
+      "elapsedRealtimeMs": 3631495206
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:05:51.637Z",
+      "elapsedRealtimeMs": 3631495210
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 5941,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:05:57.660Z",
+      "elapsedRealtimeMs": 3631501232
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 6003,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:05:57.723Z",
+      "elapsedRealtimeMs": 3631501296
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 6003,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:01.521Z",
+      "elapsedRealtimeMs": 3631505094
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:10.298Z",
+      "elapsedRealtimeMs": 3631513871
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:10.346Z",
+      "elapsedRealtimeMs": 3631513919
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:10.390Z",
+      "elapsedRealtimeMs": 3631513963
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 5,
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:10.408Z",
+      "elapsedRealtimeMs": 3631513980
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:10.445Z",
+      "elapsedRealtimeMs": 3631514018
+    },
+    {
+      "fixture": "stereo-16-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "d585a793-9352-4952-b0f0-6c992843615e",
+      "positionMs": 6000,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:16.531Z",
+      "elapsedRealtimeMs": 3631520104
+    },
+    {
+      "source": "stereo-16-48000.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 48000,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:20.082Z",
+      "elapsedRealtimeMs": 3631523655
+    },
+    {
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:20.090Z",
+      "elapsedRealtimeMs": 3631523663
+    },
+    {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/raw",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:20.149Z",
+      "elapsedRealtimeMs": 3631523721
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:20.169Z",
+      "elapsedRealtimeMs": 3631523741
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 9,
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:20.193Z",
+      "elapsedRealtimeMs": 3631523766
+    },
+    {
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:20.264Z",
+      "elapsedRealtimeMs": 3631523837
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:20.269Z",
+      "elapsedRealtimeMs": 3631523842
+    },
+    {
+      "fixture": "stereo-16-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "96a4987a-2496-4773-997d-aa84a6d07ff2",
+      "positionMs": 6008,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:26.301Z",
+      "elapsedRealtimeMs": 3631529874
+    },
+    {
+      "source": "stereo-16-88200.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 88200,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:27.738Z",
+      "elapsedRealtimeMs": 3631531311
+    },
+    {
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:27.745Z",
+      "elapsedRealtimeMs": 3631531317
+    },
+    {
+      "sampleRateHz": 88200,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/raw",
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:27.789Z",
+      "elapsedRealtimeMs": 3631531361
+    },
+    {
+      "sampleRateHz": 88200,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 113024,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:27.807Z",
+      "elapsedRealtimeMs": 3631531379
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 9,
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:27.852Z",
+      "elapsedRealtimeMs": 3631531424
+    },
+    {
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:27.905Z",
+      "elapsedRealtimeMs": 3631531478
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:27.923Z",
+      "elapsedRealtimeMs": 3631531495
+    },
+    {
+      "fixture": "stereo-16-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "db43793d-836c-4db0-9dce-16daa88844a9",
+      "positionMs": 6003,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:34.011Z",
+      "elapsedRealtimeMs": 3631537584
+    },
+    {
+      "source": "stereo-16-88200.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 88200,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:35.271Z",
+      "elapsedRealtimeMs": 3631538843
+    },
+    {
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:35.278Z",
+      "elapsedRealtimeMs": 3631538851
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:06:35.343Z",
+      "elapsedRealtimeMs": 3631538915
+    },
+    {
+      "sampleRateHz": 88200,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:35.346Z",
+      "elapsedRealtimeMs": 3631538918
+    },
+    {
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:35.387Z",
+      "elapsedRealtimeMs": 3631538959
+    },
+    {
+      "sampleRateHz": 88200,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 113024,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:35.409Z",
+      "elapsedRealtimeMs": 3631538982
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 9,
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:35.419Z",
+      "elapsedRealtimeMs": 3631538991
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:35.463Z",
+      "elapsedRealtimeMs": 3631539035
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 2132,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:06:37.679Z",
+      "elapsedRealtimeMs": 3631541253
+    },
+    {
+      "fixture": "stereo-16-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8be70d19-dc8d-46e5-a09c-4247317b1d1e",
+      "positionMs": 6002,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:41.558Z",
+      "elapsedRealtimeMs": 3631545130
+    },
+    {
+      "source": "stereo-16-96000.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 96000,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:44.189Z",
+      "elapsedRealtimeMs": 3631547762
+    },
+    {
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:44.198Z",
+      "elapsedRealtimeMs": 3631547770
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/raw",
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:44.255Z",
+      "elapsedRealtimeMs": 3631547828
+    },
+    {
+      "sampleRateHz": 96000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 123008,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:44.273Z",
+      "elapsedRealtimeMs": 3631547845
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 9,
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:44.297Z",
+      "elapsedRealtimeMs": 3631547870
+    },
+    {
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:44.357Z",
+      "elapsedRealtimeMs": 3631547930
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:44.363Z",
+      "elapsedRealtimeMs": 3631547935
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 3280,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:06:47.713Z",
+      "elapsedRealtimeMs": 3631551287
+    },
+    {
+      "fixture": "stereo-16-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "3dbc7903-05a4-4499-9e62-d588c8611d68",
+      "positionMs": 6000,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:50.436Z",
+      "elapsedRealtimeMs": 3631554009
+    },
+    {
+      "source": "stereo-16-96000.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 96000,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:50.950Z",
+      "elapsedRealtimeMs": 3631554523
+    },
+    {
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:50.960Z",
+      "elapsedRealtimeMs": 3631554532
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:06:51.012Z",
+      "elapsedRealtimeMs": 3631554585
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:51.016Z",
+      "elapsedRealtimeMs": 3631554588
+    },
+    {
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:51.044Z",
+      "elapsedRealtimeMs": 3631554616
+    },
+    {
+      "sampleRateHz": 96000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 123008,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:51.064Z",
+      "elapsedRealtimeMs": 3631554637
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 9,
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:51.087Z",
+      "elapsedRealtimeMs": 3631554660
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:51.136Z",
+      "elapsedRealtimeMs": 3631554708
+    },
+    {
+      "fixture": "stereo-16-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "63f49534-1e3d-412b-b488-47331c5d25e2",
+      "positionMs": 6004,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:57.255Z",
+      "elapsedRealtimeMs": 3631560828
+    },
+    {
+      "source": "stereo-24-44100.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 44100,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:06:58.293Z",
+      "elapsedRealtimeMs": 3631561866
+    },
+    {
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:58.305Z",
+      "elapsedRealtimeMs": 3631561877
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/raw",
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:06:58.375Z",
+      "elapsedRealtimeMs": 3631561947
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:06:58.405Z",
+      "elapsedRealtimeMs": 3631561978
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:06:58.454Z",
+      "elapsedRealtimeMs": 3631562026
+    },
+    {
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:06:58.500Z",
+      "elapsedRealtimeMs": 3631562073
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:06:58.519Z",
+      "elapsedRealtimeMs": 3631562092
+    },
+    {
+      "fixture": "stereo-24-44100.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "16f50eb2-271f-41a1-bf38-ac0199bb399f",
+      "positionMs": 6009,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:04.616Z",
+      "elapsedRealtimeMs": 3631568189
+    },
+    {
+      "source": "stereo-24-44100.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 44100,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:05.298Z",
+      "elapsedRealtimeMs": 3631568870
+    },
+    {
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:05.310Z",
+      "elapsedRealtimeMs": 3631568882
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:07:05.394Z",
+      "elapsedRealtimeMs": 3631568967
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:05.399Z",
+      "elapsedRealtimeMs": 3631568971
+    },
+    {
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:05.418Z",
+      "elapsedRealtimeMs": 3631568991
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:05.423Z",
+      "elapsedRealtimeMs": 3631568996
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:05.457Z",
+      "elapsedRealtimeMs": 3631569029
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:05.525Z",
+      "elapsedRealtimeMs": 3631569097
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 2164,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:07.754Z",
+      "elapsedRealtimeMs": 3631571328
+    },
+    {
+      "fixture": "stereo-24-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4a8110a3-408d-42ee-9158-f3838e82809f",
+      "positionMs": 6002,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:11.608Z",
+      "elapsedRealtimeMs": 3631575180
+    },
+    {
+      "source": "stereo-24-48000.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 48000,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:12.148Z",
+      "elapsedRealtimeMs": 3631575720
+    },
+    {
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:12.157Z",
+      "elapsedRealtimeMs": 3631575729
+    },
+    {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/raw",
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:12.212Z",
+      "elapsedRealtimeMs": 3631575784
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:12.244Z",
+      "elapsedRealtimeMs": 3631575816
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:12.260Z",
+      "elapsedRealtimeMs": 3631575833
+    },
+    {
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:12.318Z",
+      "elapsedRealtimeMs": 3631575890
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:12.337Z",
+      "elapsedRealtimeMs": 3631575910
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 5408,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:17.795Z",
+      "elapsedRealtimeMs": 3631581368
+    },
+    {
+      "fixture": "stereo-24-48000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1baf3eea-fc20-4dde-84de-bc1c3e5eadb1",
+      "positionMs": 6000,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:18.392Z",
+      "elapsedRealtimeMs": 3631581965
+    },
+    {
+      "source": "stereo-24-48000.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 48000,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:19.002Z",
+      "elapsedRealtimeMs": 3631582574
+    },
+    {
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:19.009Z",
+      "elapsedRealtimeMs": 3631582581
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:07:19.096Z",
+      "elapsedRealtimeMs": 3631582668
+    },
+    {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:19.101Z",
+      "elapsedRealtimeMs": 3631582673
+    },
+    {
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:19.158Z",
+      "elapsedRealtimeMs": 3631582730
+    },
+    {
+      "sampleRateHz": 48000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 61504,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:19.216Z",
+      "elapsedRealtimeMs": 3631582788
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:19.223Z",
+      "elapsedRealtimeMs": 3631582795
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:19.228Z",
+      "elapsedRealtimeMs": 3631582800
+    },
+    {
+      "fixture": "stereo-24-48000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "4029a860-df81-47d8-bc98-9a39dad13082",
+      "positionMs": 6005,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:25.323Z",
+      "elapsedRealtimeMs": 3631588895
+    },
+    {
+      "source": "stereo-24-88200.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 88200,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:26.432Z",
+      "elapsedRealtimeMs": 3631590004
+    },
+    {
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:26.444Z",
+      "elapsedRealtimeMs": 3631590016
+    },
+    {
+      "sampleRateHz": 88200,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/raw",
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:26.523Z",
+      "elapsedRealtimeMs": 3631590095
+    },
+    {
+      "sampleRateHz": 88200,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 113024,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:26.557Z",
+      "elapsedRealtimeMs": 3631590130
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:26.568Z",
+      "elapsedRealtimeMs": 3631590140
+    },
+    {
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:26.624Z",
+      "elapsedRealtimeMs": 3631590197
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:26.629Z",
+      "elapsedRealtimeMs": 3631590201
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 1133,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:27.810Z",
+      "elapsedRealtimeMs": 3631591383
+    },
+    {
+      "fixture": "stereo-24-88200.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ed7f1aa9-1d6c-4b8e-bf22-624ada092e20",
+      "positionMs": 6006,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:32.682Z",
+      "elapsedRealtimeMs": 3631596254
+    },
+    {
+      "source": "stereo-24-88200.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 88200,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:35.072Z",
+      "elapsedRealtimeMs": 3631598645
+    },
+    {
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:35.082Z",
+      "elapsedRealtimeMs": 3631598654
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:07:35.144Z",
+      "elapsedRealtimeMs": 3631598716
+    },
+    {
+      "sampleRateHz": 88200,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:35.149Z",
+      "elapsedRealtimeMs": 3631598721
+    },
+    {
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:35.213Z",
+      "elapsedRealtimeMs": 3631598786
+    },
+    {
+      "sampleRateHz": 88200,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 113024,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:35.234Z",
+      "elapsedRealtimeMs": 3631598807
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:35.244Z",
+      "elapsedRealtimeMs": 3631598817
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:35.306Z",
+      "elapsedRealtimeMs": 3631598878
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 2499,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:37.849Z",
+      "elapsedRealtimeMs": 3631601422
+    },
+    {
+      "fixture": "stereo-24-88200.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "1153d7ae-a6b3-46b9-9143-249bba5ff1cf",
+      "positionMs": 6002,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:41.367Z",
+      "elapsedRealtimeMs": 3631604940
+    },
+    {
+      "source": "stereo-24-96000.wav",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 96000,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:45.585Z",
+      "elapsedRealtimeMs": 3631609157
+    },
+    {
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:45.596Z",
+      "elapsedRealtimeMs": 3631609168
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/raw",
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:45.643Z",
+      "elapsedRealtimeMs": 3631609216
+    },
+    {
+      "sampleRateHz": 96000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 123008,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:45.689Z",
+      "elapsedRealtimeMs": 3631609261
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:45.701Z",
+      "elapsedRealtimeMs": 3631609273
+    },
+    {
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:45.740Z",
+      "elapsedRealtimeMs": 3631609313
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:45.746Z",
+      "elapsedRealtimeMs": 3631609318
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 2103,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:47.883Z",
+      "elapsedRealtimeMs": 3631611456
+    },
+    {
+      "fixture": "stereo-24-96000.wav",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "8859f686-bd96-487f-8fc9-caf4cc23f248",
+      "positionMs": 6006,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:51.804Z",
+      "elapsedRealtimeMs": 3631615377
+    },
+    {
+      "source": "stereo-24-96000.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 96000,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": false,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:07:53.401Z",
+      "elapsedRealtimeMs": 3631616974
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:53.414Z",
+      "elapsedRealtimeMs": 3631616986
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:07:53.483Z",
+      "elapsedRealtimeMs": 3631617055
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:07:53.489Z",
+      "elapsedRealtimeMs": 3631617061
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:53.511Z",
+      "elapsedRealtimeMs": 3631617083
+    },
+    {
+      "sampleRateHz": 96000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 123008,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:07:53.527Z",
+      "elapsedRealtimeMs": 3631617099
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:07:53.559Z",
+      "elapsedRealtimeMs": 3631617132
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:07:53.607Z",
+      "elapsedRealtimeMs": 3631617179
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 4215,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:07:57.920Z",
+      "elapsedRealtimeMs": 3631621493
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "ead987a3-ef5c-4a67-95a4-aae04f58036f",
+      "positionMs": 6005,
+      "playing": false,
+      "state": 4,
+      "event": "playback_state",
+      "at": "2026-11-01T18:07:59.716Z",
+      "elapsedRealtimeMs": 3631623288
+    },
+    {
+      "source": "stereo-16-44100.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 44100,
+      "sourceMeaningfulBits": 16,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": true,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:08:07.204Z",
+      "elapsedRealtimeMs": 3631630777
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:07.221Z",
+      "elapsedRealtimeMs": 3631630794
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:08:07.304Z",
+      "elapsedRealtimeMs": 3631630876
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:07.310Z",
+      "elapsedRealtimeMs": 3631630882
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:07.330Z",
+      "elapsedRealtimeMs": 3631630902
+    },
+    {
+      "sampleRateHz": 44100,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 56576,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:08:07.346Z",
+      "elapsedRealtimeMs": 3631630918
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:08:07.361Z",
+      "elapsedRealtimeMs": 3631630934
+    },
+    {
+      "routedDevice": {
+        "type": 22,
+        "product": "USB-Audio - KZ Acoustics M2",
+        "supportedRatesHz": [
+          44100,
+          48000,
+          88200,
+          96000
+        ],
+        "supportedEncodingConstants": [
+          4
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:08:07.409Z",
+      "elapsedRealtimeMs": 3631630981
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 455,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:08:07.932Z",
+      "elapsedRealtimeMs": 3631631505
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5108,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:12.583Z",
+      "elapsedRealtimeMs": 3631636155
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4485,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:08:17.965Z",
+      "elapsedRealtimeMs": 3631641537
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5316,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:18.796Z",
+      "elapsedRealtimeMs": 3631642368
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5313,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:24.792Z",
+      "elapsedRealtimeMs": 3631648365
+    },
+    {
+      "interactive": false,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 2526,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:08:28.009Z",
+      "elapsedRealtimeMs": 3631651583
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5310,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:30.789Z",
+      "elapsedRealtimeMs": 3631654362
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5315,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:36.794Z",
+      "elapsedRealtimeMs": 3631660367
+    },
+    {
+      "interactive": false,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 572,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:08:38.054Z",
+      "elapsedRealtimeMs": 3631661629
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5313,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:42.794Z",
+      "elapsedRealtimeMs": 3631666367
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4608,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:08:48.087Z",
+      "elapsedRealtimeMs": 3631671659
+    },
+    {
+      "sampleRateHz": 44100,
+      "channels": 2,
+      "pcmEncodingConstant": 2,
+      "mime": "audio\/flac",
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 5307,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:48.782Z",
+      "elapsedRealtimeMs": 3631672355
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 22,
+          "product": "USB-Audio - KZ Acoustics M2",
+          "sampleRatesHz": [
+            44100,
+            48000,
+            88200,
+            96000
+          ],
+          "encodings": [
+            4
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 10,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4021,
+      "playing": false,
+      "state": 3,
+      "event": "usb_detached",
+      "at": "2026-11-01T18:08:53.533Z",
+      "elapsedRealtimeMs": 3631677105
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4021,
+      "playing": false,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:53.543Z",
+      "elapsedRealtimeMs": 3631677115
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4029,
+      "playing": false,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:53.631Z",
+      "elapsedRealtimeMs": 3631677204
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 8,
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4029,
+      "playing": false,
+      "state": 3,
+      "event": "output_removed",
+      "at": "2026-11-01T18:08:54.459Z",
+      "elapsedRealtimeMs": 3631678032
+    },
+    {
+      "fixture": "stereo-16-44100.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "5d349d76-323d-475c-99f9-d18050b1a324",
+      "positionMs": 4029,
+      "playing": false,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:54.469Z",
+      "elapsedRealtimeMs": 3631678041
+    },
+    {
+      "source": "stereo-24-96000.flac",
+      "physicalPresetUserReported": "Standard",
+      "sourceSampleRateHz": 96000,
+      "sourceMeaningfulBits": 24,
+      "sourceChannels": 2,
+      "requestedOutput": "Default Media3 Android route; no preferred device or physical rate\/bit depth forced.",
+      "durationMs": 6000,
+      "loop": true,
+      "fixturePeakDbfs": -42,
+      "softwarePlayerVolume": 1,
+      "requestedSpeed": 1,
+      "effects": "Default Media3 PCM path; no app EQ, ReplayGain or crossfade",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "fixture_requested",
+      "at": "2026-11-01T18:08:58.288Z",
+      "elapsedRealtimeMs": 3631681860
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:58.311Z",
+      "elapsedRealtimeMs": 3631681883
+    },
+    {
+      "name": "c2.android.flac.decoder",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder",
+      "at": "2026-11-01T18:08:58.376Z",
+      "elapsedRealtimeMs": 3631681948
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": false,
+      "state": 2,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:08:58.382Z",
+      "elapsedRealtimeMs": 3631681954
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:08:58.408Z",
+      "elapsedRealtimeMs": 3631681980
+    },
+    {
+      "sampleRateHz": 96000,
+      "encodingConstant": 2,
+      "channelMask": 12,
+      "bufferBytes": 123008,
+      "offload": false,
+      "meaning": "Media3-created Android AudioTrack; physical USB stream remains unknown.",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "audio_track_configuration",
+      "at": "2026-11-01T18:08:58.415Z",
+      "elapsedRealtimeMs": 3631681987
+    },
+    {
+      "availableOutputCapabilities": [
+        {
+          "type": 1,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 2,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            48000
+          ],
+          "encodings": [
+            2
+          ]
+        },
+        {
+          "type": 18,
+          "product": "CPH1937",
+          "sampleRatesHz": [
+            8000,
+            16000
+          ],
+          "encodings": [
+            2
+          ]
+        }
+      ],
+      "meaning": "Available outputs and advertised capabilities; active physical route\/rate not measured.",
+      "systemMusicVolumeStep": 8,
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "available_outputs",
+      "at": "2026-11-01T18:08:58.471Z",
+      "elapsedRealtimeMs": 3631682044
+    },
+    {
+      "routedDevice": {
+        "type": 2,
+        "product": "CPH1937",
+        "supportedRatesHz": [
+          48000
+        ],
+        "supportedEncodingConstants": [
+          2
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:08:58.521Z",
+      "elapsedRealtimeMs": 3631682093
+    },
+    {
+      "routedDevice": {
+        "type": 2,
+        "product": "CPH1937",
+        "supportedRatesHz": [
+          48000
+        ],
+        "supportedEncodingConstants": [
+          2
+        ]
+      },
+      "meaning": "Android AudioTrack routed device; supported arrays are capabilities. Physical USB stream rate\/bit depth remain unknown.",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 0,
+      "playing": true,
+      "state": 3,
+      "event": "android_route_changed",
+      "at": "2026-11-01T18:08:58.528Z",
+      "elapsedRealtimeMs": 3631682100
+    },
+    {
+      "sampleRateHz": 96000,
+      "channels": 2,
+      "pcmEncodingConstant": 21,
+      "mime": "audio\/flac",
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 5131,
+      "playing": true,
+      "state": 3,
+      "event": "decoder_input",
+      "at": "2026-11-01T18:09:03.796Z",
+      "elapsedRealtimeMs": 3631687369
+    },
+    {
+      "interactive": true,
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 3428,
+      "playing": true,
+      "state": 3,
+      "event": "progress",
+      "at": "2026-11-01T18:09:08.098Z",
+      "elapsedRealtimeMs": 3631691671
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "serviceRunId": "87e66087-7c25-4c57-ba72-676cb88cfb84",
+      "testId": "c084d441-3776-4fd7-af5d-1536a30824cc",
+      "positionMs": 3750,
+      "playing": false,
+      "state": 3,
+      "event": "playback_state",
+      "at": "2026-11-01T18:09:08.426Z",
+      "elapsedRealtimeMs": 3631691998
+    },
+    {
+      "fixture": "stereo-24-96000.flac",
+      "notes": "All of the tests worked with locked screen, and detach",
+      "userReported": true,
+      "event": "user_observation",
+      "at": "2026-11-01T18:09:48.488Z",
+      "elapsedRealtimeMs": 3631732061
+    }
+  ],
+  "droppedEvents": 0,
+  "exportedAt": "2026-11-01T18:09:51.363Z",
+  "appVersion": "0.2.0-baseline",
+  "fixtureManifest": {
+    "schemaVersion": 1,
+    "signal": "0-2s left 440Hz; 2-4s right 660Hz; 4-6s both; 20ms fades",
+    "encoder": "ffmpeg version 8.1.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "fixtures": [
+      {
+        "file": "stereo-16-44100.wav",
+        "sampleRateHz": 44100,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "dcab6a4d03775544aebbffb7e3a7ebb04d245dd65b6070788667a5ab50819fe6",
+        "fileSha256": "e4e6c8417051ddfaf8a0be7a1a6fe489336c9ef2807d37753aa9ccc002ae2fb8"
+      },
+      {
+        "file": "stereo-16-44100.flac",
+        "sampleRateHz": 44100,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "dcab6a4d03775544aebbffb7e3a7ebb04d245dd65b6070788667a5ab50819fe6",
+        "fileSha256": "d710d138d177e60bdd769b71aed8d226f6208a3ce1bc618d6e928256091a90e3"
+      },
+      {
+        "file": "stereo-16-48000.wav",
+        "sampleRateHz": 48000,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "46529e5563f6b79f203b7828c3a4d71d89a98e20a76cd55fa2dd0f2ebeab6c9c",
+        "fileSha256": "caf8d9b963fbaf2fb8ad269d7e9640f13e5db701e07417a493ad139c1cbffec4"
+      },
+      {
+        "file": "stereo-16-48000.flac",
+        "sampleRateHz": 48000,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "46529e5563f6b79f203b7828c3a4d71d89a98e20a76cd55fa2dd0f2ebeab6c9c",
+        "fileSha256": "13ec7b23249b760f4c25e64290ab3145116bcf45a6f5e2ab876953e3833d5810"
+      },
+      {
+        "file": "stereo-16-88200.wav",
+        "sampleRateHz": 88200,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "0eefec371f9deabd445ce75053629213f400dda248f4f7cbbc8c690e6253bc21",
+        "fileSha256": "5d7126a963567ee69328ec860e4ee7c892f41993c2f76d5a897b727fbb934709"
+      },
+      {
+        "file": "stereo-16-88200.flac",
+        "sampleRateHz": 88200,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "0eefec371f9deabd445ce75053629213f400dda248f4f7cbbc8c690e6253bc21",
+        "fileSha256": "88a8daf5545de02b0d6766441dae1f967dde2bfb433de481c4ac7c6a870ed3c5"
+      },
+      {
+        "file": "stereo-16-96000.wav",
+        "sampleRateHz": 96000,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "3ab9d58222d13b2fe599a972def5e45932eb29f70523d99ef2df9667f33ff7aa",
+        "fileSha256": "19d8bb8eb6b460a93bd1a21ff7660a1c2b74c5d1361cf14867bd391b8e31074d"
+      },
+      {
+        "file": "stereo-16-96000.flac",
+        "sampleRateHz": 96000,
+        "meaningfulBits": 16,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "3ab9d58222d13b2fe599a972def5e45932eb29f70523d99ef2df9667f33ff7aa",
+        "fileSha256": "46efe34254972104c9ff02d6a9e4e753d3ecb24dda5e9c729584f79dbe4bf557"
+      },
+      {
+        "file": "stereo-24-44100.wav",
+        "sampleRateHz": 44100,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "ef66e41fd071a5f538657901ec00f756b4ed082ee14c4fdd1ec1df1f163069c1",
+        "fileSha256": "cad662e9746beb8e1fa9850c7ece5e19157264a6adecaae58abbf7a42ed819e8"
+      },
+      {
+        "file": "stereo-24-44100.flac",
+        "sampleRateHz": 44100,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "ef66e41fd071a5f538657901ec00f756b4ed082ee14c4fdd1ec1df1f163069c1",
+        "fileSha256": "21d27be5cdceff1063e8cd05acba98e08900de0fed1902e57dae0426c4c63951"
+      },
+      {
+        "file": "stereo-24-48000.wav",
+        "sampleRateHz": 48000,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "a19e6c0caff483a200c14a606e9c201910397da177a1429fc7c613b9ef70aa05",
+        "fileSha256": "f9a4d75e4c0668154a9f01abafef35f8508220dd97586f7085a068c106143494"
+      },
+      {
+        "file": "stereo-24-48000.flac",
+        "sampleRateHz": 48000,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "a19e6c0caff483a200c14a606e9c201910397da177a1429fc7c613b9ef70aa05",
+        "fileSha256": "204d6a178a5585d30797a31fa125019958f7c860ffc167f9cc2c8ac03f9ba55f"
+      },
+      {
+        "file": "stereo-24-88200.wav",
+        "sampleRateHz": 88200,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "3aac746ded80a1fd35fa71b122172542d42bd1fb9030205128a96ab88abf1a6e",
+        "fileSha256": "24b6d9a1b6f275e5c76cc4f1acfdc3f2224008487f9f76c3424b2aad46d9eb47"
+      },
+      {
+        "file": "stereo-24-88200.flac",
+        "sampleRateHz": 88200,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "3aac746ded80a1fd35fa71b122172542d42bd1fb9030205128a96ab88abf1a6e",
+        "fileSha256": "9528ad03d82745950037b25a788fd8d2ae5b30bae9bdb4368b684c5414c1fe2d"
+      },
+      {
+        "file": "stereo-24-96000.wav",
+        "sampleRateHz": 96000,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "a75ada174d4e8911f3bef5b4725ff0fea13b98dc48503afe730b0048745f2800",
+        "fileSha256": "7216510e724f3681d6f85020cfd58b69ff19a957fdf19ea327dee3b50d9a0286"
+      },
+      {
+        "file": "stereo-24-96000.flac",
+        "sampleRateHz": 96000,
+        "meaningfulBits": 24,
+        "channels": 2,
+        "durationMs": 6000,
+        "peakDbfs": -42,
+        "pcmSha256": "a75ada174d4e8911f3bef5b4725ff0fea13b98dc48503afe730b0048745f2800",
+        "fileSha256": "ff31e203babc93cc1e6d2fbed2e9348d7c81c5c429fcd2a99a7b540f5694a796"
+      }
+    ]
+  },
+  "phone": {
+    "manufacturer": "OPPO",
+    "model": "CPH1937",
+    "androidRelease": "11",
+    "sdk": 30,
+    "buildDisplay": "CPH1937_11_F.17"
+  },
+  "scope": "Normal Android route only. AudioTrack configuration is an app-side observation, not the physical USB stream.",
+  "unavailableMeasurements": [
+    "Physical USB rate and bit depth",
+    "Bus sample delivery",
+    "Cable internal DSP",
+    "Direct USB transfer statistics"
+  ],
+  "directUsb": "Unavailable: asynchronous clocking unresolved; safe hardware volume SET\/readback and native streaming not implemented or tested."
+}

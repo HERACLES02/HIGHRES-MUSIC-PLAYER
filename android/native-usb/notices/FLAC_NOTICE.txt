@@ -1,0 +1,9 @@
+Native FLAC decoder: libFLAC 1.4.3, Xiph.Org Foundation and contributors.
+https://github.com/xiph/flac/tree/1.4.3
+
+libFLAC uses the Xiph BSD-style license included in FLAC_COPYING.txt.
+The library is statically linked into libusb_experiment.so; optional Ogg support,
+programs, C++ wrapper, examples and upstream test programs are not built.
+Unmodified source, copyright notices and build licenses are in
+android/native-usb/vendor/flac; pinned hashes are in flac-sources.json.
+Project code uses only the native decoder for the private diagnostic fixtures.

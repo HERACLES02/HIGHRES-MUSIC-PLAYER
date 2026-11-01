@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "dateLocal": "2026-11-02",
+  "checkpoint": "Guarded native USB ownership and GET-only connection diagnostic",
+  "artifact": {
+    "path": "releases/music-usb-probe-0.3.0.apk",
+    "applicationId": "com.localmusic.diagnostics",
+    "versionCode": 3,
+    "versionName": "0.3.0-native-diagnostic",
+    "bytes": 53806928,
+    "sha256": "f1afcaeb3a1720cc88397cb0e663bf037cf71d69fd6c48d495256bcd1ebdb111",
+    "abis": ["arm64-v8a", "armeabi-v7a"],
+    "apkV2SignatureVerified": true,
+    "sameSigningCertificateAsPreviousProbe": true,
+    "permanentReleaseSigningKey": false
+  },
+  "localChecks": {
+    "nativeBoundaryScenariosPassed": 11,
+    "simulatedReportParsedAsJson": true,
+    "parserAssertionsPassed": 3052,
+    "fixtureRegressionTestsPassed": 2,
+    "packagedFixtureHashesVerified": 16,
+    "vendoredSourceAndLicenseHashesVerified": 40,
+    "nativeToolHashesVerified": 3,
+    "gradleDependencyVerificationEnabled": true,
+    "assembleBothArmVariants": "passed",
+    "jniExportAndLibraryPackaging": "passed",
+    "libusbLicensePackaged": true,
+    "lint": { "errors": 0, "warnings": 11, "hints": 1 }
+  },
+  "implemented": {
+    "normalEngineReleaseAndRouteGate": true,
+    "exactM2DescriptorGuard": true,
+    "androidGrantedFdDupAndLibusbWrap": true,
+    "negotiatedSpeedQuery": true,
+    "scopedControlAndPlaybackClaims": true,
+    "unclaimedAndClaimedVolumeGets": true,
+    "rateAndAlternateGets": true,
+    "releaseAndDriverStatusReporting": true,
+    "captureOrHidInterfaceClaims": false,
+    "audioSubmission": false,
+    "sampleRateSets": false,
+    "alternateSets": false,
+    "hardwareVolumeSets": false
+  },
+  "physicalNativeValidation": {
+    "phoneAttachedDuringBuild": false,
+    "newApkInstalledAndLaunched": false,
+    "negotiatedSpeedObserved": null,
+    "interfaceOwnershipVerified": false,
+    "successfulVolumeReadback": false,
+    "driverRestorationVerified": false,
+    "safeHardwareVolumeEstablished": false,
+    "clockingValidated": false,
+    "directStreamingValidated": false
+  },
+  "priorPhysicalResults": "PHONE_TEST_RESULTS.md",
+  "phoneInstructions": "NATIVE_USB_TEST.md",
+  "scope": "Build and simulated-boundary results only; physical USB behavior cannot be inferred from these checks. Stage A remains open."
+}

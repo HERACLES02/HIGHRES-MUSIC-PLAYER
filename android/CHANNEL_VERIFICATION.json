@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "dateLocal": "2026-11-02",
+  "checkpoint": "Equal-frequency non-overlapping channel comparison in Normal and Direct routes",
+  "artifact": {
+    "path": "releases/music-usb-probe-0.6.0.apk",
+    "applicationId": "com.localmusic.diagnostics",
+    "versionCode": 6,
+    "versionName": "0.6.0-channel-check",
+    "bytes": 70482800,
+    "sha256": "b847f8f6930975e92c8646c0f5b5224ba926aa4b1efefa79ae94cb27e70ae2d5",
+    "abis": ["arm64-v8a", "armeabi-v7a"],
+    "apkV2SignatureVerified": true,
+    "sameSigningCertificateAsPreviousProbe": true
+  },
+  "localChecks": {
+    "channelSignalRegressionTestsPassed": 1,
+    "channelFixtureVariantsCovered": 8,
+    "activeLeftRightSamplesIdentical": true,
+    "inactiveChannelAndGapSamplesAllZero": true,
+    "simultaneouslyNonzeroChannelSamples": 0,
+    "originalFixtureRegressionTestsPassed": 2,
+    "nativeDecoderReferenceHashesPassed": 24,
+    "signedExtremaAndChannelsChecked": true,
+    "corruptOrUnsupportedDecoderCasesRejected": 18,
+    "parserAssertionsPassed": 3052,
+    "packagedFixtureHashesVerified": 24,
+    "original16FixtureHashesUnchanged": true,
+    "nativeLibrariesByteIdenticalTo050": true,
+    "nativeTransportControlHostSuites": "prior evidence retained; not rerun for unchanged native libraries",
+    "sourceToolAndGradleDependencyHashesVerified": true,
+    "assembly": "passed",
+    "lint": { "errors": 0, "warnings": 11, "hints": 4 }
+  },
+  "physicalFollowup": {
+    "userReportsLeftAudibleAtMinus30AndMinus20Db": true,
+    "userReportsLeftSofterThanRightOnOriginalFixture": true,
+    "userClarifiedOverlapOnlyInOriginalBothChannelSection": true,
+    "higherLevelFollowupJsonReceived": false,
+    "newChannelFixtureHeardOnPhone": false,
+    "equalToneBalanceComparedAcrossRoutes": false,
+    "clockingValidated": false,
+    "longRunValidated": false
+  },
+  "changes": {
+    "new440HzSeparatedWavFixtures": true,
+    "normalAndDirectUseSameFixtureFiles": true,
+    "sharedBundledFixtureAllowlist": true,
+    "approximateSourceSectionLabel": true,
+    "channelRoutingOrSwapCorrection": false,
+    "balanceCompensation": false,
+    "defaultVolumeIncrease": false,
+    "nativeTransportChanges": false
+  },
+  "signal": "0-2s left 440Hz; 2-3s silence; 3-5s right 440Hz; 5-6s silence; repeats; no both-channel section",
+  "phoneInstructions": "CHANNEL_CHECK.md",
+  "scope": "Local fixture/UI checks only. No established channel-routing defect or physical balance correction is claimed. Stage A remains open."
+}

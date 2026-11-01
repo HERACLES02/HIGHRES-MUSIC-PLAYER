@@ -1,0 +1,11 @@
+{
+  "host": "Windows x86_64",
+  "ndkVersion": "27.2.12479018",
+  "cmakeVersion": "3.22.1",
+  "checksumOrigin": "SHA-256 recorded after official sdkmanager installation; first-download trust, not publisher signatures",
+  "files": {
+    "ndk/27.2.12479018/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe": "dcddc0336730b1053998e305cc41b93614c62209acb96b4875d44fc3a2b2d522",
+    "cmake/3.22.1/bin/cmake.exe": "41d609bae2a65a9a8e2060bb222d6e031d33c0546054d354137eb490933cb8ac",
+    "cmake/3.22.1/bin/ninja.exe": "d5d6705439aac3162ff6cfb1509246cdbbecaf9d10d7c846713af2c07d8d7ee8"
+  }
+}

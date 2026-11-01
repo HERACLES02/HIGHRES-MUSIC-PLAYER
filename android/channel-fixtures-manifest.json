@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "signal": "0-2s left 440Hz; 2-3s silence; 3-5s right 440Hz; 5-6s silence; 20ms fades; no both-channel section",
+  "fixtures": [
+    {
+      "file": "channels-16-44100.wav",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "c73a06004c45b2a259b44c7b8f5e18ac7375b80b7b0219198e6850d324dc0f2b",
+      "fileSha256": "33fd2ece78125a8d629876675b416fd616e70c03b5ce9ec2223881404134ddc4"
+    },
+    {
+      "file": "channels-16-48000.wav",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "c23931ee42930b0b0276724b005187afbc2df3b64913335f03b6444c97415435",
+      "fileSha256": "4e6c855bcb8c7546c46416c5a08a1a772b615982d3e2c4142c869ab8833be031"
+    },
+    {
+      "file": "channels-16-88200.wav",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "9055460e527369681fad2c16595563a40f645ae802b8526eda9c38d9fa6922b9",
+      "fileSha256": "8bc5b982d8e80013f334ab83d32247a3235f058a05cd16a10335a4316d0e7b1f"
+    },
+    {
+      "file": "channels-16-96000.wav",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 16,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "95eb3f6dcb99ece30947378b2727ea30dc81f9d7ca4cce47c46efa6e2f20c8f6",
+      "fileSha256": "96a350dab187d5391958d23173e87669bbf0ea29c2c812cee020f9bc36c9d48f"
+    },
+    {
+      "file": "channels-24-44100.wav",
+      "sampleRateHz": 44100,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "e318e9b8b6150ff323b03eef1c867bddb01b76ae50a3ec9dd8d72f6315d042cc",
+      "fileSha256": "4c14dee95d5f4b1b69b36074a413abadb24aa2197ab1a3e6d4ad632aec5665f9"
+    },
+    {
+      "file": "channels-24-48000.wav",
+      "sampleRateHz": 48000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "e5ab308b7994845df74b248b0e5fa093aed17dc2dfa8267908ad92708c14dbff",
+      "fileSha256": "d41d4857fbca4d0f48ea1960c1424e880014e7a64f92d5621d1825ead1c2fd2b"
+    },
+    {
+      "file": "channels-24-88200.wav",
+      "sampleRateHz": 88200,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "e085dc131d01c6568e86aece48688b5f22d4246a75eb12936827f315edb6fd6e",
+      "fileSha256": "df8bd139cdd746cc8208a92aeb1cf07077b93427ace08b7dd012a9455d6e6f07"
+    },
+    {
+      "file": "channels-24-96000.wav",
+      "sampleRateHz": 96000,
+      "meaningfulBits": 24,
+      "channels": 2,
+      "durationMs": 6000,
+      "peakDbfs": -42,
+      "pattern": "equal-tone-separated",
+      "frequencyHz": 440,
+      "pcmSha256": "75348e7451e1132a0fd48fe0e8f8726eb466380573d4db37f783afd255c49d22",
+      "fileSha256": "2f7a3958b3af2f258571f008ac0e061f39a84b84cc0920c27e26764995ed5dac"
+    }
+  ]
+}

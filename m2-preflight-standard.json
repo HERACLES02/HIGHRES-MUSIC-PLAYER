@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 2,
+  "appVersion": "0.2.0-baseline",
+  "capturedAt": "2026-11-01T18:04:08.136Z",
+  "scope": "Read-only advertised capabilities. No direct audio stream, active playback format, sound-quality result, or bit-perfect verification.",
+  "phone": {
+    "manufacturer": "OPPO",
+    "model": "CPH1937",
+    "androidRelease": "11",
+    "sdk": 30,
+    "buildDisplay": "CPH1937_11_F.17"
+  },
+  "usb": {
+    "manufacturer": "KTMicro",
+    "product": "KZ Acoustics M2",
+    "vendorId": 12722,
+    "productId": 785,
+    "transientDevicePath": "\/dev\/bus\/usb\/001\/002",
+    "activeConfiguration": 1,
+    "androidInterfaceCount": 8,
+    "serialNumberCollected": false
+  },
+  "descriptorBytes": 347,
+  "descriptorCount": 36,
+  "descriptorBytesConsumed": 347,
+  "rawDescriptorsHex": "1201000200000040b23111030300010402010902490104010080310904000000010100000a2401000147000201020c24020101020001010000000924060201010102000924030401010002000c24020501010002030000000a240607050101020200092403080203000700090401000001020000090401010101020000072401040101000b2402010102100180bb0009058405620001000007250101000000090401020101020000072401040101000b2402010103180180bb000905840593000100000725010100000009040200000102000009040201010102000007240105010100142402010202100444ac0080bb008858010077010905040584010100000725010100000009040202010102000007240105010100142402010203180444ac0088580180bb00007701090504054602010000072501010000000904030002030000000921110100012246000705830310000107050303100001",
+  "streams": [
+    {
+      "configuration": 1,
+      "interface": 1,
+      "alternate": 0,
+      "protocol": 0,
+      "playback": false,
+      "capture": false,
+      "channels": 0,
+      "containerBytes": 0,
+      "meaningfulBits": 0,
+      "encoding": "Unknown",
+      "formatValid": false,
+      "controlInterface": 0,
+      "terminalLink": 0,
+      "clockId": 0,
+      "discreteRatesHz": [],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Sample rates unknown; no supported rate is assumed.",
+      "endpoints": []
+    },
+    {
+      "configuration": 1,
+      "interface": 1,
+      "alternate": 1,
+      "protocol": 0,
+      "playback": false,
+      "capture": true,
+      "channels": 1,
+      "containerBytes": 2,
+      "meaningfulBits": 16,
+      "encoding": "PCM",
+      "formatValid": true,
+      "controlInterface": 0,
+      "terminalLink": 4,
+      "clockId": 0,
+      "discreteRatesHz": [
+        48000
+      ],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Advertised rates: 48000 Hz.",
+      "endpoints": [
+        {
+          "address": 132,
+          "direction": "IN",
+          "isochronous": true,
+          "feedback": false,
+          "synchronization": "asynchronous",
+          "rawMaxPacketSize": 98,
+          "interval": 1,
+          "synchAddress": 0,
+          "classAttributes": 1
+        }
+      ]
+    },
+    {
+      "configuration": 1,
+      "interface": 1,
+      "alternate": 2,
+      "protocol": 0,
+      "playback": false,
+      "capture": true,
+      "channels": 1,
+      "containerBytes": 3,
+      "meaningfulBits": 24,
+      "encoding": "PCM",
+      "formatValid": true,
+      "controlInterface": 0,
+      "terminalLink": 4,
+      "clockId": 0,
+      "discreteRatesHz": [
+        48000
+      ],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Advertised rates: 48000 Hz.",
+      "endpoints": [
+        {
+          "address": 132,
+          "direction": "IN",
+          "isochronous": true,
+          "feedback": false,
+          "synchronization": "asynchronous",
+          "rawMaxPacketSize": 147,
+          "interval": 1,
+          "synchAddress": 0,
+          "classAttributes": 1
+        }
+      ]
+    },
+    {
+      "configuration": 1,
+      "interface": 2,
+      "alternate": 0,
+      "protocol": 0,
+      "playback": false,
+      "capture": false,
+      "channels": 0,
+      "containerBytes": 0,
+      "meaningfulBits": 0,
+      "encoding": "Unknown",
+      "formatValid": false,
+      "controlInterface": 0,
+      "terminalLink": 0,
+      "clockId": 0,
+      "discreteRatesHz": [],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Sample rates unknown; no supported rate is assumed.",
+      "endpoints": []
+    },
+    {
+      "configuration": 1,
+      "interface": 2,
+      "alternate": 1,
+      "protocol": 0,
+      "playback": true,
+      "capture": false,
+      "channels": 2,
+      "containerBytes": 2,
+      "meaningfulBits": 16,
+      "encoding": "PCM",
+      "formatValid": true,
+      "controlInterface": 0,
+      "terminalLink": 5,
+      "clockId": 0,
+      "discreteRatesHz": [
+        44100,
+        48000,
+        88200,
+        96000
+      ],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Advertised rates: 44100, 48000, 88200, 96000 Hz.",
+      "endpoints": [
+        {
+          "address": 4,
+          "direction": "OUT",
+          "isochronous": true,
+          "feedback": false,
+          "synchronization": "asynchronous",
+          "rawMaxPacketSize": 388,
+          "interval": 1,
+          "synchAddress": 0,
+          "classAttributes": 1
+        }
+      ]
+    },
+    {
+      "configuration": 1,
+      "interface": 2,
+      "alternate": 2,
+      "protocol": 0,
+      "playback": true,
+      "capture": false,
+      "channels": 2,
+      "containerBytes": 3,
+      "meaningfulBits": 24,
+      "encoding": "PCM",
+      "formatValid": true,
+      "controlInterface": 0,
+      "terminalLink": 5,
+      "clockId": 0,
+      "discreteRatesHz": [
+        44100,
+        88200,
+        48000,
+        96000
+      ],
+      "minimumRateHz": 0,
+      "maximumRateHz": 0,
+      "rateDescription": "Advertised rates: 44100, 88200, 48000, 96000 Hz.",
+      "endpoints": [
+        {
+          "address": 4,
+          "direction": "OUT",
+          "isochronous": true,
+          "feedback": false,
+          "synchronization": "asynchronous",
+          "rawMaxPacketSize": 582,
+          "interval": 1,
+          "synchAddress": 0,
+          "classAttributes": 1
+        }
+      ]
+    }
+  ],
+  "clockQueries": [],
+  "uac1PlaybackPreflight": {
+    "featureUnits": [
+      {
+        "configuration": 1,
+        "controlInterface": 0,
+        "entityId": 7,
+        "sourceTerminal": 5,
+        "channelControlMasks": [
+          1,
+          2,
+          2
+        ],
+        "topologyScope": "Feature Unit directly downstream of the playback USB terminal; full output path not resolved.",
+        "hardwareVolumeReadback": [
+          {
+            "channel": 1,
+            "currentRawSigned256thDb": null,
+            "currentReceivedBytes": -1,
+            "minimumRawSigned256thDb": null,
+            "minimumReceivedBytes": -1,
+            "maximumRawSigned256thDb": null,
+            "maximumReceivedBytes": -1,
+            "resolutionRawSigned256thDb": null,
+            "resolutionReceivedBytes": -1,
+            "meaning": "GET only. -32768 is the UAC1 silence value. Missing\/short responses remain unknown."
+          },
+          {
+            "channel": 2,
+            "currentRawSigned256thDb": null,
+            "currentReceivedBytes": -1,
+            "minimumRawSigned256thDb": null,
+            "minimumReceivedBytes": -1,
+            "maximumRawSigned256thDb": null,
+            "maximumReceivedBytes": -1,
+            "resolutionRawSigned256thDb": null,
+            "resolutionReceivedBytes": -1,
+            "meaning": "GET only. -32768 is the UAC1 silence value. Missing\/short responses remain unknown."
+          }
+        ],
+        "queriesSkipped": false
+      }
+    ],
+    "endpoints": [
+      {
+        "interface": 2,
+        "alternate": 1,
+        "endpoint": 4,
+        "synchronization": "asynchronous",
+        "synchAddress": 0,
+        "sampleRateControlAdvertised": true,
+        "clockingStatus": "Unresolved: asynchronous OUT without associated explicit feedback. No fixed-packet scheduler or capture timing assumed."
+      },
+      {
+        "interface": 2,
+        "alternate": 2,
+        "endpoint": 4,
+        "synchronization": "asynchronous",
+        "synchAddress": 0,
+        "sampleRateControlAdvertised": true,
+        "clockingStatus": "Unresolved: asynchronous OUT without associated explicit feedback. No fixed-packet scheduler or capture timing assumed."
+      }
+    ],
+    "usbLinkSpeed": null,
+    "linkSpeedNote": "Not measured; bcdUSB is not negotiated link speed.",
+    "safeHardwareVolumeEstablished": false,
+    "directStreamingAvailable": false,
+    "blockers": [
+      "Supported playback clocking arrangement is unverified.",
+      "Low hardware-volume SET\/readback is unverified; GET alone cannot establish safe volume.",
+      "Native libusb transport and direct decoder are not implemented. Physical streaming tests have not run."
+    ]
+  },
+  "warnings": [],
+  "androidOutputCapabilities": [
+    {
+      "product": "CPH1937",
+      "type": 1,
+      "sampleRatesHz": [
+        48000
+      ],
+      "channelCounts": [
+        1
+      ],
+      "encodingConstants": [
+        2
+      ],
+      "meaning": "Android-reported supported properties; not the active output format."
+    },
+    {
+      "product": "CPH1937",
+      "type": 2,
+      "sampleRatesHz": [
+        48000
+      ],
+      "channelCounts": [
+        2
+      ],
+      "encodingConstants": [
+        2
+      ],
+      "meaning": "Android-reported supported properties; not the active output format."
+    },
+    {
+      "product": "CPH1937",
+      "type": 18,
+      "sampleRatesHz": [
+        8000,
+        16000
+      ],
+      "channelCounts": [
+        1,
+        2
+      ],
+      "encodingConstants": [
+        2
+      ],
+      "meaning": "Android-reported supported properties; not the active output format."
+    },
+    {
+      "product": "USB-Audio - KZ Acoustics M2",
+      "type": 22,
+      "sampleRatesHz": [
+        44100,
+        48000,
+        88200,
+        96000
+      ],
+      "channelCounts": [
+        2
+      ],
+      "encodingConstants": [
+        4
+      ],
+      "meaning": "Android-reported supported properties; not the active output format."
+    }
+  ],
+  "limitations": [
+    "Descriptors advertise possible configurations; playback acceptance is not tested in this build.",
+    "Android output capability arrays do not identify the current physical output format.",
+    "Clock selectors\/multipliers and USB Audio Class 3 are not resolved; unknown means unknown.",
+    "Hardware volume GET responses are diagnostic only; low-volume SET\/readback is not performed. Internal EQ\/DSP is unknown.",
+    "The KZ High-Resolution EQ preset is not evidence of sample rate or bit depth."
+  ]
+}
