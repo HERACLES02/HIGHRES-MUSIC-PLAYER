@@ -1,0 +1,83 @@
+{
+  "taglibVersion": "2.3.2",
+  "scope": "Host-generated fixtures; exact encoded packet and Java payload fingerprints, not Android provider acceptance",
+  "results": [
+    {
+      "format": "flac",
+      "codec": "flac",
+      "fixture": "stereo-16-44100.wav",
+      "sampleRateHz": 44100,
+      "bits": 16,
+      "passed": true,
+      "encodedPacketCount": 58,
+      "payloadSha256": "aa92ec312478110c1d35f434fb0a92c8910f53395536f5c3ee085ee73341aeea"
+    },
+    {
+      "format": "mp3",
+      "codec": "libmp3lame",
+      "fixture": "stereo-16-44100.wav",
+      "sampleRateHz": 44100,
+      "bits": 0,
+      "passed": true,
+      "encodedPacketCount": 231,
+      "payloadSha256": "9569d320b029cd3f5b2207517e06cf9f9abb26d3ca0fa760b03e9d5c43310320"
+    },
+    {
+      "format": "m4a",
+      "codec": "aac",
+      "fixture": "stereo-16-44100.wav",
+      "sampleRateHz": 44100,
+      "bits": 0,
+      "passed": true,
+      "encodedPacketCount": 260,
+      "payloadSha256": "487d9ed4a7ff442a1c5ba93a3c40a8a41bf7fcea7bafa829663999d12a72d64a"
+    },
+    {
+      "format": "ogg",
+      "codec": "libvorbis",
+      "fixture": "stereo-16-44100.wav",
+      "sampleRateHz": 44100,
+      "bits": 0,
+      "passed": true,
+      "encodedPacketCount": 260,
+      "payloadSha256": "85ab5455991be8c058f498289ba41b375433f5f92287bcc56a250c4964e0c11b"
+    },
+    {
+      "format": "opus",
+      "codec": "libopus",
+      "fixture": "stereo-16-44100.wav",
+      "sampleRateHz": 48000,
+      "bits": 0,
+      "passed": true,
+      "encodedPacketCount": 301,
+      "payloadSha256": "a249217babed534019e345a38a8e4fb2df6aaae49eee5061fd10f6385a16afaf"
+    },
+    {
+      "format": "flac",
+      "codec": "flac",
+      "fixture": "stereo-24-96000.wav",
+      "sampleRateHz": 96000,
+      "bits": 24,
+      "passed": true,
+      "encodedPacketCount": 71,
+      "payloadSha256": "8c2c9542e8a0136ff99b66bbf5fc63ed9ea7c245391b82314e2c6f060bdc1598"
+    },
+    {
+      "format": "m4a",
+      "codec": "alac",
+      "fixture": "stereo-24-96000.wav",
+      "sampleRateHz": 96000,
+      "bits": 24,
+      "passed": true,
+      "encodedPacketCount": 141,
+      "payloadSha256": "87c3eec386fa9823cb33d0036a5feac696de014d82d71d17bd737b20564dd828"
+    }
+  ],
+  "malformedRejected": 5,
+  "verifiedSources": {
+    "native-tags/tags.cpp": "c7c86014f48727a94c31e52d192d2453e092ff7ac400d0f37060d51186059de5",
+    "native-tags/tags.hpp": "f0d95a0922b5bcbfd7fb56885d0a5f3f83a6f2b6771eede3324ecf6cd84e5881",
+    "native-tags/jni.cpp": "909b3e8698bd357f7b52c64bd499d59dd29f40160bc423d2ecb45d75496124d2",
+    "player-core/src/main/java/com/localmusic/core/AudioPayloadDigest.java": "d7e6005c664ff77c66c28a9c72986fcb6a3fee08a14de59379b5f212bc679302"
+  }
+}

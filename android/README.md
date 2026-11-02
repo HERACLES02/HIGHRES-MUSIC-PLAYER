@@ -1,5 +1,43 @@
 # Music USB Probe: Stage A diagnostics
 
+Current player: **Local Music 0.2.0**, a separate updateable app with folders,
+artwork, lyrics and reviewed tag editing. See [handoff](PLAYER_0_2_HANDOFF.md).
+The USB probe and its Direct clocking/balance findings remain unchanged.
+
+The first separate **Local Music 0.1.0 Normal-mode preview** is now built:
+[player implementation](player/README.md), [phone check](PLAYER_PHONE_CHECK.md).
+It has a scanned music library, favorites, service-owned song playback and queue,
+and paused session restore. It installs alongside this diagnostic; Direct remains
+gated in the player. New-app phone acceptance is pending.
+
+Latest phone result: **0.10.0 lock-screen controls confirmed working**. Media3
+Pause/Resume and Stop are recorded with clean USB restoration and no transport/
+PCM errors. See [phone acceptance](MEDIA3_PHONE_RESULTS.md). No further notification
+test is requested; earlier pending statements below are historical checkpoints.
+
+Latest diagnostic: **0.10.0 Media3 Direct integration**. The Direct fixture engine
+now has a MediaLibraryService/session and SimpleBasePlayer adapter with current
+fixture metadata and fallback artwork. The 0.9.0 reports confirm a posted public
+media notification but do not resolve the missing lock-screen card. Install the
+new APK and perform the short [Media3 check](MEDIA3_DIRECT_CHECK.md); do not repeat
+the endurance run. Build, lint, signature and state checks pass locally; physical
+lock-screen visibility and remote controls remain open.
+
+Latest diagnostic: **0.9.0 lock-screen media card**, adding a service-owned
+diagnostic session and MediaStyle Pause/Resume/Stop for the Direct fixture engine.
+See [LOCK_SCREEN_MEDIA_CHECK.md](LOCK_SCREEN_MEDIA_CHECK.md). This is locally
+verified implementation; phone visibility/control acceptance is still required.
+
+Latest diagnostic: **0.8.0 notification check**. It adds a no-audio test card and
+notification/channel-state export for the missing Direct notification. See
+[NOTIFICATION_CHECK.md](NOTIFICATION_CHECK.md). It does not claim to fix visibility
+or change the native transport; earlier diagnostic checkpoints remain below.
+
+Local persistence now lives in [`player-data`](player-data/README.md): Room on
+Android and JVM, transactional playlists/favorites/lyrics/session saves, paused
+restore and migration/recovery checks. It is independent of the diagnostic app.
+Run `scripts/test-player-data.ps1`; no APK installation is needed for these checks.
+
 The future player's isolated Kotlin foundations live in
 [`player-core`](player-core/README.md): queue rules, LRC/timing, UUID library
 models and a proposed SQL schema. Run `scripts/test-player-core.ps1` to check

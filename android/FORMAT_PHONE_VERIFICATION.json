@@ -1,0 +1,90 @@
+{
+  "scope": "Review of six original physical short WAV reports, not independent bus/DAC validation",
+  "appVersion": "0.7.0-background-check",
+  "reports": [
+    {
+      "report": "m2-direct-16-48000.json",
+      "sha256": "f7e629b9b13f627d514f81c19c2a5c73096285bffb9a5f933eba8984bf34d579",
+      "bits": 16,
+      "rateHz": 48000,
+      "durationMs": 12029,
+      "completedBytes": 2304000,
+      "nominalCompletedByteDifference": 0,
+      "nominalFrameDeficit": 0,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 14078,
+      "hardwareLevelDb": -20.0,
+      "userObservation": ""
+    },
+    {
+      "report": "m2-direct-16-88200.json",
+      "sha256": "f9d02b7ae0a702d19f14dfc773c94d604d0a447c4503d4f39ca0ee8126ee5436",
+      "bits": 16,
+      "rateHz": 88200,
+      "durationMs": 12027,
+      "completedBytes": 4233596,
+      "nominalCompletedByteDifference": -4,
+      "nominalFrameDeficit": 1,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 21193,
+      "hardwareLevelDb": -20.0,
+      "userObservation": ""
+    },
+    {
+      "report": "m2-direct-16-96000.json",
+      "sha256": "7330ae0099bd500cb642c248e197aeda708535d75a362ef64b901f5a6b8c0fd0",
+      "bits": 16,
+      "rateHz": 96000,
+      "durationMs": 12021,
+      "completedBytes": 4608000,
+      "nominalCompletedByteDifference": 0,
+      "nominalFrameDeficit": 0,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 16608,
+      "hardwareLevelDb": -20.0,
+      "userObservation": ""
+    },
+    {
+      "report": "m2-direct-24-44100.json",
+      "sha256": "db79396fe8e3496d2e1d3cfa724d2b4a5d4a5b77fb0d7a2b244b8fabc4ad6ef6",
+      "bits": 24,
+      "rateHz": 44100,
+      "durationMs": 12029,
+      "completedBytes": 3175194,
+      "nominalCompletedByteDifference": -6,
+      "nominalFrameDeficit": 1,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 17266,
+      "hardwareLevelDb": -20.0,
+      "userObservation": ""
+    },
+    {
+      "report": "m2-direct-24-48000.json",
+      "sha256": "2cf623abf2128a4396960494a41bf1fec0ad950f517e3f10c4c4b486c4e29b66",
+      "bits": 24,
+      "rateHz": 48000,
+      "durationMs": 12020,
+      "completedBytes": 3456000,
+      "nominalCompletedByteDifference": 0,
+      "nominalFrameDeficit": 0,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 16356,
+      "hardwareLevelDb": -30.0,
+      "userObservation": ""
+    },
+    {
+      "report": "m2-direct-24-88200.json",
+      "sha256": "5936de140aae56a2b6781d1faeb9fab4175a5192389855c47143d0880f72387f",
+      "bits": 24,
+      "rateHz": 88200,
+      "durationMs": 12037,
+      "completedBytes": 6350394,
+      "nominalCompletedByteDifference": -6,
+      "nominalFrameDeficit": 1,
+      "cancelledTransfers": 7,
+      "maxCallbackGapUs": 19982,
+      "hardwareLevelDb": -20.0,
+      "userObservation": ""
+    }
+  ]
+}

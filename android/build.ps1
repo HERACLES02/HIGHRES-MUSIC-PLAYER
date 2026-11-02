@@ -98,13 +98,15 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Channel fixture verification failed.' }
     & python (Join-Path $projectRoot 'scripts/test_channel_fixtures.py')
     if ($LASTEXITCODE -ne 0) { throw 'Channel pattern tests failed.' }
+    & (Join-Path $projectRoot 'scripts/test-direct-state.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Direct controller-state checks failed.' }
     $verificationArgs = @()
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
     & $gradlePath --no-daemon --console=plain @verificationArgs -g (Join-Path $toolsPath 'gradle-cache') ':usb-core:selfTest' ':app:assembleDebug' ':app:lintDebug'
     if ($LASTEXITCODE -ne 0) { throw 'Android build or checks failed. See the output above.' }
     $releasePath = Join-Path $projectRoot 'releases'
     New-Item -ItemType Directory -Force -Path $releasePath | Out-Null
-    $apkPath = Join-Path $releasePath 'music-usb-probe-0.7.0.apk'
+    $apkPath = Join-Path $releasePath 'music-usb-probe-0.10.0.apk'
     Copy-Item -LiteralPath (Join-Path $projectRoot 'app\build\outputs\apk\debug\app-debug.apk') -Destination $apkPath -Force
     & (Join-Path $sdkPath 'build-tools/35.0.0/apksigner.bat') verify --verbose $apkPath
     if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }

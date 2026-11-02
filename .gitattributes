@@ -2,3 +2,8 @@
 android/native-usb/vendor/** -text
 # Packaged license text must match its upstream source byte for byte.
 android/native-usb/notices/** -text
+# Exported Room schemas have pinned byte-level hashes.
+android/player-data/schemas/** -text
+# Writer and payload-parser bytes are covered by preservation-evidence checksums.
+android/native-tags/** -text
+android/player-core/src/main/java/com/localmusic/core/AudioPayloadDigest.java -text

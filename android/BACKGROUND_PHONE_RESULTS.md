@@ -1,5 +1,13 @@
 # Interrupted endurance attempt, 2 November 2026
 
+Later result: a complete 61-minute run succeeds after the per-app power-setting
+trial, with batteryOptimizationExempt=true, zero recorded errors and restored
+settings. Repeated screen-off intervals succeed; the screen is briefly on at
+several points. No new same-PID kill is recorded. This does not isolate the exact
+policy that caused the prior kill. See
+[ENDURANCE_PHONE_RESULTS.md](ENDURANCE_PHONE_RESULTS.md). Earlier failure evidence
+is retained below.
+
 ## Follow-up: 0.7.0 exit-history export received
 
 [m2-background-stop.json](../m2-background-stop.json), exported 08:59:13.674 UTC,

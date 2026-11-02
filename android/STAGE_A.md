@@ -1,5 +1,83 @@
 # Stage A checkpoint and phone handoff
 
+Latest phone acceptance: **0.10.0 lock-screen controls work**, confirmed by the
+user. `m2-direct-media3.json` records Pause/Resume and notification Stop, with zero
+transport/PCM errors, drained transfers and restored settings. This closes the
+missing-controls finding on this phone; it does not close clocking or balance
+questions. See [MEDIA3_PHONE_RESULTS.md](MEDIA3_PHONE_RESULTS.md). Earlier pending
+statements below retain the sequence of prior checkpoints.
+
+Latest implementation: 0.10.0 replaces Direct's framework-only diagnostic card
+with a Media3 MediaLibraryService/session and SimpleBasePlayer adapter. The new
+APK passes build/lint and local controller-state checks. USB libraries, fixtures
+and hardware-volume policy are unchanged. The 0.9.0 active report confirms public
+notification 505, token and two actions; its final report confirms Stop and clean
+release, not Pause/Resume or lock-screen visibility. The short phone acceptance
+for the new path is [MEDIA3_DIRECT_CHECK.md](MEDIA3_DIRECT_CHECK.md).
+
+Latest lock-screen finding: 0.9.0 still lacks a locked-screen card; other players
+including Namida show controls. Namida's source review identifies fuller service
+discovery, session publishing, metadata/artwork and app identity than the Direct
+diagnostic. Exact causality is unproven; keep this gate open and use the planned
+Media3 service/adapter integration rather than more visibility-flag guesses.
+See [NAMIDA_MEDIA_REVIEW.md](NAMIDA_MEDIA_REVIEW.md).
+
+Latest lock-screen follow-up: no applicable visibility option is available in
+the phone settings. 0.9.0 adds an actual media-session/style card and public
+diagnostic visibility request, forwarding Pause/Resume/Stop to the native owner.
+It still needs a short phone test; no lock-screen pass is claimed. See
+[LOCK_SCREEN_MEDIA_CHECK.md](LOCK_SCREEN_MEDIA_CHECK.md).
+
+Latest notification acceptance: Direct's shade Stop action is confirmed by the
+user and report (notification_stop, zero errors, restoration). User reports no
+card on the locked screen. Lock-screen visibility/settings and full media-session
+controls remain open. See [NOTIFICATION_CHECK.md](NOTIFICATION_CHECK.md).
+
+Latest notification result: user sees the 0.8.0 ordinary test card; export
+confirms enabled app/channel and posted ID 506. No audio was active, so absent
+Direct ID 505 is expected. Next collect actual Direct notification visibility/
+Stop or an active-audio snapshot. See [NOTIFICATION_CHECK.md](NOTIFICATION_CHECK.md).
+
+Notification follow-up: app-wide notifications are confirmed enabled, but Direct
+remains missing during audio. 0.8.0 adds a no-audio same-channel test notification
+and real posting/channel-state export. Collect that first; no new long run is
+needed. Visibility/Stop acceptance remains open. See
+[NOTIFICATION_CHECK.md](NOTIFICATION_CHECK.md).
+
+Current notification blocker: user sees no Direct notification while test audio
+is still playing. App/channel visibility settings have not been measured; code
+creates a low-importance foreground notification. Check phone notification
+settings first. Notification Stop remains unverified. See
+[DETACH_PHONE_RESULTS.md](DETACH_PHONE_RESULTS.md).
+
+Latest detach/reconnect result: app records usb_detached/no-device, drains all
+pending transfers without delayed cleanup; user confirms stop, no speaker fallback
+and no automatic restart on reconnect. Absent-device restoration is unverified,
+as expected. Next: notification Stop and focus/call checks. See
+[DETACH_PHONE_RESULTS.md](DETACH_PHONE_RESULTS.md).
+
+Latest controls result: pause/resume, seeks and Stop/release worked as expected
+according to the user. Native counters record 3 pauses, 8 seeks, a requested stop,
+zero errors and verified restoration. The six new formats are also listening-
+confirmed normal apart from the known label mismatch. Next: unplug/reconnect,
+then focus/call and notification checks. See
+[TRANSPORT_CONTROLS_PHONE_RESULTS.md](TRANSPORT_CONTROLS_PHONE_RESULTS.md).
+
+Latest format review: the six remaining 12-second WAV runs completed with zero
+recorded PCM/USB errors, correct rate/alternate readback and restoration. Combined
+with prior results, transport observations cover all eight advertised stereo
+depth/rate combinations. Listening fields are blank and confirmation is pending.
+Next are controls/interruption/reconnect checks; daily-use approval remains open.
+See [FORMAT_PHONE_RESULTS.md](FORMAT_PHONE_RESULTS.md).
+
+Latest: the 0.7.0 24/96 run completed 61 minutes with exact completed PCM byte
+count, zero recorded PCM/packet/transfer errors, restoration and no unexpected
+glitches noticed by the user. Screen-off progress covers many intervals, with
+brief screen-on periods; a continuously locked hour is unverified. Battery
+optimization is now exempted. Next: remaining short format/interruption checks;
+balance and clocking remain open. See
+[ENDURANCE_PHONE_RESULTS.md](ENDURANCE_PHONE_RESULTS.md). Earlier checkpoints follow.
+
 Latest exit-history result: Android records a same-package resource kill
 (reason 9, `o-kill:6`) at 08:37:09.807 UTC, seven seconds after the original
 checkpoint. The exact enforcement trigger remains unknown. Try per-app background

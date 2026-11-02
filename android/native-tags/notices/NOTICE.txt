@@ -1,0 +1,7 @@
+Local Music uses unmodified TagLib 2.3.2 and its bundled utfcpp 4.2.0.
+TagLib: https://taglib.org/
+Exact source: https://taglib.org/releases/taglib-2.3.2.tar.gz
+Source SHA-256: 3ca2d8afaa7f1cf7f6ed10e511ebc368bfacd6dcaa3dbfa690b89e502e8963dc
+TagLib's MPL 1.1 / LGPL license texts and utfcpp license accompany this notice.
+No changes were made to the TagLib/utfcpp source files. Local Music's separate
+JNI adapter and build instructions are in the native-tags directory of the project.

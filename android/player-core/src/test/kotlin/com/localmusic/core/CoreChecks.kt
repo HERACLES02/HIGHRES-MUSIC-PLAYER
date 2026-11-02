@@ -155,6 +155,6 @@ private fun identityChecks() {
 }
 
 fun main() {
-    queueChecks(); lyricChecks(); identityChecks()
+    queueChecks(); lyricChecks(); identityChecks(); scanIdentityChecks(); verifiedWriteChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle, LRC/timing/fuzz, identities).")
 }

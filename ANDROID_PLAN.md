@@ -2,6 +2,105 @@
 
 ## Current implementation checkpoint
 
+0.2.0 phone evidence received: 875 tracks, one folder, zero reported scan failures,
+paused session restore, playback/seek observations and one VERIFIED FLAC write.
+The user subsequently confirms Undo restored the original. Lyrics/artwork
+observations, interrupted-write recovery and background/storage cases remain open.
+See [phone report review](android/player/PHONE_RESULTS_0_2.md). No new build needed.
+
+Current player checkpoint: **0.2.0-library-lyrics**, code 2. Implements persisted
+folder selection, real folders/covers, incremental WorkManager scanning, themes,
+embedded/sidecar/manual/LRCLIB synchronized lyrics, app-only edits and backed-up,
+previewed embedded writes with guarded Undo/recovery. Local tests include real
+v2→v3 database migration and seven native preservation cases across five formats.
+Physical 0.2.0 storage/write/background acceptance remains pending; Direct remains
+gated. See [0.2.0 handoff](android/PLAYER_0_2_HANDOFF.md). Earlier checkpoints below
+are retained as history. Next task: review the phone report before expanding scope.
+
+First player phone smoke check: user reports expected operation. The uploaded
+Normal report records fresh start, Pause/Play preserving position, seeking and
+FLAC 44.1 kHz/stereo decoder input with empty error fields. This advances basic
+player acceptance, while targeted storage/background/call/codec-matrix tests
+remain open. See [player phone results](android/player/PHONE_RESULTS.md).
+
+First standalone player checkpoint: **Local Music 0.1.0-normal-preview**, separate
+application `com.localmusic.player`, now builds with library scans, search/grouping,
+favorites/Continue, Normal playback, queue controls and paused session persistence.
+It uses one service-owned engine/session; the diagnostic remains separate. Local
+checks pass (8,681 core and 61 Room assertions, assembly/lint, frozen schemas and
+signature), while real-song/background/storage behavior awaits phone acceptance.
+Direct remains unavailable in this preview while its open findings are retained.
+See [player scope](android/player/README.md) and [phone check](android/PLAYER_PHONE_CHECK.md).
+
+Latest phone acceptance: user confirms **0.10.0 lock-screen controls work**.
+The report records Pause/Resume and explicit Stop with zero transport/PCM errors
+and restored USB settings. The missing-controls finding is closed for this phone;
+Direct clocking and listening-balance questions remain separate. See
+[phone results](android/MEDIA3_PHONE_RESULTS.md). No additional notification APK
+or repeat endurance test is required for this finding.
+
+Latest diagnostic implementation: **0.10.0-media3-direct** exposes the existing
+native experiment through MediaLibraryService/MediaLibrarySession and a
+SimpleBasePlayer adapter. Builds and 31 pure controller-state checks pass; all
+native libraries and fixtures match 0.9.0. The latest phone reports establish
+posted public media notification and successful Stop, while the locked-screen
+card remains missing. Physical acceptance of the new service/session controls
+is pending. See [Media3 check](android/MEDIA3_DIRECT_CHECK.md). This is diagnostic
+integration, not the complete daily-use player or a closed clocking gate.
+
+Latest diagnostic work: 0.9.0 adds a framework media-session/style card to the
+Direct experiment after the user reports no applicable lock-screen setting.
+It forwards Pause/Resume/Stop without another engine; physical lock-screen
+visibility and controls are pending. See
+[media-card check](android/LOCK_SCREEN_MEDIA_CHECK.md).
+
+Latest phone result: Direct shade notification Stop works, records
+notification_stop and restores USB without errors. Lock-screen visibility is
+still missing according to the user; inspect channel/device lock-screen choices
+and retain this as an open finding. Direct's diagnostic basic Stop card is not
+yet a full media-session transport panel. See
+[notification review](android/NOTIFICATION_CHECK.md).
+
+Latest diagnostic follow-up: user confirms notifications are globally enabled,
+yet the Direct card is missing during audio. 0.8.0 adds a same-channel no-audio
+test and current notification/channel-state export, without changing USB code.
+This investigates visibility; it is not a confirmed fix. See
+[notification check](android/NOTIFICATION_CHECK.md).
+
+Latest phone milestone: detach/reconnect behavior is user-confirmed (stops, no
+speaker fallback, no automatic restart). Native no-device errors and unverified
+restoration are retained; local transfers drain completely. Notification Stop
+and focus/call tests remain next. See [detach review](android/DETACH_PHONE_RESULTS.md).
+
+Latest phone milestone: manual Direct pause/resume/seek/stop controls are
+listening-confirmed, with zero recorded errors and restored settings. All six
+remaining format runs are now listening-confirmed normal apart from approximate
+section labels. Next physical checks are detach/reconnect and focus/notification
+handling; balance and clocking remain open. See
+[controls review](android/TRANSPORT_CONTROLS_PHONE_RESULTS.md).
+
+Latest short-format milestone: the six remaining WAV cases completed with correct
+configured rate/alternate readbacks, zero recorded errors and restoration. All
+eight advertised stereo combinations now have transport observations. The new
+listening fields are blank, so confirmation is requested separately; controls,
+interruption/reconnect, balance and clocking gates remain open. See
+[format review](android/FORMAT_PHONE_RESULTS.md).
+
+Latest phone milestone: 61-minute 24/96 Direct USB run completed with zero
+recorded PCM/USB errors, restored settings and no unexpected glitches noticed.
+It includes many screen-off intervals and brief screen-on periods; a continuous
+locked hour is not established. Remaining formats, interruptions, channel balance
+and clocking still gate daily-use approval. See
+[endurance review](android/ENDURANCE_PHONE_RESULTS.md).
+
+Parallel persistence work: `:player-data` connects models to Room with Android
+and host JVM targets, transactional playlists/favorites/lyric selections, a
+versioned two-generation session store, paused restore and retained recovery
+evidence. Exported schema v1 is a test baseline; v2 adds recovery records via
+an explicit migration. No destructive fallback, player screens or Media3 service
+integration is introduced; the USB diagnostic APK remains unchanged. See
+[player-data scope](android/player-data/README.md).
+
 Parallel work authorized while the phone endurance test continues: pure Kotlin
 `:player-core` now implements queue/resume/history/shuffle state and LRC parsing,
 timing and selection. UUID library models and an executable proposed Room v1 SQL
@@ -37,7 +136,7 @@ listening clarification. Normal 24/96 sounds balanced to the user, Direct remain
 slightly left-quiet. The supplied 16/44.1 WAV also sounds slightly left-quiet in
 another player. Full-format and screen-off endurance acceptance remain open.
 
-As of 2 November 2026, Stage A is in progress. The latest diagnostic is 0.7.0;
+As of 2 November 2026, Stage A is in progress. The latest diagnostic is 0.9.0;
 the daily-use player and stages B-F are not implemented. The accepted user handoff
 and physical reports take precedence over the older research below.
 

@@ -1,7 +1,10 @@
 package com.localmusic.diagnostics
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,6 +41,9 @@ import org.json.JSONObject
 
 class DirectTestActivity: ComponentActivity() {
     private var message by mutableStateOf("")
+    private val notificationPermission=registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        message=if(granted) NotificationEvidence.postTest(this) else "Notification permission was not granted. You can still save notification diagnosis."
+    }
     private var pending: String?=null
     private val export=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val report=pending; pending=null
@@ -78,14 +84,29 @@ class DirectTestActivity: ComponentActivity() {
                             val usb=getSystemService(UsbManager::class.java)
                             val device=usb.deviceList.values.firstOrNull { it.vendorId==0x31b2 && it.productId==0x0311 }
                             if(device==null || !usb.hasPermission(device)) message="Return to Inspect cable to grant M2 USB permission first."
-                            else ContextCompat.startForegroundService(this@DirectTestActivity,Intent(this@DirectTestActivity,UsbStreamService::class.java)
-                                .setAction(UsbStreamService.START).putExtra("confirmed",true).putExtra("fixture",filename)
+                            else ContextCompat.startForegroundService(this@DirectTestActivity,UsbStreamService.internalIntent(this@DirectTestActivity,UsbStreamService.START)
+                                .putExtra("confirmed",true).putExtra("fixture",filename)
                                 .putExtra("device",device.deviceName).putExtra("seconds",duration))
                         }) { Text("Start experimental audio") } },
                         dismissButton={ OutlinedButton(onClick={ confirm=false }) { Text("Cancel") } })
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                         Text("Direct USB experiment",style=MaterialTheme.typography.headlineMedium)
                         Text("Nominal packet cadence · missing-feedback clocking UNVALIDATED. No bit-perfect badge or daily-use approval.")
+                        Text("Notification check (no audio or cable needed)")
+                        OutlinedButton(onClick={
+                            if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+                                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            else message=NotificationEvidence.postTest(this@DirectTestActivity)
+                        }) { Text("Post test notification") }
+                        OutlinedButton(onClick={ NotificationEvidence.clearTest(this@DirectTestActivity); message="Test notification cleared. Direct playback notification was not changed." }) { Text("Clear test notification") }
+                        OutlinedButton(onClick={ runCatching {
+                            NotificationEvidence.ensureChannel(this@DirectTestActivity)
+                            startActivity(NotificationEvidence.channelSettings(this@DirectTestActivity))
+                        }.onFailure { message="Could not open channel settings: ${it.message}" } }) { Text("Open Direct notification settings") }
+                        Button(onClick={ lifecycleScope.launch {
+                            val evidence=NotificationEvidence.report(this@DirectTestActivity).put("userObservation",notes)
+                            prepareExport("m2-notification-diagnosis.json",evidence.toString(2))
+                        } }) { Text("Save notification diagnosis") }
                         Row {
                             Checkbox(checked=channelCheck,enabled=!busy,onCheckedChange={ channelCheck=it })
                             Text("Equal-tone channel comparison (440 Hz, silent gaps, WAV)")

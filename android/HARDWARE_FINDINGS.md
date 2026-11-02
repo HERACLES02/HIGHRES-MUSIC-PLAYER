@@ -1,5 +1,18 @@
 # OPPO A9 2020 / KZ M2: first physical-device report
 
+Latest: all eight advertised stereo depth/rate combinations now have transport
+evidence across the earlier and six new short WAV reports. The new runs have zero
+recorded errors and verified restoration; fractional-rate frame-count differences
+after volume reconfiguration are retained. Listening confirmation for the six is
+pending. See [FORMAT_PHONE_RESULTS.md](FORMAT_PHONE_RESULTS.md).
+
+Latest sustained evidence: a 61-minute packed PCM24/96 kHz run completes with
+zero recorded errors and verified restoration; user noticed no unexpected
+glitches. Repeated long screen-off intervals succeed, but the screen was briefly
+on several times. Channel balance, continuous-hour lock, remaining formats and
+device clocking/DSP remain unverified. See
+[ENDURANCE_PHONE_RESULTS.md](ENDURANCE_PHONE_RESULTS.md).
+
 Latest endurance attempt is incomplete: saved observations cover 6 min 12 s,
 including screen-off progress, with zero recorded errors before evidence ends.
 No current final report or restoration result exists. A background restriction

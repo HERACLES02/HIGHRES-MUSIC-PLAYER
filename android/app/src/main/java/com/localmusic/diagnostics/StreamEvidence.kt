@@ -11,7 +11,7 @@ import java.time.Instant
 
 /** Read-only postmortem evidence. Never opens USB or starts playback. */
 object StreamEvidence {
-    const val VERSION = "0.7.0-background-check"
+    const val VERSION = "0.10.0-media3-direct"
 
     private fun read(context: Context, name: String): JSONObject? = runCatching {
         context.openFileInput(name).bufferedReader().use { JSONObject(it.readText()) }
@@ -53,6 +53,7 @@ object StreamEvidence {
             .put("completedReport", completed ?: JSONObject.NULL)
             .put("checkpoint", checkpoint ?: JSONObject.NULL)
             .put("processExits", exits).put("processExitReadError", exitReadError ?: JSONObject.NULL)
+            .put("notificationState", NotificationEvidence.snapshot(context))
             .put("interpretation", "A newer checkpoint without a matching final report is incomplete evidence, not proof of a battery kill. Exit records may be absent or unrelated; compare timestamps and process IDs. Installing an update may itself add an exit record. No automatic restart.")
     }
 

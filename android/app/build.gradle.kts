@@ -11,8 +11,8 @@ android {
         applicationId = "com.localmusic.diagnostics"
         minSdk = 30
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.7.0-background-check"
+        versionCode = 10
+        versionName = "0.10.0-media3-direct"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }

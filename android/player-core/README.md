@@ -1,5 +1,11 @@
 # Offline player foundations
 
+Follow-up: [`player-data`](../player-data/README.md) now supplies real Room
+entities, repositories, snapshot serialization, migration and recovery tests.
+The diagnostic app remains independent. Statements below describing these as
+future work record this module's original boundary; use the data-module README
+for the current persistence scope and its differences from the proposed SQL.
+
 Latest local evidence: [VERIFICATION.md](VERIFICATION.md) records 8,681 Kotlin
 assertions, four SQLite schema tests, existing parser regressions and Android lint.
 

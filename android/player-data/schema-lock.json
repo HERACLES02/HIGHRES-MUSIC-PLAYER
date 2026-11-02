@@ -1,0 +1,10 @@
+{
+  "roomVersion": "2.8.4",
+  "sqliteVersion": "2.6.2",
+  "kspVersion": "2.3.4",
+  "schemas": {
+    "schemas/com.localmusic.data.LegacyDatabaseV1/1.json": "84c49581bd53bc994410a775d462b8d284330003f4b7f9ca872334c81d9db9db",
+    "schemas/com.localmusic.data.PlayerDatabase/2.json": "cf8ea1cc5482db1831698d760ca00940497680df95f30fc4032ad6f4289c047b",
+    "schemas/com.localmusic.data.PlayerDatabase/3.json": "f70d6eaa5802a5f6aa861296fca5984749fe7a0b929897715dede49e07555fd9"
+  }
+}

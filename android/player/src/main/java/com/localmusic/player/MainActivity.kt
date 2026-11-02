@@ -1,0 +1,488 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+package com.localmusic.player
+
+import android.Manifest
+import android.content.ComponentName
+import android.content.Intent
+import android.net.Uri
+import android.provider.MediaStore
+import android.os.Process
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.localmusic.core.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.*
+import org.json.JSONObject
+import com.localmusic.data.FileEditRow
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import java.util.UUID
+
+class MainActivity : ComponentActivity() {
+    private var controller by mutableStateOf<MediaController?>(null)
+    private var sessionState by mutableStateOf(JSONObject())
+    private var connectionError by mutableStateOf("")
+    private var permissionMessage by mutableStateOf("")
+    private val pendingCommands = ArrayDeque<Pair<String, Bundle>>()
+    private lateinit var future: ListenableFuture<MediaController>
+    private val exportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var pendingReport: String? = null
+    private var coverTargets = emptyList<String>()
+    private var pickedCover by mutableStateOf<Uri?>(null)
+    private var lyricTarget: Track? = null
+    private var importedLyrics by mutableStateOf<Pair<Track, String>?>(null)
+    private var pendingLyricExport: String? = null
+    private var pendingWrites = emptyList<String>()
+    private var pendingWriteAction: Pair<String, Bundle>? = null
+    private var confirmRestore by mutableStateOf<Pair<FileEditRow, String?>?>(null)
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data; val uri = data?.data
+        if (result.resultCode == RESULT_OK && uri != null) try {
+            val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            contentResolver.takePersistableUriPermission(uri, flags)
+            send(PlaybackService.ADD_FOLDER, Bundle().apply { putString("uri", uri.toString()); putInt("flags", flags) })
+        } catch (e: Exception) { permissionMessage = "Could not retain folder access: ${e.message}" }
+    }
+    private val coverPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pickedCover = uri }
+    private val lyricPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val track = lyricTarget
+        if (uri != null && track != null) exportScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) { requireNotNull(contentResolver.openInputStream(uri)).use { input ->
+                    val bytes = readLimited(input, 400000)
+                    when {
+                        bytes.size > 1 && bytes[0] == 0xff.toByte() && bytes[1] == 0xfe.toByte() -> String(bytes, Charsets.UTF_16LE)
+                        bytes.size > 1 && bytes[0] == 0xfe.toByte() && bytes[1] == 0xff.toByte() -> String(bytes, Charsets.UTF_16BE)
+                        else -> String(bytes, Charsets.UTF_8)
+                    }
+                } }
+                require(text.length <= 200000) { "Imported lyrics exceed the editor's 200,000-character limit." }
+                importedLyrics = track to text
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { permissionMessage = "Could not import lyrics: ${e.message}" }
+        }
+    }
+    private val lyricExport = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        val text = pendingLyricExport; pendingLyricExport = null
+        if (uri != null && text != null) exportScope.launch {
+            try { withContext(Dispatchers.IO) { requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(text.toByteArray(Charsets.UTF_8)) } }; permissionMessage = "Original lyric text exported; the app timing adjustment stays separate." }
+            catch (e: CancellationException) { throw e } catch (e: Exception) { permissionMessage = "Export failed: ${e.message}" }
+        }
+    }
+    private val writePermission = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (result.resultCode == RESULT_OK) pendingWriteAction?.let { send(it.first, it.second) }
+        else permissionMessage = "Write permission was not granted. Prepared copies and originals are retained."
+        pendingWrites = emptyList()
+        pendingWriteAction = null
+    }
+    private fun commit(rows: List<FileEditRow>) {
+        pendingWrites = rows.map { it.id }
+        authorizeWrite(rows, PlaybackService.EDIT_COMMIT, Bundle().apply { putStringArrayList("edits", ArrayList(pendingWrites)) })
+    }
+    private fun authorizeWrite(rows: List<FileEditRow>, action: String, args: Bundle) {
+        pendingWriteAction = action to args
+        val shared = rows.map { Uri.parse(it.sourceUri) }.filter { it.authority == "media" && checkUriPermission(it, Process.myPid(), Process.myUid(), Intent.FLAG_GRANT_WRITE_URI_PERMISSION) != PackageManager.PERMISSION_GRANTED }
+        try {
+            if (shared.isNotEmpty()) writePermission.launch(IntentSenderRequest.Builder(MediaStore.createWriteRequest(contentResolver, shared).intentSender).build())
+            else { send(action, args); pendingWrites = emptyList(); pendingWriteAction = null }
+        } catch (e: Exception) { permissionMessage = "File-write authorization failed: ${e.message}" }
+    }
+    private fun reviewRecovery(row: FileEditRow) {
+        val call = controller?.sendCustomCommand(androidx.media3.session.SessionCommand(PlaybackService.EDIT_RECOVERY_REVIEW, Bundle.EMPTY), Bundle().apply { putString("edit", row.id) }) ?: return
+        call.addListener({
+            val hash = runCatching { call.get().extras.getString("sha") }.getOrNull()
+            if (hash != null) confirmRestore = row to hash else permissionMessage = "Recovery preview could not be verified. Check file access; the backup is retained."
+        }, ContextCompat.getMainExecutor(this))
+    }
+    private val exportReport = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val report = pendingReport; pendingReport = null
+        if (uri != null && report != null) exportScope.launch {
+            try {
+                withContext(Dispatchers.IO) { requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(report.toByteArray(Charsets.UTF_8)) } }
+                permissionMessage = "Playback report saved."
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { permissionMessage = "Could not save report: ${e.message}" }
+        }
+    }
+    private fun saveReport() {
+        val request = controller?.sendCustomCommand(SessionCommand(PlaybackService.EXPORT, Bundle.EMPTY), Bundle.EMPTY) ?: return
+        request.addListener({
+            try {
+                pendingReport = requireNotNull(request.get().extras.getString("report"))
+                exportReport.launch("local-music-normal.json")
+            } catch (e: Exception) { permissionMessage = "Could not prepare report: ${e.message}" }
+        }, ContextCompat.getMainExecutor(this))
+    }
+    private val audioAccess = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) send(PlaybackService.SCAN) else permissionMessage = "Music access was denied. You can allow it and scan again."
+    }
+    private val notificationAccess = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionMessage = if (granted) "Playback notifications allowed." else "Notifications are blocked. Allow them in Android settings for playback controls."
+    }
+    private fun send(action: String, args: Bundle = Bundle.EMPTY) {
+        val connected = controller
+        if (connected == null || !sessionState.optBoolean("ready")) {
+            if (pendingCommands.size < 20) pendingCommands.addLast(action to Bundle(args))
+            else permissionMessage = "The library is still opening. Wait before sending more commands."
+            return
+        }
+        connected.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), args)
+    }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        savedInstanceState?.getString("writeAction")?.let { action ->
+            savedInstanceState.getBundle("writeArguments")?.let { pendingWriteAction = action to it }
+        }
+        coverTargets = savedInstanceState?.getStringArrayList("coverTargets").orEmpty()
+        pickedCover = savedInstanceState?.getString("pickedCover")?.let(Uri::parse)
+        volumeControlStream = android.media.AudioManager.STREAM_MUSIC
+        future = MediaController.Builder(this, SessionToken(this, ComponentName(this, PlaybackService::class.java)))
+            .setListener(object : MediaController.Listener {
+                override fun onExtrasChanged(controller: MediaController, extras: Bundle) { readState(extras) }
+                override fun onDisconnected(controller: MediaController) {
+                    this@MainActivity.controller = null
+                    connectionError = "Playback service disconnected. Close and reopen Local Music."
+                }
+            }).buildAsync()
+        future.addListener({
+            try { controller = future.get(); readState(controller!!.sessionExtras) }
+            catch (e: Exception) { connectionError = "Could not connect playback: ${e.cause?.message ?: e.message}" }
+        }, ContextCompat.getMainExecutor(this))
+        setContent {
+            var store by remember { mutableStateOf<MusicStore?>(null) }
+            var openError by remember { mutableStateOf("") }
+            LaunchedEffect(Unit) {
+                try { store = (application as MusicApplication).storage.await() }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { openError = "Could not open library: ${e.message}" }
+            }
+            val preferences = store?.preferences?.collectAsState()?.value ?: MusicPreferences()
+            val dark = when (preferences.appearance) { "Light" -> false; "Dark", "AMOLED" -> true; else -> isSystemInDarkTheme() }
+            MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = Color(0xFFA6DFC5), secondary = Color(0xFFB5CCD2),
+                background = if (preferences.appearance == "AMOLED") Color.Black else Color(0xFF101412),
+                surface = if (preferences.appearance == "AMOLED") Color.Black else Color(0xFF101412))
+                else lightColorScheme(primary = Color(0xFF245E4B), secondary = Color(0xFF3B6068))) {
+                Surface(Modifier.fillMaxSize()) {
+                    val library = store?.state?.collectAsState()?.value ?: LibraryState()
+                    MusicScreen(library, controller, sessionState,
+                        listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"),
+                        ::send, store, preferences, FeatureActions(
+                            pickFolder = { folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) },
+                            pickCover = { targets -> coverTargets = targets.map { it.id.value.toString() }; coverPicker.launch(arrayOf("image/*")) },
+                            importLyrics = { track -> lyricTarget = track; lyricPicker.launch(arrayOf("*/*")) },
+                            exportLyrics = { track, text -> pendingLyricExport = text; lyricExport.launch(track.tags.title.replace(Regex("[\\/:*?\"<>|]"), "_") + ".lrc") },
+                            commit = ::commit, undo = { confirmRestore = it to null }, recovery = ::reviewRecovery), onScan = {
+                            permissionMessage = ""
+                            if (checkSelfPermission(MusicStore.audioPermission()) == PackageManager.PERMISSION_GRANTED || library.folders.isNotEmpty()) send(PlaybackService.SCAN)
+                            else audioAccess.launch(MusicStore.audioPermission())
+                        }, onExport = ::saveReport, onNotifications = {
+                            if (Build.VERSION.SDK_INT >= 33) notificationAccess.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+                        })
+                    importedLyrics?.let { (track, text) -> LyricsEditorDialog(track, text, sessionState.optLong("position"), ::send) { importedLyrics = null } }
+                    pickedCover?.let { uri ->
+                        var crop by remember(uri) { mutableStateOf(true) }
+                        AlertDialog(onDismissRequest = { pickedCover = null }, title = { Text("Review cover artwork") }, text = {
+                            Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+                                val imageModifier = if (crop) Modifier.fillMaxWidth().aspectRatio(1f) else Modifier.fillMaxWidth().height(220.dp)
+                                AsyncImage(uri, "Selected cover", modifier = imageModifier.background(Color.Black), contentScale = if (crop) ContentScale.Crop else ContentScale.Fit)
+                                Row { Checkbox(crop, { crop = it }); Text("Center square crop") }
+                                Text("Resize to at most 1024 pixels. Choose app-only use or prepare a music-file preview.") }
+                        }, confirmButton = { TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putStringArrayList("ids", ArrayList(coverTargets)); putString("uri", uri.toString()); putBoolean("crop", crop) }); pickedCover = null }) { Text("Use in this app") } },
+                            dismissButton = { Row { TextButton(enabled = !library.scanning, onClick = {
+                                val batch = UUID.randomUUID().toString()
+                                send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", ArrayList(coverTargets)); putString("patch", "{}"); putInt("coverMode", 1); putString("coverUri", uri.toString()); putBoolean("crop", crop) })
+                                pickedCover = null; permissionMessage = "Cover preview is being prepared. Open Settings → Edits and recovery to review it before writing."
+                            }) { Text("Embed…") }; TextButton(onClick = { pickedCover = null }) { Text("Cancel") } } })
+                    }
+                    confirmRestore?.let { (row, hash) -> AlertDialog(onDismissRequest = { confirmRestore = null }, title = { Text("Restore original ${row.displayName}?") },
+                        text = { Text(if (hash == null) "Undo restores the retained original. A conflicting newer file change will be rejected." else "This interrupted file will be replaced with the verified original backup. Any change since this recovery preview will be rejected.") },
+                        confirmButton = { TextButton(onClick = { authorizeWrite(listOf(row), if (hash == null) PlaybackService.EDIT_UNDO else PlaybackService.EDIT_RECOVER,
+                            Bundle().apply { putString("edit", row.id); if (hash != null) putString("sha", hash) }); confirmRestore = null }) { Text("Restore original") } },
+                        dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } }) }
+                }
+            }
+        }
+    }
+    private fun readState(bundle: Bundle) {
+        sessionState = runCatching { JSONObject(bundle.getString("state") ?: "{}") }.getOrDefault(JSONObject())
+        if (controller != null && sessionState.optBoolean("ready")) {
+            val queued = pendingCommands.toList(); pendingCommands.clear()
+            for ((action, args) in queued) send(action, args)
+        }
+    }
+    override fun onSaveInstanceState(outState: Bundle) {
+        pendingWriteAction?.let { outState.putString("writeAction", it.first); outState.putBundle("writeArguments", it.second) }
+        outState.putStringArrayList("coverTargets", ArrayList(coverTargets))
+        outState.putString("pickedCover", pickedCover?.toString())
+        super.onSaveInstanceState(outState)
+    }
+    override fun onDestroy() { MediaController.releaseFuture(future); exportScope.cancel(); super.onDestroy() }
+}
+
+private fun time(ms: Long): String = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
+private fun artist(track: Track) = track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }
+private fun idBundle(track: Track) = Bundle().apply { putString("id", track.id.value.toString()) }
+private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = false) = Bundle().apply {
+    putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putInt("index", index); putBoolean("continue", resume)
+}
+
+@Composable
+private fun MusicScreen(library: LibraryState, controller: MediaController?, playback: JSONObject, message: String,
+    send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
+    onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit) {
+    var screen by rememberSaveable { mutableStateOf("Home") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("Songs") }
+    var group by rememberSaveable { mutableStateOf<String?>(null) }
+    var newest by rememberSaveable { mutableStateOf(false) }
+    var details by remember { mutableStateOf<Track?>(null) }
+    var editing by remember { mutableStateOf<List<Track>?>(null) }
+    var nativeBatch by remember { mutableStateOf<String?>(null) }
+    var selecting by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf(emptySet<TrackId>()) }
+    var licenses by remember { mutableStateOf(false) }
+    val ready = playback.optBoolean("ready") && controller != null
+    val currentId = playback.optString("currentId")
+    val current = library.tracks.firstOrNull { it.id.value.toString() == currentId }
+    val filtered = remember(library.tracks, search, newest) {
+        val found = library.tracks.filter { (it.tags.title + " " + artist(it) + " " + it.tags.album.orEmpty()).contains(search, true) }
+        if (newest) found.sortedByDescending { it.addedAtMs } else found.sortedWith(compareBy<Track> { it.tags.title.lowercase() }.thenBy { it.id.value.toString() })
+    }
+    fun start(tracks: List<Track>, index: Int, resume: Boolean = false) { send(PlaybackService.START, collectionBundle(tracks, index, resume)) }
+    Scaffold(bottomBar = {
+        Column {
+            if (current != null) Surface(tonalElevation = 4.dp) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    TextButton(onClick = { screen = "Playing" }, modifier = Modifier.fillMaxWidth()) {
+                        Text(current.tags.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        TextButton(onClick = { controller?.seekToPrevious() }, enabled = ready) { Text("Previous") }
+                        Button(onClick = { if (playback.optBoolean("playWhenReady")) controller?.pause() else controller?.play() }, enabled = ready) {
+                            Text(if (playback.optBoolean("playWhenReady")) "Pause" else "Play")
+                        }
+                        TextButton(onClick = { controller?.seekToNext() }, enabled = ready) { Text("Next") }
+                    }
+                }
+            }
+            NavigationBar {
+                listOf("Home", "Library", "Playing", "Queue", "Settings").forEach { tab ->
+                    NavigationBarItem(selected = screen == tab, onClick = { screen = tab },
+                        icon = { Text(when (tab) { "Home" -> "⌂"; "Library" -> "♫"; "Playing" -> "▶"; "Queue" -> "≡"; else -> "⚙" }) }, label = { Text(tab) })
+                }
+            }
+        }
+    }) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column { Text("Local Music", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("${library.tracks.size} songs · Normal playback", style = MaterialTheme.typography.bodySmall) }
+                TextButton(onClick = onScan, enabled = ready && !library.scanning) { Text("Scan") }
+            }
+            if (!ready && message.isBlank()) Text("Opening your library…", Modifier.padding(horizontal = 20.dp))
+            if (message.isNotBlank()) Text(message, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+            if (library.error.isNotBlank()) Row(Modifier.padding(horizontal = 16.dp)) {
+                Text(library.error, Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { send(PlaybackService.CLEAR_ERROR, Bundle.EMPTY) }) { Text("Dismiss") }
+            }
+            if (playback.optString("error").isNotBlank()) Text(playback.optString("error"), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error)
+            if (library.scanning) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Row(Modifier.padding(horizontal = 16.dp)) {
+                    Text("Scanning… ${library.scanned} songs", Modifier.weight(1f))
+                    TextButton(onClick = { send(PlaybackService.CANCEL_SCAN, Bundle.EMPTY) }) { Text("Cancel") }
+                }
+            }
+            when (screen) {
+                "Home" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { Text("Your music, offline", style = MaterialTheme.typography.headlineMedium) }
+                    if (library.tracks.isEmpty()) item {
+                        Text("Scan music stored on your phone or SD card. Your files stay on your device.")
+                        Button(onClick = onScan, enabled = ready) { Text("Find my music") }
+                    }
+                    val continues = library.tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE }
+                    if (continues.isNotEmpty()) {
+                        item { Section("Continue listening") }
+                        items(continues.take(10), key = { "continue-${it.id}" }) { track ->
+                            ListItem(headlineContent = { Text(track.tags.title) }, supportingContent = { Text("Saved at ${time(library.continues[track.id]!!)}") },
+                                trailingContent = { TextButton(onClick = { start(listOf(track), 0, true) }, enabled = ready) { Text("Continue") } })
+                        }
+                    }
+                    item { Section("Favorites") }
+                    if (library.tracks.none { it.favorite }) item { Text("Use a song’s menu to add a favorite.") }
+                    val favorites = library.tracks.filter { it.favorite }
+                    items(favorites.take(10), key = { "favorite-${it.id}" }) { track ->
+                        SongRow(track, ready, { start(favorites, favorites.indexOf(track)) }, send) { details = track }
+                    }
+                    item { Section("Recently added") }
+                    val recent = library.tracks.sortedByDescending { it.addedAtMs }
+                    items(recent.take(15), key = { "recent-${it.id}" }) { track -> SongRow(track, ready, { start(recent, recent.indexOf(track)) }, send) { details = track } }
+                }
+                "Library" -> {
+                    OutlinedTextField(search, { search = it }, label = { Text("Search songs, artists or albums") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Songs", "Albums", "Artists", "Folders").forEach { name ->
+                            FilterChip(selected = category == name, onClick = { category = name; group = null }, label = { Text(name) })
+                        }
+                        FilterChip(selected = newest, onClick = { newest = !newest }, label = { Text("Newest first") })
+                    }
+                    fun groupName(track: Track): String = when (category) {
+                        "Albums" -> "${track.tags.album ?: "Unknown album"} · ${track.tags.albumArtist ?: artist(track)}"
+                        "Artists" -> artist(track)
+                        "Folders" -> library.details[track.id]?.folders?.values?.firstOrNull() ?: "Folder information needs a rescan"
+                        else -> ""
+                    }
+                    if (category != "Songs" && group == null) {
+                        val groups = filtered.groupBy(::groupName).toSortedMap()
+                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
+                            items(groups.keys.toList()) { key -> ListItem(modifier = Modifier.clickable { group = key },
+                                headlineContent = { Text(key) }, supportingContent = { Text("${groups[key]!!.size} songs") }) }
+                            if (groups.isEmpty()) item { Text("No matching music. Scan or try another search.") }
+                        }
+                    } else {
+                        if (group != null) TextButton(onClick = { group = null }) { Text("‹ All $category") }
+                        val shown = if (category == "Songs") filtered else filtered.filter { groupName(it) == group }
+                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                            TextButton(onClick = { selecting = !selecting; selection = emptySet() }) { Text(if (selecting) "Done selecting" else "Select songs") }
+                            if (selecting) TextButton(enabled = selection.size in 1..50, onClick = { editing = library.tracks.filter { it.id in selection } }) { Text("Edit ${selection.size} selected") }
+                            if (category == "Albums" && group != null) TextButton(enabled = shown.size in 1..50, onClick = { editing = shown }) { Text("Edit album") }
+                        }
+                        if (selection.size > 50) Text("Use batches of at most 50 songs.", Modifier.padding(horizontal = 16.dp))
+                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp)) {
+                            if (shown.isEmpty()) item { Text("No matching songs. Scan or try another search.") }
+                            items(shown, key = { it.id.value.toString() }) { track -> SongRow(track, ready, { start(shown, shown.indexOf(track)) }, send,
+                                art = store?.artwork(track.id), selected = if (selecting) track.id in selection else null,
+                                toggle = { selection = if (track.id in selection) selection - track.id else selection + track.id }) { details = track } }
+                        }
+                    }
+                }
+                "Playing" -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Now playing", style = MaterialTheme.typography.headlineMedium)
+                    if (current == null) Text("Choose a song from your library.") else {
+                        CoverArt(store?.artwork(current.id), current.tags.title, Modifier.fillMaxWidth().height(220.dp))
+                        Text(current.tags.title, style = MaterialTheme.typography.headlineSmall)
+                        Text(artist(current)); Text(current.tags.album.orEmpty())
+                        val duration = playback.optLong("duration").coerceAtLeast(1)
+                        val position = playback.optLong("position").coerceIn(0, duration)
+                        var dragged by remember(currentId) { mutableStateOf<Float?>(null) }
+                        Slider(value = dragged ?: (position.toFloat() / duration), onValueChange = { dragged = it },
+                            onValueChangeFinished = { dragged?.let { controller?.seekTo((it * duration).toLong()) }; dragged = null }, enabled = ready)
+                        Text("${time(position)} / ${time(duration)}")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = controller?.shuffleModeEnabled == true, onClick = { controller?.shuffleModeEnabled = controller?.shuffleModeEnabled != true }, label = { Text("Shuffle") })
+                            val repeat = controller?.repeatMode ?: 0
+                            FilterChip(selected = repeat != 0, onClick = { controller?.repeatMode = (repeat + 1) % 3 }, label = { Text("Repeat: ${when (repeat) { 1 -> "one"; 2 -> "all"; else -> "off" }}") })
+                        }
+                        TextButton(onClick = { details = current }) { Text("Song details") }
+                        OutlinedButton(onClick = { controller?.stop() }, enabled = ready) { Text("Stop playback") }
+                        Text("Normal · Android audio output", fontWeight = FontWeight.Bold)
+                        Text("Output sample rate is not measured. Effects are off.")
+                        LyricsPanel(current, store, library.revision, position, controller, send, actions)
+                    }
+                }
+                "Queue" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { Section("Play Next & manual queue") }
+                    val manual = playback.optJSONArray("manual")
+                    if (manual == null || manual.length() == 0) item { Text("Use a song’s menu to queue it. Duplicate songs are allowed.") }
+                    items(manual?.length() ?: 0) { index -> Text("${index + 1}. ${library.tracks.firstOrNull { it.id.value.toString() == manual!!.optString(index) }?.tags?.title ?: "Unavailable song"}") }
+                    item { Text("${playback.optInt("manualCount")} manual entries; showing up to 60."); Section("Listening sequence") }
+                    val sequence = playback.optJSONArray("sequence")
+                    items(sequence?.length() ?: 0) { index -> Text("${index + 1}. ${library.tracks.firstOrNull { it.id.value.toString() == sequence!!.optString(index) }?.tags?.title ?: "Unavailable song"}") }
+                    item { Text("${playback.optInt("sequenceCount")} remaining; showing up to 60. Browsing and sorting keep this sequence unchanged.") }
+                }
+                "Settings" -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Section("Music access")
+                    Text("Scan Android’s indexed music on internal storage and SD cards. Missing songs keep their saved references.")
+                    Button(onClick = onScan, enabled = ready && !library.scanning) { Text("Allow access / scan music") }
+                    OutlinedButton(onClick = actions.pickFolder, enabled = ready) { Text("Choose music folder / SD card") }
+                    library.folders.forEach { folder -> Text("Granted: ${Uri.parse(folder.treeUri).lastPathSegment ?: "Music folder"}", style = MaterialTheme.typography.bodySmall) }
+                    Row { Switch(checked = preferences.autoScan, onCheckedChange = { value -> send(PlaybackService.PREFERENCES, Bundle().apply { putString("appearance", preferences.appearance); putBoolean("autoScan", value) }) }); Text("Rescan automatically when indexed music changes") }
+                    Text("Appearance", style = MaterialTheme.typography.titleLarge)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("System", "Light", "Dark", "AMOLED").forEach { name -> FilterChip(selected = preferences.appearance == name, onClick = {
+                            send(PlaybackService.PREFERENCES, Bundle().apply { putString("appearance", name); putBoolean("autoScan", preferences.autoScan) })
+                        }, label = { Text(name) }) }
+                    }
+                    if (library.message.isNotBlank()) Text(library.message)
+                    OutlinedButton(onClick = onNotifications) { Text("Playback notifications") }
+                    OutlinedButton(onClick = onExport, enabled = ready) { Text("Save playback report") }
+                    Section("Output")
+                    Text("Normal playback is active. Direct USB is unavailable in this preview while clocking and listening-balance findings remain open.")
+                    Section("About this preview")
+                    Text("Local Music 0.2.0\nOffline folders, covers, lyrics and reviewed tag edits. No account needed.")
+                    Text("Online lyrics search runs only when you request it; selected versions remain available offline.")
+                    TextButton(onClick = { licenses = true }) { Text("Open-source notices") }
+                    EditHistory(library, { nativeBatch = it }, actions)
+                    Text("Playlists, processing controls, widget and app-data backup are not included yet.")
+                }
+            }
+        }
+    }
+    details?.let { track -> AlertDialog(onDismissRequest = { details = null }, title = { Text(track.tags.title) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(artist(track)); Text("Album: ${track.tags.album ?: "Unknown"}")
+            Text("Duration: ${time(track.audio.durationMs)}\nFormat: ${track.audio.mimeType}\nAvailability: ${track.availability}")
+            Text("Source: ${track.audio.sampleRateHz?.let { "$it Hz" } ?: "sample rate unknown"} · ${track.audio.meaningfulBits?.let { "$it-bit" } ?: "bit depth unknown"} · ${track.audio.channels ?: "?"} channel(s)")
+            TextButton(onClick = { editing = listOf(track); details = null }) { Text("Edit tags…") }
+            TextButton(onClick = { actions.pickCover(listOf(track)); details = null }) { Text("Choose artwork…") }
+            TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putString("id", track.id.value.toString()); putBoolean("remove", true) }); details = null }) { Text("Remove cover in this app") }
+            TextButton(enabled = !library.scanning, onClick = {
+                val batch = UUID.randomUUID().toString(); nativeBatch = batch; details = null
+                send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", arrayListOf(track.id.value.toString())); putString("patch", "{}"); putInt("coverMode", 2) })
+            }) { Text("Preview removal of embedded front cover…") }
+        } }, confirmButton = { TextButton(onClick = { details = null }) { Text("Close") } }) }
+    editing?.let { tracks -> TagEditorDialog(tracks, library, send, actions, { nativeBatch = it }) { editing = null } }
+    nativeBatch?.let { batch -> NativePreviewDialog(batch, library, send, actions) { nativeBatch = null } }
+    if (licenses) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var notice by remember { mutableStateOf("Loading notices…") }
+        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
+        AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Open-source notices") }, text = { Text(notice, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })
+    }
+}
+
+@Composable private fun Section(title: String) { Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
+
+@Composable private fun SongRow(track: Track, ready: Boolean, play: () -> Unit, send: (String, Bundle) -> Unit,
+    art: String? = null, selected: Boolean? = null, toggle: (() -> Unit)? = null, details: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    ListItem(modifier = Modifier.clickable(enabled = ready && (selected != null || track.availability == Availability.AVAILABLE), onClick = { if (selected != null) toggle?.invoke() else play() }),
+        leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
+        headlineContent = { Text(track.tags.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        trailingContent = { Box {
+            TextButton(onClick = { menu = true }, enabled = ready) { Text("More") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text(if (track.favorite) "Remove favorite" else "Add favorite") }, onClick = { menu = false; send(PlaybackService.FAVORITE, idBundle(track)) })
+                DropdownMenuItem(text = { Text("Play Next") }, onClick = { menu = false; send(PlaybackService.NEXT, idBundle(track)) })
+                DropdownMenuItem(text = { Text("Add to Queue") }, onClick = { menu = false; send(PlaybackService.ADD, idBundle(track)) })
+                DropdownMenuItem(text = { Text("Details") }, onClick = { menu = false; details() })
+            }
+        } })
+}

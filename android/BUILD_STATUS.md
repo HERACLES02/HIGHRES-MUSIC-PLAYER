@@ -1,5 +1,97 @@
 # Diagnostic APK build status
 
+Current separate player: **0.2.0-library-lyrics**, code 2. See
+[scope, checks and phone gate](PLAYER_0_2_HANDOFF.md). New features are locally
+tested; phone/provider acceptance is pending. Diagnostic artifacts below remain
+separate and unchanged.
+
+## Separate player: 0.1.0-normal-preview, 2 November 2026
+
+First phone result now received: successful basic Normal playback, Pause/Play
+and seek observations, supported by the report and user's success confirmation.
+See [player phone results](player/PHONE_RESULTS.md). The broader pending phone
+checks below remain separate; no new APK is required for this result.
+
+`com.localmusic.player` now has its own installable **Local Music** APK. This does
+not change the diagnostic artifact below. Player build, 8,681 core assertions,
+61 real Room assertions, frozen schemas and signature pass. Lint has 0 errors,
+6 warnings. New-app phone behavior remains pending. Artifact/checksum and limits:
+[player verification](player/VERIFICATION.md); [phone steps](PLAYER_PHONE_CHECK.md).
+
+## Current diagnostic: 0.10.0-media3-direct, 2 November 2026
+
+Phone acceptance: user confirms lock-screen controls now work. The uploaded
+report records Pause/Resume, explicit Stop, zero transport/PCM errors and verified
+restoration. See [MEDIA3_PHONE_RESULTS.md](MEDIA3_PHONE_RESULTS.md). Build evidence
+below is retained; its pending physical-check statement is the pre-test status.
+
+- Artifact: `releases/music-usb-probe-0.10.0.apk`, 74,183,597 bytes, version code 10.
+- SHA-256: `9925348200ea86b4a0ad528a33e3856bd660924d5cc3f73ac08d87fb737ed744`.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build.ps1`
+  passes assembly, strict source/tool/dependency checks, 3,052 parser assertions,
+  two original fixture regressions and one eight-variant channel regression.
+  `scripts/test-direct-state.ps1` separately passes 31 controller-state assertions
+  and is now included in the build script for subsequent builds.
+- Lint: 0 errors, 14 warnings, 4 hints. The exported-service warning is retained:
+  Media3 discovery is public, while session trust checks and private-intent nonce
+  checks authorize commands. The bitmap KTX suggestion is also retained. No
+  suppression was added. Two deprecated constructor warnings belong to the unused
+  0.9.0 helper, not the running Media3 notification path.
+- APK v2 signature and unchanged signing certificate verified; certificate SHA-256
+  `51b163c3c29d8f91f65fbd03929ebb4a98aada4d32b601f2cae5a479374ec507`.
+  aapt verifies application ID, version, min API 30 and target API 35.
+- All six native libraries and all 24 fixture files are byte-identical to 0.9.0.
+  No native-suite rerun: native transport/PCM code is unchanged.
+- Implements a MediaLibraryService/session and SimpleBasePlayer adapter for the
+  diagnostic Direct engine. No dependency upgrade or new manifest permission.
+  Physical lock-screen visibility and Media3 remote controls remain pending.
+  See [MEDIA3_DIRECT_CHECK.md](MEDIA3_DIRECT_CHECK.md) for evidence and phone steps.
+
+## Current diagnostic: 0.9.0-media-card, 2 November 2026
+
+- Artifact: `releases/music-usb-probe-0.9.0.apk`, 70,147,886 bytes, version code 9.
+- SHA-256: `c2e01358e1acabb8703067feb190aac4de4a742ae79ebb60108062e6ebf53300`.
+- Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build.ps1`.
+- Final assembly, strict source/tool/dependency checks, parser 3,052 assertions,
+  two original fixture regressions and one eight-variant channel regression pass.
+  Lint: 0 errors, 13 warnings, 4 hints. Two Kotlin deprecation warnings for the
+  compatible framework action-icon constructor are visible, not suppressed.
+- APK v2 signature verifies with the same certificate SHA-256
+  `51b163c3c29d8f91f65fbd03929ebb4a98aada4d32b601f2cae5a479374ec507`.
+  aapt verifies application ID, version, min API 30 and target API 35.
+- All six native shared libraries and all 24 WAV/FLAC fixture bytes match 0.8.0.
+  No native source/dependency/permission changes or native-suite reruns.
+- Direct's diagnostic session/style card and Pause/Resume/Stop forwarding compile;
+  the Normal session is released before the Direct session is created. Session
+  shutdown paths, inactive-engine command guards and public diagnostic metadata
+  were source-reviewed. This is not physical validation of remote callbacks or
+  lock-screen visibility. See [LOCK_SCREEN_MEDIA_CHECK.md](LOCK_SCREEN_MEDIA_CHECK.md).
+
+## Current diagnostic: 0.8.0-notification-check, 2 November 2026
+
+- Artifact: `releases/music-usb-probe-0.8.0.apk`, 70,542,452 bytes, version code 8.
+- SHA-256: `bb92d69342c54626b2ca25355f110de1ce3fa424d96ad0cd5da0e2183a9f4065`.
+- Build command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build.ps1`.
+- Final assembly, strict source/tool/dependency checks, two original fixture
+  regressions, one eight-variant channel fixture regression and 3,052 parser
+  assertions pass. Lint: 0 errors, 13 warnings, 4 hints; no suppression added.
+- APK v2 signature verifies; certificate remains
+  `51b163c3c29d8f91f65fbd03929ebb4a98aada4d32b601f2cae5a479374ec507`.
+  aapt verifies package, version, min API 30 and target API 35.
+- All six native shared libraries and all 24 WAV/FLAC fixtures are byte-identical
+  to 0.7.0. No native suites were repeated for this notification/report-only update.
+- No new dependencies. Manifest adds POST_NOTIFICATIONS with a guarded user-
+  triggered runtime request only on Android 13+. It creates no prompt on the
+  target Android 11 phone. No microphone, file-access or listener permission added.
+- Phone notification visibility and Stop action are unverified. The update reads
+  posting/channel state and posts a separate same-channel test card; it does not
+  claim a fix. See [NOTIFICATION_CHECK.md](NOTIFICATION_CHECK.md).
+
+Parallel Room persistence work: `:player-data` passes 58 real-database assertions,
+Android compilation/lint and frozen-schema checks. No new diagnostic APK was
+built or installed. See [persistence verification](player-data/VERIFICATION.md)
+for migration, recovery, paused restoration and remaining phone-integration limits.
+
 Parallel player-foundation work: `:player-core` and its proposed SQL schema pass
 8,681 Kotlin assertions and four SQLite tests. Existing parser checks and Android
 lint also pass with the new module configured. This produced no new APK; the

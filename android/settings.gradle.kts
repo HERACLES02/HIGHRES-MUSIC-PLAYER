@@ -6,4 +6,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "MusicPlayerAndroid"
-include(":usb-core", ":app", ":player-core")
+include(":usb-core", ":app", ":player-core", ":player-data")
+include(":player")
