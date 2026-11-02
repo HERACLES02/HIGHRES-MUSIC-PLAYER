@@ -1,5 +1,16 @@
 # Music USB Probe: Stage A diagnostics
 
+The future player's isolated Kotlin foundations live in
+[`player-core`](player-core/README.md): queue rules, LRC/timing, UUID library
+models and a proposed SQL schema. Run `scripts/test-player-core.ps1` to check
+them without building or installing an APK. The diagnostic app has no dependency
+on this module; the current phone test can continue unchanged.
+
+Latest: **0.7.0 background-stop diagnosis**. Install as an update, then export
+**Save background-stop diagnosis** without starting a new test. It reads saved
+reports and available Android process-exit history; it does not claim a fix for
+the interrupted endurance run. See [BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md).
+
 Latest: **0.6.0 equal-tone channel comparison**. Use
 [CHANNEL_CHECK.md](CHANNEL_CHECK.md) to compare identical, non-overlapping 440 Hz
 signals in Direct USB and Normal mode. This investigates balance without adding

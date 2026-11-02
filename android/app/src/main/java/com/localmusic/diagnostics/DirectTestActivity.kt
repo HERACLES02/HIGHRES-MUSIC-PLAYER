@@ -127,6 +127,12 @@ class DirectTestActivity: ComponentActivity() {
                         Text("Hardware volume only. Start low; increase only if needed after checking the quiet signal. Paused changes apply on Resume.")
                         Row { for(level in listOf(-40,-30,-20)) OutlinedButton(enabled=busy && phase in listOf(2,3),onClick={ UsbStreamService.command(3,level) }) { Text("$level dB") } }
                         OutlinedTextField(value=notes,onValueChange={ notes=it.take(3000) },label={ Text("Heard correct speed/channels? Glitches, screen-off, pause/seek, reconnect notes") })
+                        Text("After an unexpected stop, save background-stop diagnosis first. It includes the latest checkpoint, the last final report (which may be older), and available Android process-exit records.")
+                        Button(onClick={ lifecycleScope.launch {
+                            val evidence=withContext(Dispatchers.IO) { StreamEvidence.bundle(this@DirectTestActivity) }
+                            message=StreamEvidence.summary(evidence)
+                            prepareExport("m2-background-stop.json",evidence.put("userObservation",notes).toString(2))
+                        } }) { Text("Save background-stop diagnosis") }
                         Button(enabled=!busy,onClick={
                             lifecycleScope.launch {
                                 val saved=state.report ?: withContext(Dispatchers.IO) { runCatching { openFileInput("native-stream-last.json").bufferedReader().use { it.readText() } }.getOrNull() }

@@ -47,7 +47,7 @@ class UsbProbe(private val context: Context) {
             }
             val root = JSONObject()
                 .put("schemaVersion", 2)
-                .put("appVersion", "0.6.0-channel-check")
+                .put("appVersion", StreamEvidence.VERSION)
                 .put("capturedAt", captured)
                 .put("scope", "Read-only advertised capabilities. No direct audio stream, active playback format, sound-quality result, or bit-perfect verification.")
                 .put("phone", JSONObject().put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)

@@ -104,7 +104,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Android build or checks failed. See the output above.' }
     $releasePath = Join-Path $projectRoot 'releases'
     New-Item -ItemType Directory -Force -Path $releasePath | Out-Null
-    $apkPath = Join-Path $releasePath 'music-usb-probe-0.6.0.apk'
+    $apkPath = Join-Path $releasePath 'music-usb-probe-0.7.0.apk'
     Copy-Item -LiteralPath (Join-Path $projectRoot 'app\build\outputs\apk\debug\app-debug.apk') -Destination $apkPath -Force
     & (Join-Path $sdkPath 'build-tools/35.0.0/apksigner.bat') verify --verbose $apkPath
     if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }

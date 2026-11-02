@@ -2,7 +2,42 @@
 
 ## Current implementation checkpoint
 
-As of 2 November 2026, Stage A is in progress. The latest diagnostic is 0.6.0;
+Parallel work authorized while the phone endurance test continues: pure Kotlin
+`:player-core` now implements queue/resume/history/shuffle state and LRC parsing,
+timing and selection. UUID library models and an executable proposed Room v1 SQL
+schema establish the data contract. This module is not linked to the diagnostic
+APK; Media3/UI/Room repository integration remains outstanding. See
+[player-core README](android/player-core/README.md) for behavior, test commands
+and explicit limits. This does not approve the unresolved Direct USB gates.
+
+Latest postmortem: 0.7.0 successfully exported Android exit history. A resource
+kill (reason 9, `o-kill:6`) at 08:37:09.807 UTC correlates with the original
+endurance failure. Exact policy/resource trigger remains unknown. Next trial:
+allow this app's background activity and exempt it from battery optimization,
+then repeat endurance with richer run identifiers. No confirmed fix or endurance
+pass yet; see [background review](android/BACKGROUND_PHONE_RESULTS.md).
+
+Latest endurance attempt stopped with only a checkpoint (6 min 12 s of saved
+progress, no recorded error, several minutes screen-off). The separately saved
+final report belongs to the earlier minute. Cause is unknown. 0.7.0 adds Android
+process-exit evidence and run identity; read the existing evidence first using
+its new export, without restarting the hour-long test. See
+[background review](android/BACKGROUND_PHONE_RESULTS.md).
+
+Latest steady 24/96 minute: no seeks/pauses, zero recorded errors, screen-off
+progress, restored settings and no user-reported glitches. Maximum callback gap
+28.067 ms; the earlier two-second gap did not recur. Next is the 61-minute
+screen-off experiment. Slight left weakness, clocking and full-format acceptance
+remain unresolved; see [phone review](android/HIGH_RATE_PHONE_RESULTS.md).
+
+Latest phone review: [24/96 follow-up](android/HIGH_RATE_PHONE_RESULTS.md)
+records a minute's completed Direct PCM byte count, zero recorded errors and
+restoration, with one seek and a roughly two-second callback gap requiring
+listening clarification. Normal 24/96 sounds balanced to the user, Direct remains
+slightly left-quiet. The supplied 16/44.1 WAV also sounds slightly left-quiet in
+another player. Full-format and screen-off endurance acceptance remain open.
+
+As of 2 November 2026, Stage A is in progress. The latest diagnostic is 0.7.0;
 the daily-use player and stages B-F are not implemented. The accepted user handoff
 and physical reports take precedence over the older research below.
 
@@ -15,14 +50,16 @@ for exact local checks and artifact hashes.
 Physical evidence covers USB descriptors, Normal-route fixtures, native access,
 volume/rate/alternate controls and two short Direct USB runs. Their application
 PCM/transport counters pass. Follow-up clarified that left is audible at -30/-20
-dB and the original fixture's both-channel overlap was intentional. Balance still
-needs a controlled comparison; clocking and sustained playback are unvalidated.
-See [android/STREAM_PHONE_RESULTS.md](android/STREAM_PHONE_RESULTS.md).
+dB and the original fixture's both-channel overlap was intentional. The 0.6.0
+equal-tone comparison now reproduces low-volume left weakness in both Normal
+and Direct USB. Its one-minute Direct run records zero PCM/transfer errors and
+verified restoration. The cause of imbalance, clocking and sustained playback
+remain unvalidated. See [android/CHANNEL_PHONE_RESULTS.md](android/CHANNEL_PHONE_RESULTS.md).
 
 0.6.0 adds equal-frequency, gap-separated channel comparison in both routes,
-without a routing fix or balance compensation. The user has postponed this phone
-test. Resume with [android/CHANNEL_CHECK.md](android/CHANNEL_CHECK.md); do not mark
-it passed or start the long run before resolving the balance finding.
+without a routing fix or balance compensation. The comparison was performed;
+next isolate the balance finding using another earphone/cable combination where
+available. Do not mark it passed or start the long run before resolving that finding.
 
 The M2 advertises stereo 16/24-bit PCM at 44.1/48/88.2/96 kHz. No fixed Android
 48 kHz limit or end-to-end bit-perfect result is assumed. Direct scheduling is

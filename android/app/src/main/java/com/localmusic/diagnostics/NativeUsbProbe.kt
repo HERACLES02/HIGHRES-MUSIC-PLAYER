@@ -36,7 +36,7 @@ class NativeUsbProbe(private val context: Context) {
             }
             JSONObject(NativeUsb.inspect(connection.fileDescriptor, allowDetach, testControls))
         } finally { connection.close() }
-        val root = JSONObject().put("schemaVersion", 2).put("appVersion", "0.6.0-channel-check")
+        val root = JSONObject().put("schemaVersion", 2).put("appVersion", StreamEvidence.VERSION)
             .put("capturedAt", captured).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("scope", if (testControls) "Silent low hardware-volume SET/readback and eight rate/alternate configurations, followed by restoration. No audio transfers."

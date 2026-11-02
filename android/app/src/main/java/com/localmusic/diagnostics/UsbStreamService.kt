@@ -52,6 +52,9 @@ class UsbStreamService: Service() {
     private var receiverRegistered=false
     private var reason=""
     private var ticks=0
+    private var runId=""
+    private var startedAt=""
+    private var requestedSeconds=0
     private var evictedSamples=0
     private val samples=JSONArray()
     private val ticker=object: Runnable {
@@ -63,7 +66,9 @@ class UsbStreamService: Service() {
                 if(samples.length()>=450) { samples.remove(0); evictedSamples++ }
                 samples.put(JSONObject().put("at",Instant.now().toString())
                     .put("interactive",getSystemService(PowerManager::class.java).isInteractive).put("native",JSONObject(snapshot)))
-                val partial=JSONObject().put("schemaVersion",1).put("appVersion","0.6.0-channel-check")
+                val partial=JSONObject().put("schemaVersion",1).put("appVersion",StreamEvidence.VERSION)
+                    .put("runId",runId).put("startedAt",startedAt).put("processId",android.os.Process.myPid())
+                    .put("durationSecondsRequested",requestedSeconds).put("interruptionReason",reason.ifBlank { "none_recorded_yet" })
                     .put("incomplete",true).put("fixture",state.fixture).put("capturedAt",Instant.now().toString())
                     .put("progress",JSONArray(samples.toString())).put("evictedSamples",evictedSamples).toString()
                 scope.launch(reportIo) { saveAtomic("native-stream-incomplete.json",partial) }
@@ -98,6 +103,7 @@ class UsbStreamService: Service() {
             state=state.copy(message="M2 USB permission is needed. Return to Inspect cable first."); stopSelf(); return START_NOT_STICKY
         }
         ownsGate=true; UsbDiagnosticGate.held=true; BaselineService.releaseForNative()
+        runId=java.util.UUID.randomUUID().toString(); startedAt=Instant.now().toString(); requestedSeconds=seconds
         running=true; state=StreamUi(true,"Checking fixture and preparing low hardware volume…",fixture)
         val filter=IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
         if(Build.VERSION.SDK_INT>=33) registerReceiver(receiver,filter,RECEIVER_NOT_EXPORTED)
@@ -145,7 +151,8 @@ class UsbStreamService: Service() {
                 if(ownsGate) { UsbDiagnosticGate.held=false; ownsGate=false }
             }
             try {
-            val report=JSONObject().put("schemaVersion",1).put("appVersion","0.6.0-channel-check")
+            val report=JSONObject().put("schemaVersion",1).put("appVersion",StreamEvidence.VERSION)
+                .put("runId",runId).put("startedAt",startedAt).put("processId",android.os.Process.myPid())
                 .put("exportedAt",Instant.now().toString()).put("phone",JSONObject().put("model",Build.MODEL).put("sdk",Build.VERSION.SDK_INT).put("buildDisplay",Build.DISPLAY))
                 .put("scope","Experimental nominal-rate direct USB fixture transport; missing-feedback clocking remains unvalidated. No end-to-end bit-perfect claim.")
                 .put("physicalPreset","Standard (user confirmed)").put("fixture",fixture).put("durationSecondsRequested",seconds)

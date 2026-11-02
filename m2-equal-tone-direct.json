@@ -1,0 +1,1273 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.6.0-channel-check",
+  "exportedAt": "2026-11-01T21:27:02.620Z",
+  "phone": {
+    "model": "CPH1937",
+    "sdk": 30,
+    "buildDisplay": "CPH1937_11_F.17"
+  },
+  "scope": "Experimental nominal-rate direct USB fixture transport; missing-feedback clocking remains unvalidated. No end-to-end bit-perfect claim.",
+  "physicalPreset": "Standard (user confirmed)",
+  "fixture": "channels-16-44100.wav",
+  "durationSecondsRequested": 60,
+  "signalPattern": "0-2s left 440 Hz; 2-3s silence; 3-5s right 440 Hz; 5-6s silence. Repeats; no both-channel section.",
+  "source": {
+    "file": "channels-16-44100.wav",
+    "sampleRateHz": 44100,
+    "meaningfulBits": 16,
+    "channels": 2,
+    "durationMs": 6000,
+    "peakDbfs": -42,
+    "pattern": "equal-tone-separated",
+    "frequencyHz": 440,
+    "pcmSha256": "c73a06004c45b2a259b44c7b8f5e18ac7375b80b7b0219198e6850d324dc0f2b",
+    "fileSha256": "33fd2ece78125a8d629876675b416fd616e70c03b5ce9ec2223881404134ddc4"
+  },
+  "native": {
+    "libusbVersion": "1.0.29",
+    "negotiatedSpeedEnum": 2,
+    "allowTemporaryDriverDetach": true,
+    "controlTestRequested": false,
+    "volumeWriteAttempted": true,
+    "sampleRateWriteAttempted": true,
+    "alternateWriteAttempted": true,
+    "lowVolumeControlVerified": true,
+    "configurationMatrixPassed": false,
+    "settingsRestored": true,
+    "streamExperiment": {
+      "clocking": "Experimental nominal 1000-interval\/s packet cadence; no feedback or capture timing. Device clocking remains unvalidated.",
+      "sampleRateHz": 44100,
+      "bits": 16,
+      "durationSecondsRequested": 60,
+      "wallElapsedMs": 60046,
+      "endpointInterval": 1,
+      "maximumPacketBytes": 388,
+      "stoppedByRequest": false,
+      "stats": {
+        "phase": 5,
+        "error": 0,
+        "pendingTransfers": 0,
+        "submittedBytes": 10603220,
+        "completedBytes": 10583996,
+        "submittedFrames": 2650805,
+        "positionFrames": 2646616,
+        "completedIntervals": 60000,
+        "comparedBytes": 10603220,
+        "pcmMismatches": 0,
+        "callbacks": 7514,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 14,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 24835,
+        "submissionFnv1a64": "9704263005451006083",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -5120,
+        "hardwareLevelRaw2": -5120,
+        "volumeHealthChecks": 6
+      }
+    },
+    "operations": [
+      {
+        "operation": "init_no_discovery",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "wrap_android_fd",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "device_descriptor",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "get_configuration",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_control_before",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_playback_before",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_1",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_2",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_3",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch1_get_4",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_1",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_2",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_3",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "unclaimed_volume_ch2_get_4",
+        "result": -1,
+        "error": "LIBUSB_ERROR_IO",
+        "errnoAfterCall": 16
+      },
+      {
+        "operation": "configure_auto_detach",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "claim_control_0",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "claimed_volume_ch1_get_3",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch1_get_4",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "claimed_volume_ch2_get_1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch2_get_2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "claimed_volume_ch2_get_3",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "claimed_volume_ch2_get_4",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "claim_playback_2",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "get_playback_alternate",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "get_endpoint_sample_rate",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "007701",
+        "rateHz": 96000
+      },
+      {
+        "operation": "snapshot_alternate",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "snapshot_rate",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "007701",
+        "rateHz": 96000
+      },
+      {
+        "operation": "snapshot_ch1_cur",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "snapshot_ch1_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "snapshot_ch1_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "snapshot_ch1_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "snapshot_ch2_cur",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "snapshot_ch2_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "snapshot_ch2_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "snapshot_ch2_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "low_ch1_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "low_ch1_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "low_ch1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "low_ch2_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "low_ch2_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "low_ch2_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "01"
+      },
+      {
+        "operation": "stream_format_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_rate_set",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_readback",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_hardware_ch1_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_hardware_ch1_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_hardware_ch1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_hardware_ch2_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_hardware_ch2_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_hardware_ch2_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_before_audio_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_before_audio_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00d8",
+        "rawSigned256thDb": -10240
+      },
+      {
+        "operation": "stream_idle_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_idle_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "stream_idle_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "01"
+      },
+      {
+        "operation": "stream_format_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_rate_set",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_readback",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_volume_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "stream_volume_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "stream_volume_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "stream_volume_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "stream_volume_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "stream_volume_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "stream_hardware_ch1_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_hardware_ch1_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_hardware_ch1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_hardware_ch2_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_hardware_ch2_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_hardware_ch2_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_before_audio_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_before_audio_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00e2",
+        "rawSigned256thDb": -7680
+      },
+      {
+        "operation": "stream_idle_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_idle_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "stream_idle_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_format_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "01"
+      },
+      {
+        "operation": "stream_format_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_rate_set",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_readback",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "44ac00",
+        "rateHz": 44100
+      },
+      {
+        "operation": "stream_rate_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_volume_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "stream_volume_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "stream_volume_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "stream_volume_min",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ce",
+        "rawSigned256thDb": -12800
+      },
+      {
+        "operation": "stream_volume_max",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "stream_volume_res",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "8000",
+        "rawSigned256thDb": 128
+      },
+      {
+        "operation": "stream_hardware_ch1_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_hardware_ch1_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_hardware_ch1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_hardware_ch2_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_hardware_ch2_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_hardware_ch2_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "stream_before_audio_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_before_audio_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch1",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "stream_periodic_volume_ch2",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00ec",
+        "rawSigned256thDb": -5120
+      },
+      {
+        "operation": "restore_rate_alt1_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_rate_alt1_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "01"
+      },
+      {
+        "operation": "restore_rate_alt1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_rate_set",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "007701",
+        "rateHz": 96000
+      },
+      {
+        "operation": "restore_rate_readback",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "007701",
+        "rateHz": 96000
+      },
+      {
+        "operation": "restore_rate_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_idle_alt0_set",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_idle_alt0_readback",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "00"
+      },
+      {
+        "operation": "restore_idle_alt0_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_idle_rate_readback",
+        "result": 3,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "007701",
+        "rateHz": 96000
+      },
+      {
+        "operation": "restore_ch1_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "restore_ch1_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "restore_ch1_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "restore_ch2_set",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "restore_ch2_readback",
+        "result": 2,
+        "error": "SUCCESS",
+        "errnoAfterCall": 11,
+        "dataHex": "0000",
+        "rawSigned256thDb": 0
+      },
+      {
+        "operation": "restore_ch2_exact",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "settings_restore_verified",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "release_playback_2",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "release_control_0",
+        "result": 0,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_control_after",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      },
+      {
+        "operation": "kernel_driver_playback_after",
+        "result": 1,
+        "error": "SUCCESS",
+        "errnoAfterCall": 0
+      }
+    ],
+    "audioSubmitted": true,
+    "captureOrHidClaimed": false,
+    "clockingValidated": false,
+    "safeHardwareVolumeEstablished": false,
+    "errnoNote": "errnoAfterCall is supplementary; libusb return codes are authoritative. Positive kernel-driver results mean active, not a transfer byte count."
+  },
+  "nativeLiveFinalStats": {
+    "phase": 5,
+    "error": 0,
+    "pendingTransfers": 0,
+    "submittedBytes": 10603220,
+    "completedBytes": 10583996,
+    "submittedFrames": 2650805,
+    "positionFrames": 2646616,
+    "completedIntervals": 60000,
+    "comparedBytes": 10603220,
+    "pcmMismatches": 0,
+    "callbacks": 7514,
+    "packetErrors": 0,
+    "transferErrors": 0,
+    "cancelledTransfers": 14,
+    "queueEmptyDuringActive": 0,
+    "maxCallbackGapUs": 24835,
+    "submissionFnv1a64": "9704263005451006083",
+    "pauseCount": 0,
+    "seekCount": 0,
+    "cleanupDelayed": false,
+    "hardwareLevelRaw1": -5120,
+    "hardwareLevelRaw2": -5120,
+    "volumeHealthChecks": 6
+  },
+  "decodedPcmSha256Verified": true,
+  "decoders": "native PCM WAV \/ libFLAC 1.4.3",
+  "unavailableMeasurements": [
+    "Device internal buffer underruns \/ overflows",
+    "Independent physical bus PCM capture",
+    "DAC render clock and internal DSP"
+  ],
+  "preparationError": null,
+  "interruptionReason": "none",
+  "progress": [
+    {
+      "at": "2026-11-01T21:26:02.381Z",
+      "interactive": true,
+      "native": {
+        "phase": 1,
+        "error": 0,
+        "pendingTransfers": 0,
+        "submittedBytes": 0,
+        "completedBytes": 0,
+        "submittedFrames": 0,
+        "positionFrames": 0,
+        "completedIntervals": 0,
+        "comparedBytes": 0,
+        "pcmMismatches": 0,
+        "callbacks": 0,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 0,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 0,
+        "submissionFnv1a64": "14695981039346656037",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": 0,
+        "hardwareLevelRaw2": 0,
+        "volumeHealthChecks": 0
+      }
+    },
+    {
+      "at": "2026-11-01T21:26:12.435Z",
+      "interactive": true,
+      "native": {
+        "phase": 2,
+        "error": 0,
+        "pendingTransfers": 8,
+        "submittedBytes": 1771056,
+        "completedBytes": 1761176,
+        "submittedFrames": 442764,
+        "positionFrames": 440294,
+        "completedIntervals": 9984,
+        "comparedBytes": 1772464,
+        "pcmMismatches": 0,
+        "callbacks": 1248,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 0,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 15181,
+        "submissionFnv1a64": "5727115060151166317",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -10240,
+        "hardwareLevelRaw2": -10240,
+        "volumeHealthChecks": 0
+      }
+    },
+    {
+      "at": "2026-11-01T21:26:22.514Z",
+      "interactive": true,
+      "native": {
+        "phase": 2,
+        "error": 0,
+        "pendingTransfers": 8,
+        "submittedBytes": 3556220,
+        "completedBytes": 3535052,
+        "submittedFrames": 889055,
+        "positionFrames": 883763,
+        "completedIntervals": 20040,
+        "comparedBytes": 3556220,
+        "pcmMismatches": 0,
+        "callbacks": 2512,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 7,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 15181,
+        "submissionFnv1a64": "16870717665146352822",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -7680,
+        "hardwareLevelRaw2": -7680,
+        "volumeHealthChecks": 2
+      }
+    },
+    {
+      "at": "2026-11-01T21:26:32.590Z",
+      "interactive": true,
+      "native": {
+        "phase": 2,
+        "error": 0,
+        "pendingTransfers": 8,
+        "submittedBytes": 5339976,
+        "completedBytes": 5309460,
+        "submittedFrames": 1334994,
+        "positionFrames": 1327982,
+        "completedIntervals": 30099,
+        "comparedBytes": 5339976,
+        "pcmMismatches": 0,
+        "callbacks": 3776,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 14,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 15181,
+        "submissionFnv1a64": "13628653552921705617",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -5120,
+        "hardwareLevelRaw2": -5120,
+        "volumeHealthChecks": 3
+      }
+    },
+    {
+      "at": "2026-11-01T21:26:42.669Z",
+      "interactive": true,
+      "native": {
+        "phase": 2,
+        "error": 0,
+        "pendingTransfers": 8,
+        "submittedBytes": 7116676,
+        "completedBytes": 7087572,
+        "submittedFrames": 1779169,
+        "positionFrames": 1772510,
+        "completedIntervals": 40179,
+        "comparedBytes": 7118088,
+        "pcmMismatches": 0,
+        "callbacks": 5036,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 14,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 15181,
+        "submissionFnv1a64": "4165012918038541003",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -5120,
+        "hardwareLevelRaw2": -5120,
+        "volumeHealthChecks": 4
+      }
+    },
+    {
+      "at": "2026-11-01T21:26:52.761Z",
+      "interactive": true,
+      "native": {
+        "phase": 2,
+        "error": 0,
+        "pendingTransfers": 8,
+        "submittedBytes": 8897608,
+        "completedBytes": 8867096,
+        "submittedFrames": 2224402,
+        "positionFrames": 2217391,
+        "completedIntervals": 50267,
+        "comparedBytes": 8897608,
+        "pcmMismatches": 0,
+        "callbacks": 6297,
+        "packetErrors": 0,
+        "transferErrors": 0,
+        "cancelledTransfers": 14,
+        "queueEmptyDuringActive": 0,
+        "maxCallbackGapUs": 21136,
+        "submissionFnv1a64": "17849165772756832058",
+        "pauseCount": 0,
+        "seekCount": 0,
+        "cleanupDelayed": false,
+        "hardwareLevelRaw1": -5120,
+        "hardwareLevelRaw2": -5120,
+        "volumeHealthChecks": 5
+      }
+    }
+  ],
+  "evictedSamples": 0,
+  "userObservation": "All good except the sound only works for left on -30dB and -20dB and the sound is lower compared to right",
+  "observationUserReported": true
+}

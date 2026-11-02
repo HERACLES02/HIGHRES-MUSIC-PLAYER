@@ -1,7 +1,10 @@
 # Equal-tone channel comparison: 0.6.0
 
-Status: locally built and verified; the user has postponed the phone comparison.
-No equal-tone Normal/Direct result is available yet. Resume with the steps below.
+Status: phone comparison received and reviewed on 2 November 2026. The user
+reports low-volume left weakness in both Normal and Direct USB. The Direct
+minute completed without recorded PCM/transfer errors and with restoration.
+Balance remains unresolved; see [CHANNEL_PHONE_RESULTS.md](CHANNEL_PHONE_RESULTS.md).
+The steps below document the comparison already performed, not a request to repeat it.
 
 Your follow-up establishes that left is audible at -30/-20 dB and the overlap
 was only in the original both-channel section. The overlap was intentional.

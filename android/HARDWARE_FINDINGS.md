@@ -1,5 +1,24 @@
 # OPPO A9 2020 / KZ M2: first physical-device report
 
+Latest endurance attempt is incomplete: saved observations cover 6 min 12 s,
+including screen-off progress, with zero recorded errors before evidence ends.
+No current final report or restoration result exists. A background restriction
+or hardware fault is not established. See
+[BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md) for the 0.7.0 postmortem export.
+
+Latest 24/96 audio follow-up: a requested minute completed exact nominal PCM
+bytes with zero recorded errors and verified restoration, but included a seek
+and a 2.02-second callback gap. Normal 24/96 is reported balanced, Direct slightly
+left-quiet. The supplied 16/44.1 WAV also sounded left-quiet in another player.
+No hardware fault or DSP/clocking conclusion follows. See
+[HIGH_RATE_PHONE_RESULTS.md](HIGH_RATE_PHONE_RESULTS.md).
+
+2 November 2026, latest: equal-tone reports reproduce low-volume left weakness
+in both routes. The cause is not established. The Direct minute has zero recorded
+PCM/transfer errors and verified restoration, but does not settle acoustic balance
+or clocking. See [CHANNEL_PHONE_RESULTS.md](CHANNEL_PHONE_RESULTS.md).
+The following entries retain earlier checkpoint history.
+
 Follow-up: left is audible at -30/-20 dB; overlap was only the intentional
 both-channel section. The remaining balance observation needs a same-frequency
 comparison. See [CHANNEL_CHECK.md](CHANNEL_CHECK.md) for 0.6.0. Older missing-left

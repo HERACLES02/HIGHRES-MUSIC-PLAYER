@@ -1,5 +1,45 @@
 # Diagnostic APK build status
 
+Parallel player-foundation work: `:player-core` and its proposed SQL schema pass
+8,681 Kotlin assertions and four SQLite tests. Existing parser checks and Android
+lint also pass with the new module configured. This produced no new APK; the
+diagnostic still has no dependency on the player foundation. See
+[player-core verification](player-core/VERIFICATION.md).
+
+## Current: 0.7.0-background-check, 2 November 2026
+
+Phone follow-up: the background-stop export now physically succeeds and exposes
+the original attempt's correlated system resource-kill record. See
+[BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md). This validates the
+export, not an endurance fix. No new build was needed for report review.
+
+- Artifact: `releases/music-usb-probe-0.7.0.apk`, 70,509,336 bytes, version code 7.
+- SHA-256: `ab3ee925f94dd5ec3dc58266ecd5313763d40829e86a15b8ffbb6a2e7bba40bc`.
+- APK v2 signature verifies; certificate SHA-256 remains
+  `51b163c3c29d8f91f65fbd03929ebb4a98aada4d32b601f2cae5a479374ec507`.
+  Package, version, min API 30 and target API 35 verified with aapt.
+- Final build passes parser 3,052 assertions, two original fixture regressions,
+  one eight-variant channel regression, pinned sources/tools, assembly and lint
+  (0 errors, 11 warnings, 4 hints). No dependency verification changes required.
+- All six packaged native libraries and all 24 WAV/FLAC fixtures are byte-identical
+  to 0.6.0. Native suites were not repeated for this Kotlin/report-only change.
+- Real JSON evidence checks establish the newer checkpoint/stale-final ordering,
+  372.031 s saved span and 291.639 s observed screen-off span, with no recorded
+  errors. Process-exit export is compiled/lint-checked, not yet phone-verified.
+
+This update adds a read-only background-stop export with both saved reports,
+timestamp ordering, own-app process-exit history and Android battery/background
+restriction observations. New checkpoints/final reports include run UUID, PID,
+start time and requested duration. Normal-report wording no longer claims native
+streaming is unimplemented. No new dependencies or native changes.
+
+Build command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build.ps1`.
+Phone export instructions and interrupted-run evidence are in
+[BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md).
+
+Earlier build checkpoints follow.
+
 ## Current: 0.6.0-channel-check, 2 November 2026
 
 - Artifact: `releases/music-usb-probe-0.6.0.apk`, 70,482,800 bytes, version code 6.

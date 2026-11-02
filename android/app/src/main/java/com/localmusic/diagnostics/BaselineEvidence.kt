@@ -37,14 +37,14 @@ object BaselineEvidence {
     }
 
     fun snapshot(context: Context): String = JSONObject(data(context).toString())
-        .put("exportedAt", Instant.now().toString()).put("appVersion", "0.6.0-channel-check")
+        .put("exportedAt", Instant.now().toString()).put("appVersion", StreamEvidence.VERSION)
         .put("fixtureManifest", JSONObject(context.assets.open("fixtures-manifest.json").bufferedReader().use { it.readText() }))
         .put("channelFixtureManifest", JSONObject(context.assets.open("channel-fixtures-manifest.json").bufferedReader().use { it.readText() }))
         .put("phone", JSONObject().put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
             .put("androidRelease", Build.VERSION.RELEASE).put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
         .put("scope", "Normal Android route only. AudioTrack configuration is an app-side observation, not the physical USB stream.")
         .put("unavailableMeasurements", JSONArray(listOf("Physical USB rate and bit depth", "Bus sample delivery", "Cable internal DSP", "Direct USB transfer statistics")))
-        .put("directUsb", "Unavailable: asynchronous clocking unresolved; safe hardware volume SET/readback and native streaming not implemented or tested.")
+        .put("directUsb", "Separate experimental native fixture transport exists; this Normal-route report does not measure it. Device clocking and daily-use acceptance remain unvalidated.")
         .toString(2)
 
     fun latestOutput(context: Context): String {

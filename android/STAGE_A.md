@@ -1,5 +1,41 @@
 # Stage A checkpoint and phone handoff
 
+Latest exit-history result: Android records a same-package resource kill
+(reason 9, `o-kill:6`) at 08:37:09.807 UTC, seven seconds after the original
+checkpoint. The exact enforcement trigger remains unknown. Try per-app background
+allowance and battery-optimization exemption before another endurance run; this
+is a controlled trial, not a proven fix. The bundle also includes a separate
+newer requested-stop run. See [BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md).
+
+Latest endurance attempt: saved progress ends after 6 min 12 s, including several
+minutes screen-off, with no recorded transport/PCM error before the checkpoint.
+No matching final report exists; the exported final report is from the earlier
+one-minute run. Cause and interrupted-run restoration remain unknown. 0.7.0
+adds read-only process-exit/battery-state exports and run identifiers; it is a
+diagnostic update, not a demonstrated background fix. Export its background-stop
+bundle before another endurance run. See
+[BACKGROUND_PHONE_RESULTS.md](BACKGROUND_PHONE_RESULTS.md).
+
+Latest steady-playback follow-up: the new 24/96 minute has no seek/pause, zero
+recorded errors, a 28.067 ms maximum callback gap, screen-off progress and verified
+restoration. The user reports no unexpected dropout or crackling, with persistent
+slight left weakness. Proceed to the existing 61-minute screen-off endurance
+experiment; balance, clocking and full-format acceptance remain open. See
+[HIGH_RATE_PHONE_RESULTS.md](HIGH_RATE_PHONE_RESULTS.md).
+
+Latest high-rate follow-up: 24/96 Direct completed 60,000 intervals and exact
+nominal PCM byte count with zero recorded PCM/packet/transfer errors and restored
+settings. One seek and a 2.02-second callback gap prevent classifying this as an
+uninterrupted minute. Normal 24/96 is reported balanced; Direct slightly left-quiet.
+See [HIGH_RATE_PHONE_RESULTS.md](HIGH_RATE_PHONE_RESULTS.md). Screen-off endurance
+and all-format physical acceptance remain open.
+
+2 November 2026, latest: the 0.6.0 equal-tone comparison reports low-volume left
+weakness in both Normal and Direct USB. Direct ran one minute with zero recorded
+PCM/packet/transfer errors and verified restoration. Balance and clocking remain
+unresolved; keep the long run on hold. See
+[CHANNEL_PHONE_RESULTS.md](CHANNEL_PHONE_RESULTS.md). Statements below are earlier checkpoints.
+
 Latest clarification: left is audible at -30/-20 dB and the original overlap
 occurred only during its intentional both-channel section. Balance remains to
 be compared with equal tones. 0.6.0 adds the same gap-separated signal to Direct
