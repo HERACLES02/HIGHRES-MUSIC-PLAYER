@@ -274,6 +274,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
     var playlistNamingText by remember { mutableStateOf("") }
     var playlistDeleting by remember { mutableStateOf<Playlist?>(null) }
     var queueClearing by remember { mutableStateOf(false) }
+    var sleepOpen by remember { mutableStateOf(false) }
     fun openPlaylistPicker(ids: List<TrackId>) { playlistPickerName = ""; playlistPicker = ids }
     fun playlistArgs(id: PlaylistId, entry: String? = null, shuffle: Boolean = false) = Bundle().apply {
         putString("id", id.value.toString()); entry?.let { putString("entry", it) }; putBoolean("shuffle", shuffle)
@@ -413,6 +414,13 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                             val repeat = controller?.repeatMode ?: 0
                             FilterChip(selected = repeat != 0, onClick = { controller?.repeatMode = (repeat + 1) % 3 }, label = { Text("Repeat: ${when (repeat) { 1 -> "one"; 2 -> "all"; else -> "off" }}") })
                         }
+                        TextButton(onClick = { sleepOpen = true }, enabled = ready) {
+                            Text(when (playback.optString("sleepMode", "OFF")) {
+                                "IMMEDIATE" -> "Sleep timer · ${time(playback.optLong("sleepRemaining", -1L))} left"
+                                "END_OF_TRACK" -> "Sleep timer · after this track"
+                                else -> "Sleep timer"
+                            })
+                        }
                         TextButton(onClick = { details = current }) { Text("Song details") }
                         OutlinedButton(onClick = { controller?.stop() }, enabled = ready) { Text("Stop playback") }
                         Text("Normal · Android audio output", fontWeight = FontWeight.Bold)
@@ -529,7 +537,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     EditHistory(library, { nativeBatch = it }, actions)
                     Text("Playlists are saved with your chosen order, including repeated songs. App-data backup, processing controls, widget and artist biographies are not included yet.")
                     Section("About this preview")
-                    Text("Local Music 0.4.0\nSaved playlists and queue editing, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
+                    Text("Local Music 0.5.0\nSleep timer, queue editing and saved playlists, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
                 }
             }
         }
@@ -586,6 +594,29 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
         text = { Text("Pending next-up songs are removed. The song that is playing, its position, history and shuffle stay untouched.") },
         confirmButton = { TextButton(enabled = ready, onClick = { send(PlaybackService.QUEUE_CLEAR, Bundle.EMPTY); queueClearing = false }) { Text("Clear queue") } },
         dismissButton = { TextButton(onClick = { queueClearing = false }) { Text("Cancel") } })
+    if (sleepOpen) AlertDialog(onDismissRequest = { sleepOpen = false }, title = { Text("Sleep timer") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(when (playback.optString("sleepMode", "OFF")) {
+                "IMMEDIATE" -> "Pausing in ${time(playback.optLong("sleepRemaining", -1L))}. Playing something new keeps this countdown."
+                "END_OF_TRACK" -> "Pausing after this track ends. Playing something else keeps it armed."
+                else -> "Playback pauses when the countdown ends. The countdown keeps running while paused."
+            })
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 15, 30, 45, 60, 90, 120).forEach { minutes ->
+                    FilterChip(selected = false, enabled = ready, onClick = { send(PlaybackService.SLEEP_SET, Bundle().apply { putInt("minutes", minutes) }); sleepOpen = false },
+                        label = { Text(if (minutes == 1) "1 min" else "$minutes min") })
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = false, enabled = ready, onClick = { send(PlaybackService.SLEEP_END_TRACK, Bundle.EMPTY); sleepOpen = false },
+                    label = { Text("After this track") })
+                FilterChip(selected = false, enabled = ready, onClick = { send(PlaybackService.SLEEP_CANCEL, Bundle.EMPTY); sleepOpen = false },
+                    label = { Text("Cancel timer") })
+            }
+            Text("Setting a new timer always replaces the old one. The timer is not saved across app restarts.", style = MaterialTheme.typography.bodySmall)
+        } },
+        confirmButton = { TextButton(onClick = { sleepOpen = false }) { Text("Close") } },
+        dismissButton = {})
     editing?.let { tracks -> TagEditorDialog(tracks, library, send, actions, { nativeBatch = it }) { editing = null } }
     nativeBatch?.let { batch -> NativePreviewDialog(batch, library, send, actions) { nativeBatch = null } }
     if (licenses) {

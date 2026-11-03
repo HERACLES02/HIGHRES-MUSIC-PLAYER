@@ -218,6 +218,55 @@ private fun playlistChecks() {
     failure { Playlists.requireName("x".repeat(Playlists.MAX_NAME_CHARS + 1)) }
 }
 
+private fun sleepTimerChecks() {
+    var now = 1_000_000L
+    val base = SleepTimer { now }
+    val off = base.state
+    expect(off.mode == SleepState.Mode.OFF && off.remainingMs == -1L, "Fresh sleep timer is off")
+    failure { base.start(0) }; failure { base.start(481) }
+    expect(base.state == off, "Rejected minutes change nothing")
+    base.start(480)
+    expect(base.remainingMs(now) == 480 * 60_000L, "Upper boundary accepts 480 minutes")
+    base.cancel()
+    expect(base.state.mode == SleepState.Mode.OFF, "Cancel clears the timer before expiry")
+    expect(!base.checkExpired(), "Cancelled timer cannot fire")
+
+    val timer = SleepTimer { now }
+    timer.start(2)
+    expect(timer.remainingMs(now + 60_000) == 60_000L, "Countdown decreases with the clock and ignores play state")
+    now += 119_999
+    expect(!timer.checkExpired() && timer.remainingMs(now) == 1L, "Timer is not early by one millisecond")
+    now += 1
+    expect(timer.checkExpired(), "Timer fires exactly at the deadline")
+    expect(!timer.checkExpired() && timer.state.mode == SleepState.Mode.OFF, "Expiry is single-fire")
+    timer.start(1); now += 3_600_000
+    expect(timer.remainingMs(now) == 0L, "Remaining clamps to zero at or past the deadline")
+    expect(timer.checkExpired(), "Expiry runs while paused; a very late tick (Doze gap) still fires once")
+    expect(timer.state.mode == SleepState.Mode.OFF && timer.state.remainingMs == -1L, "After expiry the state is fully off")
+    timer.start(1); timer.start(3)
+    expect(timer.remainingMs(now) == 3 * 60_000L, "Setting again replaces the previous deadline")
+
+    val trackTimer = SleepTimer { now }
+    trackTimer.start(1); trackTimer.startEndOfTrack()
+    expect(trackTimer.state.mode == SleepState.Mode.END_OF_TRACK && trackTimer.remainingMs(now) == null,
+        "End-of-track mode has no minute deadline")
+    expect(trackTimer.atTrackEnd() && !trackTimer.checkExpired(), "Minute-expiry checks ignore end-of-track mode")
+    trackTimer.consumeTrackEnd()
+    expect(!trackTimer.atTrackEnd() && trackTimer.state.mode == SleepState.Mode.OFF, "Track end is consumed once")
+    trackTimer.consumeTrackEnd()
+    expect(!trackTimer.atTrackEnd(), "Second consume is inert")
+    trackTimer.startEndOfTrack()
+    expect(trackTimer.atTrackEnd() && trackTimer.state.mode == SleepState.Mode.END_OF_TRACK,
+        "Re-arming end-of-track after an expiry revives the timer")
+    trackTimer.cancel()
+    expect(!trackTimer.atTrackEnd() && trackTimer.state == SleepState(SleepState.Mode.OFF),
+        "Cancel works on an armed end-of-track timer")
+    val replaced = SleepTimer { now }
+    replaced.startEndOfTrack(); replaced.start(30)
+    expect(replaced.state.mode == SleepState.Mode.IMMEDIATE && replaced.remainingMs(now) == 30 * 60_000L,
+        "Minutes setting replaces an armed end-of-track flag")
+}
+
 private fun identityChecks() {
     val id = track(1); val uri = "content://media/external/audio/media/42"
     expect(SourceIdentity.match(uri, mapOf(uri to id), emptySet()) == SourceMatch.Existing(id), "Source dedup keeps UUID")
@@ -237,6 +286,6 @@ private fun identityChecks() {
 }
 
 fun main() {
-    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); scanIdentityChecks(); verifiedWriteChecks()
-    println("Player core checks passed: $checks assertions (queue/resume/history/shuffle, LRC/timing/fuzz, playlists, identities).")
+    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks()
+    println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

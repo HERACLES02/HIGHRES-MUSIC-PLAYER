@@ -210,6 +210,9 @@ class PlaybackService : MediaLibraryService() {
                         QUEUE_REMOVE -> authority.removeFromQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))))
                         QUEUE_MOVE -> authority.moveInQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))), args.getInt("index"))
                         QUEUE_CLEAR -> authority.clearQueue()
+                        SLEEP_SET -> authority.sleepTimer(args.getInt("minutes", 0))
+                        SLEEP_END_TRACK -> authority.sleepTimerEndOfTrack()
+                        SLEEP_CANCEL -> authority.sleepTimerCancel()
                         CLEAR_ERROR -> store.clearError()
                         EXPORT -> result.putString("report", JSONObject(authority.report()).put("library", JSONObject()
                             .put("trackCount", store.state.value.tracks.size).put("folderCount", store.state.value.folders.size)
@@ -286,9 +289,12 @@ class PlaybackService : MediaLibraryService() {
         const val QUEUE_REMOVE = "com.localmusic.player.QUEUE_REMOVE"
         const val QUEUE_MOVE = "com.localmusic.player.QUEUE_MOVE"
         const val QUEUE_CLEAR = "com.localmusic.player.QUEUE_CLEAR"
+        const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
+        const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
+        const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
         val ACTIONS = setOf(START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
-            PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR)
+            PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)
     }
 }

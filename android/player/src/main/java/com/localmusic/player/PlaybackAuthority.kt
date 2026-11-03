@@ -49,6 +49,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         ByteArrayOutputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it); bitmap.recycle(); it.toByteArray() }
     }
     val player = NormalSessionPlayer(this)
+    val sleep = SleepTimer { android.os.SystemClock.elapsedRealtime() }
     val current: Track? get() = store?.state?.value?.tracks?.firstOrNull { it.id == queue.current?.trackId }
     val tracks: List<Track> get() = store?.state?.value?.tracks.orEmpty()
     private val noisy = object : BroadcastReceiver() {
@@ -67,6 +68,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             if (destroyed) return
             observePosition(); player.refresh(); changed()
             val now = SystemClock.elapsedRealtime()
+            // Expiry is discovered by the service-owned tick (also while paused) and only pauses.
+            if (sleep.checkExpired(now)) { event("sleep_timer_expired"); pause("Sleep timer finished.") }
             if (now - lastPersistAt >= 10000 && queue.current != null) { persist(); event("progress"); lastPersistAt = now }
             handler.postDelayed(this, if (engine.isPlaying) 250 else 1000)
         }
@@ -137,6 +140,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         if (engine.playerError != null || queue.completed || engine.playbackState == Player.STATE_IDLE) {
             queue.play(); load(queue.selection, true); return
         }
+        // A sleep timer that stopped at the track's natural end leaves the engine just before
+        // STATE_ENDED with completed unset; pressing Play must restart the current song from zero.
+        if (engine.playbackState == Player.STATE_ENDED) {
+            queue.updatePosition(0); queue.play(); load(queue.selection, true); return
+        }
         if (takeFocus()) { queue.play(); engine.play() }
         event("play")
         update()
@@ -170,7 +178,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     fun previous() { observePosition(); val playing = queue.isPlaying; persist(); load(queue.previous(), playing) }
     fun advance(automatic: Boolean = false) {
-        observePosition(); val playing = queue.isPlaying
+        observePosition()
+        // End-of-track expiry fires only at the natural end of the currently playing song,
+        // never on a manual Next: pause in place instead of loading the next selection.
+        if (automatic && sleep.atTrackEnd()) {
+            sleep.consumeTrackEnd()
+            event("sleep_timer_expired"); pause("Sleep timer finished at the end of this track.")
+            return
+        }
+        val playing = queue.isPlaying
         // Save the completed song before moving away, so Home never offers it as Continue.
         if (automatic) {
             val old = queue.snapshot()
@@ -226,6 +242,20 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         require(ready) { "The library is still opening." }
         queue.clearManualEntries(); persist(); update()
     }
+    /** Sleep timer in minutes (1-480): pause at one fixed deadline on the monotonic clock. */
+    fun sleepTimer(minutes: Int) {
+        require(ready) { "The library is still opening." }
+        sleep.start(minutes); event("sleep_timer_set"); update()
+    }
+    /** Sleep timer armed for the natural end of the currently playing track. */
+    fun sleepTimerEndOfTrack() {
+        require(ready) { "The library is still opening." }
+        sleep.startEndOfTrack(); event("sleep_timer_track_end"); update()
+    }
+    fun sleepTimerCancel() {
+        require(ready) { "The library is still opening." }
+        sleep.cancel(); event("sleep_timer_cancel"); update()
+    }
     fun shuffle(value: Boolean) { queue.setShuffle(value); persist(); update() }
     fun repeat(value: Int) { queue.repeat = when (value) { Player.REPEAT_MODE_ALL -> RepeatMode.ALL; Player.REPEAT_MODE_ONE -> RepeatMode.ONE; else -> RepeatMode.OFF }; persist(); update() }
     private fun observePosition() {
@@ -243,7 +273,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
-        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.4.0-queue-edits")
+        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.5.0-sleep-timer")
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))
@@ -276,6 +306,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("manualCount", snapshot.manual.size)
             .put("sequence", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.trackId.value.toString() }))
             .put("sequenceCount", (snapshot.order.size - snapshot.cursor - 1).coerceAtLeast(0))
+            .put("sleepMode", sleep.state.mode.name)
+            .put("sleepRemaining", sleep.state.remainingMs)
         return Bundle().apply { putString("state", json.toString()) }
     }
     fun release() {
