@@ -265,6 +265,18 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
     var selecting by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf(emptySet<TrackId>()) }
     var licenses by remember { mutableStateOf(false) }
+    var playlistDetail by remember { mutableStateOf<Playlist?>(null) }
+    var playlistDetailLoad by remember { mutableStateOf<Pair<PlaylistId, List<PlaylistEntry>>?>(null) }
+    var playlistPicker by remember { mutableStateOf<List<TrackId>?>(null) }
+    var playlistPickerName by remember { mutableStateOf("") }
+    var playlistNaming by remember { mutableStateOf<Playlist?>(null) }
+    var playlistCreating by remember { mutableStateOf(false) }
+    var playlistNamingText by remember { mutableStateOf("") }
+    var playlistDeleting by remember { mutableStateOf<Playlist?>(null) }
+    fun openPlaylistPicker(ids: List<TrackId>) { playlistPickerName = ""; playlistPicker = ids }
+    fun playlistArgs(id: PlaylistId, entry: String? = null, shuffle: Boolean = false) = Bundle().apply {
+        putString("id", id.value.toString()); entry?.let { putString("entry", it) }; putBoolean("shuffle", shuffle)
+    }
     val ready = playback.optBoolean("ready") && controller != null
     val currentId = playback.optString("currentId")
     val current = library.tracks.firstOrNull { it.id.value.toString() == currentId }
@@ -290,9 +302,9 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                 }
             }
             NavigationBar {
-                listOf("Home", "Library", "Playing", "Queue", "Settings").forEach { tab ->
+                listOf("Home", "Library", "Playing", "Queue", "Playlists", "Settings").forEach { tab ->
                     NavigationBarItem(selected = screen == tab, onClick = { screen = tab },
-                        icon = { Text(when (tab) { "Home" -> "⌂"; "Library" -> "♫"; "Playing" -> "▶"; "Queue" -> "≡"; else -> "⚙" }) }, label = { Text(tab) })
+                        icon = { Text(when (tab) { "Home" -> "⌂"; "Library" -> "♫"; "Playing" -> "▶"; "Queue" -> "≡"; "Playlists" -> "≣"; else -> "⚙" }) }, label = { Text(tab) })
                 }
             }
         }
@@ -336,11 +348,11 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     if (library.tracks.none { it.favorite }) item { Text("Use a song’s menu to add a favorite.") }
                     val favorites = library.tracks.filter { it.favorite }
                     items(favorites.take(10), key = { "favorite-${it.id}" }) { track ->
-                        SongRow(track, ready, { start(favorites, favorites.indexOf(track)) }, send) { details = track }
+                        SongRow(track, ready, { start(favorites, favorites.indexOf(track)) }, send, addToPlaylist = { openPlaylistPicker(listOf(track.id)) }) { details = track }
                     }
                     item { Section("Recently added") }
                     val recent = library.tracks.sortedByDescending { it.addedAtMs }
-                    items(recent.take(15), key = { "recent-${it.id}" }) { track -> SongRow(track, ready, { start(recent, recent.indexOf(track)) }, send) { details = track } }
+                    items(recent.take(15), key = { "recent-${it.id}" }) { track -> SongRow(track, ready, { start(recent, recent.indexOf(track)) }, send, addToPlaylist = { openPlaylistPicker(listOf(track.id)) }) { details = track } }
                 }
                 "Library" -> {
                     OutlinedTextField(search, { search = it }, label = { Text("Search songs, artists or albums") }, singleLine = true,
@@ -370,6 +382,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
                             TextButton(onClick = { selecting = !selecting; selection = emptySet() }) { Text(if (selecting) "Done selecting" else "Select songs") }
                             if (selecting) TextButton(enabled = selection.size in 1..50, onClick = { editing = library.tracks.filter { it.id in selection } }) { Text("Edit ${selection.size} selected") }
+                            if (selecting && selection.isNotEmpty()) TextButton(onClick = { openPlaylistPicker(selection.toList()) }) { Text("Add to playlist") }
                             if (category == "Albums" && group != null) TextButton(enabled = shown.size in 1..50, onClick = { editing = shown }) { Text("Edit album") }
                         }
                         if (selection.size > 50) Text("Use batches of at most 50 songs.", Modifier.padding(horizontal = 16.dp))
@@ -377,7 +390,8 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                             if (shown.isEmpty()) item { Text("No matching songs. Scan or try another search.") }
                             items(shown, key = { it.id.value.toString() }) { track -> SongRow(track, ready, { start(shown, shown.indexOf(track)) }, send,
                                 art = store?.artwork(track.id), selected = if (selecting) track.id in selection else null,
-                                toggle = { selection = if (track.id in selection) selection - track.id else selection + track.id }) { details = track } }
+                                toggle = { selection = if (track.id in selection) selection - track.id else selection + track.id },
+                                addToPlaylist = { openPlaylistPicker(listOf(track.id)) }) { details = track } }
                         }
                     }
                 }
@@ -415,6 +429,71 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     items(sequence?.length() ?: 0) { index -> Text("${index + 1}. ${library.tracks.firstOrNull { it.id.value.toString() == sequence!!.optString(index) }?.tags?.title ?: "Unavailable song"}") }
                     item { Text("${playback.optInt("sequenceCount")} remaining; showing up to 60. Browsing and sorting keep this sequence unchanged.") }
                 }
+                "Playlists" -> {
+                    val detail = playlistDetail
+                    if (detail == null) {
+                        Column(Modifier.weight(1f)) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Playlists", style = MaterialTheme.typography.headlineMedium)
+                                TextButton(enabled = ready, onClick = { playlistNamingText = ""; playlistCreating = true })
+                                    { Text("New playlist") }
+                            }
+                            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (library.playlists.isEmpty()) item {
+                                    Text("No playlists yet. Use a song’s More menu → Add to playlist, or create one here. Repeated songs are allowed.")
+                                }
+                                items(library.playlists, key = { it.first.id.value.toString() }) { (playlist, count) ->
+                                    PlaylistRow(playlist, count, { playlistDetail = playlist },
+                                        { send(PlaybackService.PLAYLIST_START, playlistArgs(playlist.id)) },
+                                        { send(PlaybackService.PLAYLIST_START, playlistArgs(playlist.id, shuffle = true)) },
+                                        { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name },
+                                        { playlistDeleting = playlist })
+                                }
+                            }
+                        }
+                    } else {
+                        val stored = library.playlists.firstOrNull { it.first.id == detail.id }?.first ?: detail
+                        LaunchedEffect(stored.id, library.revision) {
+                            val repository = store?.repository() ?: return@LaunchedEffect
+                            val loaded = withContext(Dispatchers.IO) { repository.playlist(stored.id) }
+                            if (loaded == null) { playlistDetail = null; playlistDetailLoad = null }
+                            else playlistDetailLoad = stored.id to loaded.second
+                        }
+                        // Rows bind to the loaded playlist; a switch to another playlist renders them only after its own load.
+                        val playlistDetailEntries = playlistDetailLoad?.takeIf { it.first == stored.id }?.second ?: emptyList()
+                        Column(Modifier.weight(1f)) {
+                            TextButton(onClick = { playlistDetail = null }) { Text("‹ All playlists") }
+                            Text(stored.name, style = MaterialTheme.typography.headlineMedium)
+                            val count = playlistDetailEntries.size
+                            val loadedHere = playlistDetailLoad?.takeIf { it.first == stored.id } != null
+                            Text(when {
+                                !loadedHere -> "Loading saved order…"
+                                count == 0 -> "This playlist is empty. Use a song’s More menu → Add to playlist."
+                                else -> "$count occurrence(s) in saved order · repeated songs allowed"
+                            }, style = MaterialTheme.typography.bodySmall)
+                            Row {
+                                TextButton(enabled = ready && count > 0, onClick = { send(PlaybackService.PLAYLIST_START, playlistArgs(stored.id)) }) { Text("Play") }
+                                TextButton(enabled = ready && count > 0, onClick = { send(PlaybackService.PLAYLIST_START, playlistArgs(stored.id, shuffle = true)) }) { Text("Play shuffled") }
+                                TextButton(enabled = ready, onClick = { playlistNaming = stored; playlistCreating = false; playlistNamingText = stored.name }) { Text("Rename") }
+                                TextButton(enabled = ready, onClick = { playlistDeleting = stored }) { Text("Delete") }
+                            }
+                            if (playlistDetailEntries.isNotEmpty())
+                                Text("Editing this saved list never changes a sequence that is already playing. Missing songs stay in place.", style = MaterialTheme.typography.bodySmall)
+                            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(playlistDetailEntries, key = { it.id.value.toString() }) { entry ->
+                                    val index = playlistDetailEntries.indexOfFirst { it.id == entry.id }
+                                    val track = library.tracks.firstOrNull { it.id == entry.trackId }
+                                    PlaylistEntryRow(entry, index, count, track,
+                                        play = { send(PlaybackService.PLAYLIST_START, playlistArgs(stored.id, entry.id.value.toString())) },
+                                        move = { target -> send(PlaybackService.PLAYLIST_MOVE,
+                                            Bundle().apply { putString("id", stored.id.value.toString()); putString("entry", entry.id.value.toString()); putInt("index", target) }) },
+                                        remove = { send(PlaybackService.PLAYLIST_REMOVE,
+                                            Bundle().apply { putString("id", stored.id.value.toString()); putString("entry", entry.id.value.toString()) }) })
+                                }
+                            }
+                        }
+                    }
+                }
                 "Settings" -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Section("Music access")
                     Text("Scan Android’s indexed music on internal storage and SD cards. Missing songs keep their saved references.")
@@ -433,12 +512,12 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     OutlinedButton(onClick = onExport, enabled = ready) { Text("Save playback report") }
                     Section("Output")
                     Text("Normal playback is active. Direct USB is unavailable in this preview while clocking and listening-balance findings remain open.")
-                    Section("About this preview")
-                    Text("Local Music 0.2.0\nOffline folders, covers, lyrics and reviewed tag edits. No account needed.")
                     Text("Online lyrics search runs only when you request it; selected versions remain available offline.")
                     TextButton(onClick = { licenses = true }) { Text("Open-source notices") }
                     EditHistory(library, { nativeBatch = it }, actions)
-                    Text("Playlists, processing controls, widget and app-data backup are not included yet.")
+                    Text("Playlists are saved with your chosen order, including repeated songs. App-data backup, processing controls, widget and artist biographies are not included yet.")
+                    Section("About this preview")
+                    Text("Local Music 0.3.0\nSaved playlists, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
                 }
             }
         }
@@ -449,6 +528,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
             Text("Duration: ${time(track.audio.durationMs)}\nFormat: ${track.audio.mimeType}\nAvailability: ${track.availability}")
             Text("Source: ${track.audio.sampleRateHz?.let { "$it Hz" } ?: "sample rate unknown"} · ${track.audio.meaningfulBits?.let { "$it-bit" } ?: "bit depth unknown"} · ${track.audio.channels ?: "?"} channel(s)")
             TextButton(onClick = { editing = listOf(track); details = null }) { Text("Edit tags…") }
+            TextButton(onClick = { openPlaylistPicker(listOf(track.id)); details = null }) { Text("Add to playlist…") }
             TextButton(onClick = { actions.pickCover(listOf(track)); details = null }) { Text("Choose artwork…") }
             TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putString("id", track.id.value.toString()); putBoolean("remove", true) }); details = null }) { Text("Remove cover in this app") }
             TextButton(enabled = !library.scanning, onClick = {
@@ -456,6 +536,40 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                 send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", arrayListOf(track.id.value.toString())); putString("patch", "{}"); putInt("coverMode", 2) })
             }) { Text("Preview removal of embedded front cover…") }
         } }, confirmButton = { TextButton(onClick = { details = null }) { Text("Close") } }) }
+    playlistPicker?.let { ids ->
+        AlertDialog(onDismissRequest = { playlistPicker = null }, title = { Text(if (ids.size == 1) "Add to playlist" else "Add ${ids.size} songs to a playlist") },
+            text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (library.playlists.isEmpty()) Text("Create your first playlist below.")
+                library.playlists.forEach { (playlist, _) ->
+                    TextButton(onClick = { send(PlaybackService.PLAYLIST_ADD, Bundle().apply {
+                        putString("id", playlist.id.value.toString()); putStringArrayList("ids", ArrayList(ids.map { it.value.toString() })) })
+                        playlistPicker = null }) { Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+                OutlinedTextField(playlistPickerName, { playlistPickerName = it.take(Playlists.MAX_NAME_CHARS) },
+                    label = { Text("Or create a new playlist") }, singleLine = true)
+                Text("A repeated song is added again as its own entry. Each playlist keeps its own saved order.", style = MaterialTheme.typography.bodySmall)
+            } },
+            confirmButton = { TextButton(enabled = playlistPickerName.isNotBlank(),
+                onClick = { send(PlaybackService.PLAYLIST_CREATE, Bundle().apply {
+                    putString("name", playlistPickerName); putStringArrayList("ids", ArrayList(ids.map { it.value.toString() })) })
+                playlistPicker = null }) { Text("Create and add") } },
+            dismissButton = { TextButton(onClick = { playlistPicker = null }) { Text("Cancel") } })
+    }
+    if (playlistCreating || playlistNaming != null) {
+        val target = playlistNaming
+        AlertDialog(onDismissRequest = { playlistCreating = false; playlistNaming = null },
+            title = { Text(if (target == null) "New playlist" else "Rename playlist") },
+            text = { Column { OutlinedTextField(playlistNamingText, { playlistNamingText = it.take(Playlists.MAX_NAME_CHARS) }, label = { Text("Playlist name") }, singleLine = true) } },
+            confirmButton = { TextButton(enabled = playlistNamingText.isNotBlank(), onClick = {
+                if (target == null) send(PlaybackService.PLAYLIST_CREATE, Bundle().apply { putString("name", playlistNamingText) })
+                else send(PlaybackService.PLAYLIST_RENAME, Bundle().apply { putString("id", target.id.value.toString()); putString("name", playlistNamingText) })
+                playlistCreating = false; playlistNaming = null }) { Text(if (target == null) "Create" else "Rename") } },
+            dismissButton = { TextButton(onClick = { playlistCreating = false; playlistNaming = null }) { Text("Cancel") } })
+    }
+    playlistDeleting?.let { target -> AlertDialog(onDismissRequest = { playlistDeleting = null }, title = { Text("Delete ${target.name}?") },
+        text = { Text("The saved playlist and its ordered entries are deleted. Songs, favorites and other playlists stay untouched.") },
+        confirmButton = { TextButton(onClick = { send(PlaybackService.PLAYLIST_DELETE, Bundle().apply { putString("id", target.id.value.toString()) }); playlistDeleting = null }) { Text("Delete") } },
+        dismissButton = { TextButton(onClick = { playlistDeleting = null }) { Text("Cancel") } }) }
     editing?.let { tracks -> TagEditorDialog(tracks, library, send, actions, { nativeBatch = it }) { editing = null } }
     nativeBatch?.let { batch -> NativePreviewDialog(batch, library, send, actions) { nativeBatch = null } }
     if (licenses) {
@@ -469,8 +583,40 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
 
 @Composable private fun Section(title: String) { Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
 
+@Composable private fun PlaylistRow(playlist: Playlist, count: Int, open: () -> Unit, play: () -> Unit,
+    shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    ListItem(modifier = Modifier.clickable(onClick = open), headlineContent = { Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(if (count == 1) "1 song" else "$count songs") },
+        trailingContent = { Box { TextButton(onClick = { menu = true }) { Text("More") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Play") }, enabled = count > 0, onClick = { menu = false; play() })
+                DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
+                DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; rename() })
+                DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() })
+            } } })
+}
+
+@Composable private fun PlaylistEntryRow(entry: PlaylistEntry, index: Int, total: Int, track: Track?,
+    play: () -> Unit, move: (Int) -> Unit, remove: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    ListItem(modifier = Modifier.clickable(enabled = track != null, onClick = play),
+        leadingContent = { Text("${index + 1}.") },
+        headlineContent = { Text(track?.tags?.title ?: "Unavailable song", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(if (track == null) "Not in the library yet; scan again or remove this entry."
+            else artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        trailingContent = { Box { TextButton(onClick = { menu = true }) { Text("More") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Play from here") }, enabled = track != null, onClick = { menu = false; play() })
+                DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0, onClick = { menu = false; move(index - 1) })
+                DropdownMenuItem(text = { Text("Move down") }, enabled = index < total - 1, onClick = { menu = false; move(index + 1) })
+                DropdownMenuItem(text = { Text("Remove entry") }, onClick = { menu = false; remove() })
+            } } })
+}
+
 @Composable private fun SongRow(track: Track, ready: Boolean, play: () -> Unit, send: (String, Bundle) -> Unit,
-    art: String? = null, selected: Boolean? = null, toggle: (() -> Unit)? = null, details: () -> Unit) {
+    art: String? = null, selected: Boolean? = null, toggle: (() -> Unit)? = null, addToPlaylist: () -> Unit = {},
+    details: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     ListItem(modifier = Modifier.clickable(enabled = ready && (selected != null || track.availability == Availability.AVAILABLE), onClick = { if (selected != null) toggle?.invoke() else play() }),
         leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
@@ -482,6 +628,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                 DropdownMenuItem(text = { Text(if (track.favorite) "Remove favorite" else "Add favorite") }, onClick = { menu = false; send(PlaybackService.FAVORITE, idBundle(track)) })
                 DropdownMenuItem(text = { Text("Play Next") }, onClick = { menu = false; send(PlaybackService.NEXT, idBundle(track)) })
                 DropdownMenuItem(text = { Text("Add to Queue") }, onClick = { menu = false; send(PlaybackService.ADD, idBundle(track)) })
+                DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { menu = false; addToPlaylist() })
                 DropdownMenuItem(text = { Text("Details") }, onClick = { menu = false; details() })
             }
         } })

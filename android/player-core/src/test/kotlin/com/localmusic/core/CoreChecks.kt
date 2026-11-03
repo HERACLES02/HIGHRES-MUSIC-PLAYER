@@ -136,6 +136,46 @@ private fun lyricChecks() {
     }
 }
 
+private fun playlistChecks() {
+    val pid = PlaylistId.new()
+    val same = PlaylistEntry(EntryId.new(), pid, track(1), 0)
+    val sameDup = PlaylistEntry(EntryId.new(), pid, track(1), 1)
+    val other = PlaylistEntry(EntryId.new(), pid, track(2), 2)
+    val tail = PlaylistEntry(EntryId.new(), pid, track(4), 3)
+    val base = listOf(same, sameDup, other, tail)
+    expect(Playlists.normalized(base) == base, "Stored order and ranks pass normalization unchanged")
+    failure { Playlists.normalized(listOf(same, same.copy(rank = 1))) }
+    failure { Playlists.normalized(listOf(same, sameDup.copy(playlistId = PlaylistId.new()))) }
+    expect(Playlists.normalized(listOf(same.copy(rank = 5), other.copy(rank = -2))).map { it.id } ==
+        listOf(other.id, same.id), "Ranks normalize to playback order regardless of stored values")
+    val appended = Playlists.append(pid, base, listOf(track(2), track(1), track(2)))
+    expect(appended.size == 7 && appended.take(4) == base, "Append adds occurrences without touching existing identity/order")
+    expect(appended.drop(4).map { it.trackId } == listOf(track(2), track(1), track(2)) &&
+        appended.drop(4).map { it.id }.toSet().size == 3, "Appended duplicate songs keep independent occurrence identities")
+    expect(Playlists.append(pid, emptyList(), listOf(track(1))).size == 1, "Append into empty playlist")
+    failure { Playlists.append(pid, base, emptyList()) }
+    failure { Playlists.append(pid, base, (1..Playlists.MAX_ENTRIES).map { track(it) }) }
+    val removed = Playlists.remove(base, sameDup.id)
+    expect(removed.map { it.id } == listOf(same.id, other.id, tail.id) && removed.any { it.trackId == track(1) },
+        "Remove targets one occurrence; the matching duplicate stays")
+    failure { Playlists.remove(base, EntryId.new()) }
+    failure { Playlists.remove(emptyList(), same.id) }
+    expect(Playlists.move(base, other.id, 0).map { it.trackId } == listOf(track(2), track(1), track(1), track(4)),
+        "Move repositions the occurrence and keeps the rest in order")
+    expect(Playlists.move(base, tail.id, 1).map { it.id } == listOf(same.id, tail.id, sameDup.id, other.id),
+        "Backwards move inserts before the target position")
+    expect(Playlists.move(base, same.id, base.lastIndex).map { it.id } == listOf(sameDup.id, other.id, tail.id, same.id),
+        "Forward move inserts after the target position")
+    expect(Playlists.move(base, same.id, 2).map { it.id } == listOf(sameDup.id, other.id, same.id, tail.id),
+        "In-list move shifts later entries without a gap")
+    failure { Playlists.move(base, same.id, -1) }
+    failure { Playlists.move(base, same.id, base.size) }
+    failure { Playlists.move(base, EntryId.new(), 0) }
+    expect(Playlists.requireName("  Untitled mix  ") == "Untitled mix", "Playlist names trim on save")
+    failure { Playlists.requireName("   ") }
+    failure { Playlists.requireName("x".repeat(Playlists.MAX_NAME_CHARS + 1)) }
+}
+
 private fun identityChecks() {
     val id = track(1); val uri = "content://media/external/audio/media/42"
     expect(SourceIdentity.match(uri, mapOf(uri to id), emptySet()) == SourceMatch.Existing(id), "Source dedup keeps UUID")
@@ -155,6 +195,6 @@ private fun identityChecks() {
 }
 
 fun main() {
-    queueChecks(); lyricChecks(); identityChecks(); scanIdentityChecks(); verifiedWriteChecks()
-    println("Player core checks passed: $checks assertions (queue/resume/history/shuffle, LRC/timing/fuzz, identities).")
+    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); scanIdentityChecks(); verifiedWriteChecks()
+    println("Player core checks passed: $checks assertions (queue/resume/history/shuffle, LRC/timing/fuzz, playlists, identities).")
 }

@@ -19,6 +19,10 @@ interface PlayerDao {
     @Query("SELECT * FROM track_source WHERE trackId=:trackId ORDER BY id") suspend fun sources(trackId: String): List<SourceRow>
     @Upsert suspend fun putPlaylist(row: PlaylistRow)
     @Query("SELECT * FROM playlist WHERE id=:id") suspend fun playlist(id: String): PlaylistRow?
+    @Query("SELECT * FROM playlist ORDER BY name COLLATE NOCASE, id") suspend fun playlists(): List<PlaylistRow>
+    @Query("SELECT COUNT(*) FROM playlist_entry WHERE playlistId=:id") suspend fun entryCount(id: String): Int
+    @Query("DELETE FROM playlist WHERE id=:id") suspend fun deletePlaylist(id: String)
+    @Query("DELETE FROM playlist_entry WHERE playlistId=:id") suspend fun deletePlaylistEntries(id: String)
     @Insert suspend fun insertEntry(row: PlaylistEntryRow)
     @Query("DELETE FROM playlist_entry WHERE playlistId=:playlistId") suspend fun clearEntries(playlistId: String)
     @Query("SELECT * FROM playlist_entry WHERE playlistId=:playlistId ORDER BY rank") suspend fun entries(playlistId: String): List<PlaylistEntryRow>

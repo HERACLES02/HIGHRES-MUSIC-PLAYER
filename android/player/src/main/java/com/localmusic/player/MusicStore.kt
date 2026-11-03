@@ -34,7 +34,8 @@ data class LyricsChoice(val receipt: String, val candidate: LyricsCandidate)
 data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Map<TrackId, Long> = emptyMap(),
     val scanning: Boolean = false, val scanned: Int = 0, val message: String = "", val error: String = "",
     val details: Map<TrackId, LibraryExtras> = emptyMap(), val folders: List<FolderGrant> = emptyList(), val revision: Long = 0,
-    val edits: List<FileEditRow> = emptyList(), val editBusy: Boolean = false)
+    val edits: List<FileEditRow> = emptyList(), val editBusy: Boolean = false,
+    val playlists: List<Pair<Playlist, Int>> = emptyList())
 
 class MusicApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -116,11 +117,18 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         val resumes = tracks.mapNotNull { t -> repo.continuePosition(t.id)?.let { t.id to it } }.toMap()
         val folders = repo.folderGrants()
         val edits = repo.edits()
-        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits) }
+        val playlists = repo.playlists()
+        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists) }
     }
     suspend fun favorite(id: TrackId) {
         val repo = repository(); val track = repo.track(id) ?: return
         repo.setFavorite(id, !track.favorite); refresh()
+    }
+
+    /** Playlist edits touch only playlist tables; skipping the full track refresh keeps reorders responsive. */
+    suspend fun refreshPlaylists() {
+        val playlists = repository().playlists()
+        mutable.update { it.copy(playlists = playlists, revision = it.revision + 1) }
     }
     fun requestScan() {
         mutable.update { it.copy(message = "Library scan queued.") }

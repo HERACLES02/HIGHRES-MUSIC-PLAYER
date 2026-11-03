@@ -162,6 +162,51 @@ class PlaybackService : MediaLibraryService() {
                             } } finally { authority.reopenAfterEdit(setOf(PlaybackAuthority.id(row.trackId))); store.endEdit() }
                         }
                         EDIT_RECOVERY_REVIEW -> result.putString("sha", FileEdits(this@PlaybackService, store).recoveryHash(requireNotNull(args.getString("edit"))))
+                        PLAYLIST_CREATE, PLAYLIST_ADD -> {
+                            val ids = args.getStringArrayList("ids")?.map(PlaybackAuthority::id) ?: emptyList()
+                            require(ids.distinct().size == ids.size) { "Pick each song once; add it again later as a repeated entry." }
+                            require(ids.size <= Playlists.MAX_ENTRIES) { "Playlists are limited to ${Playlists.MAX_ENTRIES} entries." }
+                            val known = store.state.value.tracks.associateBy { it.id }
+                            require(ids.all { known.containsKey(it) }) { "A song is no longer in the library. Scan and try again." }
+                            val playlist = if (command.customAction == PLAYLIST_CREATE) {
+                                store.repository().createPlaylist(requireNotNull(args.getString("name")), ids)
+                            } else {
+                                store.repository().playlist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))))?.first
+                                    ?: error("The playlist was already deleted.")
+                            }
+                            if (command.customAction == PLAYLIST_ADD && ids.isNotEmpty())
+                                store.repository().addPlaylistEntries(playlist.id, ids)
+                            if (command.customAction == PLAYLIST_CREATE) result.putString("id", playlist.id.value.toString())
+                            store.refreshPlaylists()
+                        }
+                        PLAYLIST_RENAME -> {
+                            store.repository().renamePlaylist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))),
+                                requireNotNull(args.getString("name"))); store.refreshPlaylists()
+                        }
+                        PLAYLIST_DELETE -> {
+                            store.repository().deletePlaylist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id"))))); store.refreshPlaylists()
+                        }
+                        PLAYLIST_REMOVE -> {
+                            store.repository().removePlaylistEntry(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))),
+                                EntryId(UUID.fromString(requireNotNull(args.getString("entry"))))); store.refreshPlaylists()
+                        }
+                        PLAYLIST_MOVE -> {
+                            store.repository().movePlaylistEntry(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))),
+                                EntryId(UUID.fromString(requireNotNull(args.getString("entry")))), args.getInt("index")); store.refreshPlaylists()
+                        }
+                        PLAYLIST_START -> {
+                            val id = PlaylistId(UUID.fromString(requireNotNull(args.getString("id"))))
+                            val (_, entries) = store.repository().playlist(id) ?: error("The playlist was already deleted.")
+                            val known = store.state.value.tracks.associateBy { it.id }
+                            // One captured copy at press time: available occurrences in saved order. The saved list keeps everything.
+                            val playable = entries.filter { known[it.trackId]?.availability == Availability.AVAILABLE }
+                            require(playable.isNotEmpty()) { "None of this playlist's songs are currently available. Check storage access and scan again." }
+                            val startEntry = args.getString("entry")?.let { wanted ->
+                                entries.firstOrNull { it.id == EntryId(UUID.fromString(wanted)) }
+                            }
+                            val index = startEntry?.let { target -> playable.indexOfFirst { it.id == target.id } }?.takeIf { it >= 0 } ?: 0
+                            authority.start(playable.map { it.trackId }, index, 0, args.getBoolean("shuffle"))
+                        }
                         CLEAR_ERROR -> store.clearError()
                         EXPORT -> result.putString("report", JSONObject(authority.report()).put("library", JSONObject()
                             .put("trackCount", store.state.value.tracks.size).put("folderCount", store.state.value.folders.size)
@@ -228,8 +273,16 @@ class PlaybackService : MediaLibraryService() {
         const val EDIT_UNDO = "com.localmusic.player.EDIT_UNDO"
         const val EDIT_RECOVER = "com.localmusic.player.EDIT_RECOVER"
         const val EDIT_RECOVERY_REVIEW = "com.localmusic.player.EDIT_RECOVERY_REVIEW"
+        const val PLAYLIST_CREATE = "com.localmusic.player.PLAYLIST_CREATE"
+        const val PLAYLIST_RENAME = "com.localmusic.player.PLAYLIST_RENAME"
+        const val PLAYLIST_DELETE = "com.localmusic.player.PLAYLIST_DELETE"
+        const val PLAYLIST_ADD = "com.localmusic.player.PLAYLIST_ADD"
+        const val PLAYLIST_REMOVE = "com.localmusic.player.PLAYLIST_REMOVE"
+        const val PLAYLIST_MOVE = "com.localmusic.player.PLAYLIST_MOVE"
+        const val PLAYLIST_START = "com.localmusic.player.PLAYLIST_START"
         val ACTIONS = setOf(START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
-            EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW)
+            EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
+            PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START)
     }
 }

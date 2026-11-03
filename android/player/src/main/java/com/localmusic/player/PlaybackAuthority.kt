@@ -114,7 +114,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             ?: sources.firstOrNull()
         return MediaItem.Builder().setMediaId(track.id.value.toString()).setUri(source?.uri ?: "").setMediaMetadata(metadata.build()).build()
     }
-    fun start(ids: List<TrackId>, index: Int, resume: Long = 0) {
+    fun start(ids: List<TrackId>, index: Int, resume: Long = 0, shuffled: Boolean? = null) {
         check(ready) { "The library is still opening." }
         require(ids.isNotEmpty() && ids.size <= 5000 && index in ids.indices) { "Choose a collection of up to 5,000 songs." }
         val known = tracks.associateBy { it.id }
@@ -122,7 +122,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         require(known[ids[index]]?.availability == Availability.AVAILABLE) { "This file is unavailable. Check storage access and scan again." }
         check(store?.isEditing(ids[index]) != true) { "This file is being edited. Wait for the operation to finish." }
         observePosition(); persist()
-        val selected = queue.start(ids, index, queue.shuffle, resume, known[ids[index]]?.audio?.durationMs?.takeIf { it > 0 })
+        val selected = queue.start(ids, index, shuffled ?: queue.shuffle, resume, known[ids[index]]?.audio?.durationMs?.takeIf { it > 0 })
         load(selected, true)
         event(if (resume > 0) "explicit_continue" else "fresh_song_start")
     }
@@ -228,7 +228,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
-        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.2.0-library-lyrics")
+        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.3.0-playlists")
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))

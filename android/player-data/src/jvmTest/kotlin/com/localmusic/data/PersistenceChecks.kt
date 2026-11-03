@@ -72,6 +72,69 @@ private suspend fun persistence(path: Path) {
     db.close()
 }
 
+private suspend fun playlistOperations(path: Path) {
+    var db = openPlayerDatabase(path.toString()); var repo = PlayerRepository(db)
+    repo.saveTrack(track(1)); repo.saveTrack(track(2)); repo.saveTrack(track(3))
+    val first = repo.createPlaylist("  Alpha mix  ")
+    expect(first.name == "Alpha mix", "Created playlist name is trimmed")
+    expect(repo.playlists() == listOf(first to 0), "Created playlist appears with zero entries and a trimmed name")
+    val second = repo.createPlaylist("Beta list")
+    repo.addPlaylistEntries(first.id, listOf(id(1), id(1), id(2)))
+    val (_, entries) = repo.playlist(first.id)!!
+    expect(entries.map { it.trackId } == listOf(id(1), id(1), id(2)) && entries.map { it.rank }.distinct().size == 3,
+        "Repeated songs keep distinct occurrences and ranks")
+    expect(entries.map { it.playlistId }.toSet() == setOf(first.id), "Entries bind to their own playlist")
+    expect(repo.playlists() == listOf(first to 3, second to 0), "Summary counts include every occurrence")
+    repo.movePlaylistEntry(first.id, entries.last().id, 1)
+    val (_, moved) = repo.playlist(first.id)!!
+    expect(moved.map { it.trackId } == listOf(id(1), id(2), id(1)), "Move runs through the pure rules and renumbers ranks")
+    expect(moved.first().id == entries.first().id && moved.drop(1).map { it.id } == listOf(entries.last().id, entries[1].id),
+        "Moved occurrence keeps its identity; existing occurrences survive the reorder")
+    val removal = repo.playlist(first.id)!!.second
+    repo.removePlaylistEntry(first.id, removal[0].id)
+    val (_, remaining) = repo.playlist(first.id)!!
+    expect(remaining.map { it.trackId } == listOf(id(2), id(1)), "Remove targets one occurrence; the other repeated song stays")
+    expect(remaining.map { it.id } == listOf(removal[1].id, removal[2].id), "Remaining occurrences keep their identities")
+    repo.renamePlaylist(first.id, "Alpha final")
+    val renamed = repo.playlist(first.id)!!.first
+    expect(renamed.name == "Alpha final" && renamed.id == first.id, "Rename keeps identity and entries")
+    expect(repo.playlist(second.id)?.second?.size == 0, "Delete/rename of one playlist leaves others untouched")
+    expect(repo.playlist(first.id)!!.second == remaining, "Unknown occurrence rejected without partial change")
+    expect(repo.playlists().size == 2, "Add into a deleted/missing playlist creates nothing")
+    val third = repo.createPlaylist("Gamma list", listOf(id(3)))
+    expect(repo.playlists() == listOf(renamed to 2, second to 0, third to 1), "Create-with-songs commits header and entries in one operation")
+    db.close()
+    db = openPlayerDatabase(path.toString()); repo = PlayerRepository(db)
+    val reopened = repo.playlist(first.id)!!
+    expect(reopened.first.name == "Alpha final" && reopened.second.map { it.id } == remaining.map { it.id },
+        "Occurrence identities, order and name survive a real disk reopen")
+    expect(repo.playlists() == listOf(renamed to 2, second to 0, third to 1), "Playlist summaries survive reopen")
+    repo.deletePlaylist(first.id)
+    expect(repo.playlist(first.id) == null && repo.playlists() == listOf(second to 0, third to 1), "Delete affects only that playlist")
+    expect(repo.track(id(1)) != null, "Deleting a playlist never deletes tracks")
+    fails { repo.createPlaylist("   ") }
+    fails { repo.removePlaylistEntry(first.id, EntryId.new()) }
+    fails { repo.addPlaylistEntries(PlaylistId.new(), listOf(id(1))) }
+    db.close()
+}
+
+/** Tries to delete the whole test tree, briefly retrying: if a suite ever fails before its last
+ *  db.close(), the open Room connection legitimately keeps the temp database locked, and this must
+ *  fail with a clear listing instead of masking the primary exception. */
+private suspend fun cleanupTempDirectory(directory: Path) {
+    var lastFailure: Exception? = null
+    for (attempt in 0 until 40) {
+        var blockedThisRound = false
+        Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { target ->
+            try { Files.deleteIfExists(target) } catch (blocked: java.io.IOException) { lastFailure = blocked; blockedThisRound = true }
+        } }
+        if (!blockedThisRound) { println("TEST CLEANUP: freed after ${attempt * 50} ms"); return }
+        kotlinx.coroutines.delay(50)
+    }
+    val leftovers = Files.walk(directory).use { paths -> paths.map { it.fileName.toString() }.toList() }
+    throw IllegalStateException("Test database files stayed locked after 2s of retries: $lastFailure; leftovers=$leftovers")
+}
+
 private suspend fun recovery(path: Path) {
     var db = openPlayerDatabase(path.toString()); var repo = PlayerRepository(db)
     expect(repo.loadSession() == SessionLoad.Empty, "Fresh database has no phantom session")
@@ -220,12 +283,21 @@ fun main() = runBlocking {
     Files.createDirectories(testRoot)
     val directory = Files.createTempDirectory(testRoot, "room-").toRealPath()
     check(directory.parent == testRoot.toRealPath()) { "Temporary test directory escaped the intended root" }
+    var primary: Throwable? = null
     try {
         providerChecks(); codecChecks(); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
         versions(directory.resolve("versions.db")); migration(directory.resolve("migration.db"))
+        playlistOperations(directory.resolve("playlists.db"))
         migrationFrom2(directory.resolve("from-installed-v2.db")); invalidDatabase(directory.resolve("invalid.db"))
         println("Room persistence checks passed: $checks assertions using real disk SQLite and generated Room DAOs.")
+    } catch (t: Throwable) {
+        primary = t
+        println("PRIMARY FAILURE (before cleanup): $t")
     } finally {
-        Files.walk(directory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+        try { cleanupTempDirectory(directory) } catch (cleanupFailure: Throwable) {
+            if (primary == null) throw cleanupFailure
+            println("(cleanup also incomplete, primary failure above is the real one)")
+        }
     }
+    if (primary != null) throw primary
 }
