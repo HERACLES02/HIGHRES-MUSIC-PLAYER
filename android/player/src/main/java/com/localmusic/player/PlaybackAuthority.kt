@@ -211,6 +211,21 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         if (next) queue.playNext(id) else queue.addToQueue(id)
         persist(); update()
     }
+    /** Removes one pending next-up occurrence by identity; the active song never changes. */
+    fun removeFromQueue(entry: EntryId) {
+        require(ready) { "The library is still opening." }
+        queue.removeOccurrence(entry); persist(); update()
+    }
+    /** Moves one pending occurrence to a new next-up position (0 = play next). */
+    fun moveInQueue(entry: EntryId, index: Int) {
+        require(ready) { "The library is still opening." }
+        queue.moveOccurrence(entry, index); persist(); update()
+    }
+    /** Clears pending next-up entries; safe while playing or paused. */
+    fun clearQueue() {
+        require(ready) { "The library is still opening." }
+        queue.clearManualEntries(); persist(); update()
+    }
     fun shuffle(value: Boolean) { queue.setShuffle(value); persist(); update() }
     fun repeat(value: Int) { queue.repeat = when (value) { Player.REPEAT_MODE_ALL -> RepeatMode.ALL; Player.REPEAT_MODE_ONE -> RepeatMode.ONE; else -> RepeatMode.OFF }; persist(); update() }
     private fun observePosition() {
@@ -228,7 +243,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
-        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.3.0-playlists")
+        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.4.0-queue-edits")
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))
@@ -257,6 +272,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("error", listOf(persistenceWarning, error).filter { it.isNotBlank() }.joinToString("\n"))
             .put("currentId", queue.current?.trackId?.value?.toString().orEmpty())
             .put("manual", JSONArray(snapshot.manual.take(60).map { it.trackId.value.toString() }))
+            .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)
             .put("sequence", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.trackId.value.toString() }))
             .put("sequenceCount", (snapshot.order.size - snapshot.cursor - 1).coerceAtLeast(0))

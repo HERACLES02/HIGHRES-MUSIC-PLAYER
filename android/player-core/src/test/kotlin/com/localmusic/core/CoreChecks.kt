@@ -38,6 +38,33 @@ private fun queueChecks() {
     expect(q.next()?.entry?.trackId == track(2), "Manual leaves collection frontier")
     expect(q.previous()?.entry?.trackId == track(9), "History includes manual songs")
     q.playNext(track(7)); expect(q.next()?.entry?.trackId == track(7), "Explicit priority after Previous")
+    q.start(tracks, 0)
+    q.addToQueue(track(9)); q.addToQueue(track(9)); q.addToQueue(track(3))
+    val pending = q.upcomingManual
+    val kept = pending[0]; val doomed = pending[1]; val after = pending[2]
+    val activeBefore = q.current to q.positionMs
+    q.removeOccurrence(doomed.id)
+    val afterRemove = q.upcomingManual
+    expect(afterRemove.map { it.trackId } == listOf(track(9), track(3)) && afterRemove[0].id == kept.id,
+        "Removing one occurrence keeps the duplicate and every remaining identity")
+    expect(q.current == activeBefore.first && q.positionMs == activeBefore.second, "Removing a pending entry leaves the active song and position alone")
+    val stable = q.snapshot()
+    failure { q.removeOccurrence(doomed.id) }
+    failure { q.removeOccurrence(q.current!!.id) }
+    failure { q.moveOccurrence(after.id, 2) }
+    failure { q.moveOccurrence(EntryId.new(), 0) } // move-target from-guard
+    failure { q.moveOccurrence(after.id, -1) }
+    expect(q.snapshot() == stable, "Rejected queue edits change nothing")
+    q.moveOccurrence(after.id, 0)
+    expect(q.upcomingManual.map { it.trackId } == listOf(track(3), track(9)) && q.upcomingManual[0].id == after.id,
+        "Move retargets one occurrence by identity; others keep relative order")
+    expect(q.upcomingManual.map { it.id } == listOf(after.id, kept.id), "Move preserves every kept identity")
+    q.clearManualEntries()
+    expect(q.upcomingManual.isEmpty() && q.current == activeBefore.first && q.positionMs == activeBefore.second,
+        "Clear queue removes only pending entries; playing or paused, the active song stays")
+    expect(q.next()?.entry?.trackId == track(2), "After clearing, next follows the collection frontier")
+    q.clearManualEntries()
+    expect(q.upcomingManual.isEmpty(), "Clearing an empty queue is a safe no-op")
     val dup = ListeningQueue(Random(0)); dup.start(listOf(track(1), track(1), track(2)), 0)
     val first = dup.current!!; expect(dup.next()?.entry?.trackId == track(1) && dup.current?.id != first.id, "Collection duplicate occurrences preserved")
     repeat(100) { seed ->
@@ -78,7 +105,7 @@ private fun queueChecks() {
         val rng = Random(seed)
         val model = ListeningQueue(Random(seed)); model.start(tracks, rng.nextInt(4), seed % 2 == 0)
         repeat(100) {
-            when (rng.nextInt(7)) {
+            when (rng.nextInt(10)) {
                 0 -> model.next(rng.nextBoolean())
                 1 -> model.previous()
                 2 -> model.setShuffle(!model.shuffle)
@@ -86,6 +113,21 @@ private fun queueChecks() {
                 4 -> model.addToQueue(track(rng.nextInt(1, 8)))
                 5 -> model.repeat = RepeatMode.entries[rng.nextInt(3)]
                 6 -> { model.updatePosition(rng.nextLong(0, 50000)); model.pause() }
+                7 -> {
+                    val clean = model.snapshot()
+                    expect(runCatching { model.removeOccurrence(EntryId.new()) }.exceptionOrNull() is IllegalArgumentException,
+                        "Fuzz: unknown queued id is rejected seed=$seed")
+                    expect(model.snapshot() == clean, "Fuzz: rejected remove changes nothing")
+                    model.upcomingManual.firstOrNull()?.let { model.removeOccurrence(it.id) }
+                }
+                8 -> {
+                    val clean = model.snapshot()
+                    expect(runCatching { model.moveOccurrence(EntryId.new(), rng.nextInt(0, 3)) }.exceptionOrNull() is IllegalArgumentException,
+                        "Fuzz: unknown move target is rejected seed=$seed")
+                    expect(model.snapshot() == clean, "Fuzz: rejected move changes nothing")
+                    model.upcomingManual.firstOrNull()?.let { model.moveOccurrence(it.id, rng.nextInt(model.upcomingManual.size)) }
+                }
+                9 -> if (model.upcomingManual.isNotEmpty()) model.clearManualEntries()
             }
             val copy = ListeningQueue(Random(seed))
             expect(copy.restore(model.snapshot()), "Every reachable mixed-command state can be restored seed=$seed")

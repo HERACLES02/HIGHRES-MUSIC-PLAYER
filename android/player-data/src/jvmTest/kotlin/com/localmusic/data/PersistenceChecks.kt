@@ -37,7 +37,11 @@ private suspend fun persistence(path: Path) {
     val alternate = lyrics.copy(id = UUID.randomUUID(), originalText = "", origin = LyricsOrigin.EMBEDDED, instrumental = true)
     repo.saveLyrics(lyrics); repo.saveLyrics(alternate, select = true)
     val grant = FolderGrant(UUID.randomUUID(), "content://tree/music", 3, 1); repo.saveFolderGrant(grant)
-    val queue = ListeningQueue().apply { start(listOf(id(1), id(2)), 0); addToQueue(id(1)); addToQueue(id(1)); updatePosition(43000) }
+    val queue = ListeningQueue().apply {
+        start(listOf(id(1), id(2)), 0); addToQueue(id(1)); addToQueue(id(1)); addToQueue(id(2)); updatePosition(43000)
+        removeOccurrence(upcomingManual[0].id) // edited-queue retention: remove one duplicate occurrence…
+        moveOccurrence(upcomingManual.last().id, 0) // …and move the remaining other song to play next
+    }
     repo.saveSession(queue.snapshot(), 1)
     db.close()
 
@@ -52,6 +56,7 @@ private suspend fun persistence(path: Path) {
     val restored = repo.loadSession() as SessionLoad.Restored
     expect(!restored.queue.isPlaying && restored.queue.positionMs == 43000L, "Real disk session restores paused")
     expect(restored.queue.snapshot() == queue.snapshot(), "Serialized queue, manual duplicates and history round trip")
+    expect(restored.queue.upcomingManual == queue.upcomingManual, "Queue edits survive restart as saved (removed duplicate gone, moved entry first)")
     expect(db.records().resume(id(1).value.toString())?.positionMs == 43000L, "Resume state persisted with session")
     repo.markUnavailable(id(1), Availability.VOLUME_UNMOUNTED)
     expect(repo.track(id(1))?.availability == Availability.VOLUME_UNMOUNTED, "Storage removal changes availability")

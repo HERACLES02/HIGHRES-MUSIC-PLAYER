@@ -64,6 +64,31 @@ class ListeningQueue(private val random: Random = Random.Default) {
         history = history.take(historyCursor + 1) // explicit priority over forward history
     }
     fun addToQueue(track: TrackId) { manual = manual + QueueEntry(EntryId.new(), track) }
+
+    /** Removes exactly one pending occurrence; a matching duplicate of the same song remains.
+     *  Pending entries only: the active occurrence always lives in playback history, so this can
+     *  never stop or replace the current song. Unknown identities are rejected without change. */
+    fun removeOccurrence(occurrence: EntryId) {
+        require(manual.any { it.id == occurrence }) { "That queued entry no longer exists." }
+        manual = manual.filterNot { it.id == occurrence }
+    }
+
+    /** Moves one pending occurrence to its new next-up position (0 = play next, size - 1 = last);
+     *  others keep their relative order and every occurrence keeps its identity. */
+    fun moveOccurrence(occurrence: EntryId, index: Int) {
+        require(index in manual.indices) { "That queued entry changed. Reload the queue and try again." }
+        val from = manual.indexOfFirst { it.id == occurrence }
+        require(from >= 0) { "That queued entry no longer exists." }
+        val target = manual[from]
+        val others = manual.filterNot { it.id == occurrence }
+        manual = others.take(index) + target + others.drop(index)
+    }
+
+    /** Explicit clear of pending next-up entries. Safe while playing or paused: the active song,
+     *  its position, recent/forward history and shuffle state are untouched, and the audible
+     *  collection frontier continues afterward. */
+    fun clearManualEntries() { manual = emptyList() }
+
     fun setShuffle(enabled: Boolean) {
         if (shuffle == enabled) return
         shuffle = enabled

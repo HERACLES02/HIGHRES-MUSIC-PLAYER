@@ -112,12 +112,13 @@ Music files change only after the user reviews the prepared preview and presses
 Write, with Android write authorization when needed. A readable URI is not proof
 of write permission. No atomic replacement is assumed across document providers.
 
-### 0.3.0-playlists: Step 2 increment, coded and locally verified (Nov 2026)
+### 0.3.0-playlists: Step 2 increment, coded, verified and phone-accepted (Nov 2026)
 
-Saved-playlist management is implemented end to end and locally verified, but
-NOT yet phone-accepted. Details in `android/player/VERIFICATION_0_3.md`; review
-diff artifact in `android/playlist-increment.diff` (UTF-8, includes the new
-`Playlists.kt`).
+Saved-playlist management is implemented end to end, locally verified, and
+user-confirmed on the OPPO phone on 3 November 2026 (`PHONE_RESULTS_0_3.md`
+records the acceptance and its evidence limits). Details in
+`android/player/VERIFICATION_0_3.md`; review diff artifact in
+`android/playlist-increment.diff` (UTF-8, includes the new `Playlists.kt`).
 
 - Pure core: `Playlists.kt` (append/remove/move by occurrence EntryId,
   `requireName`, 200-char names, 5000-entry cap). Room schema stays version 3:
@@ -157,12 +158,70 @@ on count not readiness, global revision bump re-queries lyrics panels cheaply,
 repository-level rollback assertion for create-with-songs, and
 `savePlaylist(name, entries)` not applying `requireName` (no callers).
 
+### 0.4.0-queue-edits: Step 3 part 1 increment, coded, verified and phone-accepted (Nov 2026)
+
+Manual-queue editing is implemented end to end and locally verified. Details in
+`android/player/VERIFICATION_0_4.md`; review diff artifact in
+`android/queue-increment.diff` (UTF-8, eight edited player files including the
+review-driven test additions).
+
+- Pure core (documented rules in `ListeningQueue.kt` KDoc):
+  `removeOccurrence` (one pending occurrence by EntryId; a duplicate keeps its
+  own identity), `moveOccurrence` (retarget to 0 = play next, others keep
+  relative order), `clearManualEntries` (pending next-up entries only). Because
+  the active occurrence always lives in history, no edit can stop or replace
+  the current song; clearing is safe while playing. Unknown ids/out-of-range
+  targets are rejected before any change.
+- Wiring: QUEUE_REMOVE/QUEUE_MOVE/QUEUE_CLEAR service commands (trusted boundary,
+  PLAYLIST_MOVE-style args), three authority methods in the `enqueue` pattern
+  (`require(ready)` → mutate → `persist(); update()`), and `manualIds` published
+  next to `manual` in the state JSON (occurrence ids for the visible 60 rows).
+- UI: Queue tab rows now have Move up / Move down / Remove entry menus addressed
+  by occurrence id, plus "Clear queue" with a confirm dialog.
+
+Checks actually run: 8,713 core assertions (new invariants: remove keeps the
+duplicate and identities and leaves song/position alone; rejected edits change
+nothing; move/clear rules; clear-empty no-op; fuzz extended to all three
+commands, still restore-round-trip), 92 Room + 24 fixture assertions unchanged,
+frozen-schema verification, `git diff --check` clean. APK:
+`android/releases/local-music-0.4.0.apk`, versionCode 4, `0.4.0-queue-edits`,
+SHA-256 `5ea5dbe605f389729985ddea91401309f8bcd8d790e34510a5f7f6200d9cf8dd`,
+v2 signature verified, update-compatible with the installed 0.3 preview.
+
+Not yet done for this increment: no phone acceptance (see the 0.4 verification
+note's "Not claimed") and the acceptance doc updates for both 0.3
+(`PHONE_RESULTS_0_3.md`, handoff edits) and this work remain uncommitted by
+explicit user preference ("later").
+
+Independent review completed: DeepSeek session
+`ses_e5e86d3dcffeWFGy4Da3kv7IIo` reviewed `android/queue-increment.diff` and
+found one blocker — the Clear-queue confirm dialog was unreachable dead code —
+plus three minors (move-down could push an entry past the editable 60-row
+window, queue rows had no LazyColumn keys so an open menu could re-target,
+coverage thinner than claimed). All four were fixed; the re-review
+(`ses_e5e7befa9ffeN49b1rlDI4YgIs`) confirmed every fix and found no new issues
+("all fixes confirmed, no new issues"). The explicit ruled-out list
+(active-song stop/replace, duplicate identity loss, restore round-trip,
+restart retention, persistence races, double-press, external clients,
+playlist regressions) is recorded in `VERIFICATION_0_4.md`. Suites now read
+10,406 core + 93 Room (+24 fixture) assertions. Final APK SHA-256
+`2fb5be3a25646cbbea952a58832ecda90356567946ddcbd4f39dcf470801d47f`
+supersedes the two earlier local builds.
+
+Phone-accepted on 3 November 2026: user confirmed the queue editing works on
+the OPPO (`PHONE_RESULTS_0_4.md`; overall pass without itemized per-step
+evidence, recorded with the usual honesty notes). Step 3 part 1 is complete.
+Nothing has been committed yet — all increment work plus both acceptance
+records (`PHONE_RESULTS_0_3.md`, `PHONE_RESULTS_0_4.md`) and the handoff
+edits remain uncommitted pending the user's "commit later" decision.
+
 ### Important gaps
 
-- Saved playlists are implemented but still await phone acceptance (0.3.0);
-  see the Step 2 outcome above.
+- Saved playlists (0.3) and manual queue editing (0.4) are implemented,
+  verified and user-accepted on this phone; see the outcomes above.
 - No complete durable listening-history feature/UI, app-data backup/restore,
-  sleep timer, widget, processing controls or artist-biography/release-artwork lookup.
+  sleep timer, widget, processing controls or artist-biography/release-artwork
+  lookup.
 - Gapless transitions are not implemented: the coordinator currently loads songs
   individually. Do not call ordinary sequential playback gapless.
 - Enhanced word-level Lyricsfile YAML is not implemented.
@@ -652,7 +711,9 @@ Use its `README.md`/`LEARNING.md` if specifically asked to work on it.
 ## 11. Documents to read, in this order
 
 1. This handoff, then `android/PLAYER_0_2_HANDOFF.md`.
-2. `android/player/PHONE_RESULTS_0_2.md` and `VERIFICATION_0_2.md`.
+2. `android/player/VERIFICATION_0_3.md` and `PHONE_RESULTS_0_3.md` for the
+   current 0.3 state; `android/player/PHONE_RESULTS_0_2.md`,
+   `VERIFICATION_0_2.md` for the accepted 0.2 baseline.
 3. Relevant current source files from the map above.
 4. `ANDROID_PLAN.md` for the long-term product requirements, not current completion.
 5. Relevant specific USB result files if touching Direct; latest acceptance takes
@@ -667,8 +728,8 @@ documented later user confirmation.
 
 ```text
 Continue my existing Local Music Android app in D:\music_player.
-Read GLM_CONTINUATION_HANDOFF.md first, then VERIFICATION_0_3.md and the
-0.2 handoff, phone results and verification documents it names. Inspect
+Read GLM_CONTINUATION_HANDOFF.md first, then VERIFICATION_0_4.md and the
+earlier handoff, phone results and verification documents it names. Inspect
 current source and git status before editing; preserve all pre-existing
 Flask changes, untracked files, original phone reports and signing keys.
 
@@ -676,20 +737,26 @@ I am a coding beginner. Explain the result plainly, include exact PowerShell
 commands and short phone checks. Do not rebuild the project from scratch.
 
 The actual player is android/player (com.localmusic.player), currently
-0.3.0-playlists with saved playlists coded and locally verified but not
-yet phone-accepted. android/app is the separate USB diagnostic. Direct USB
-remains gated by unresolved clocking/balance findings; keep developing
+0.4.0-queue-edits: saved playlists (0.3) and manual queue editing (0.4) are
+locally verified AND user-accepted on my phone (see PHONE_RESULTS_0_3.md and
+PHONE_RESULTS_0_4.md). android/app is the separate USB diagnostic. Direct
+USB remains gated by unresolved clocking/balance findings; keep developing
 Normal-mode features. Do not repeat accepted probe endurance/lock-screen
-tests, the basic FLAC write/Undo already confirmed by me, or the 0.2
-playback checks.
+tests, the basic FLAC write/Undo already confirmed by me, the 0.2 playback
+checks, the 0.3 playlist acceptance, or the 0.4 queue-editing acceptance;
+the 10,406-assertion core suite is green and does not need rerunning.
 
-First install/check the latest 0.3.0 APK on my phone and walk me through a
-short saved-playlist phone acceptance (create with songs incl. duplicates,
-rename, reorder one occurrence, delete, play captured order with restart
-paused, missing file keeps placeholders). Then implement the next bounded
-coding increment (Step 3 part 1: queue removal/reorder of one occurrence
-with pure ListeningQueue commands first). Do not treat any queue work as
-done before its engine/capture rules are reviewed.
+Implement the next bounded increment (Step 3 item 4: the sleep timer, still
+within Normal Mode). Before coding, write down and keep visible: end-of-track
+versus immediate stop semantics, countdown visibility, cancel/reset
+behavior, paused-playback behavior, process/service lifetime and cleanup on
+destroy; use monotonic elapsed time, never wall-clock; never an
+Activity-owned timer. Then implement service-owned, build an
+update-compatible preview APK with checksum, review the diff with an
+independent model, fix anything real, and record VERIFICATION and remaining
+phone checks honestly. Local checks expected: monotonic-clock rule tests,
+expiry while paused/foreground/background (documented limits), full suite
+green. If a physical check is unavailable, report it honestly.
 
 Use focused regression tests, add migrations only if genuinely needed,
 never alter frozen schemas or weaken write/recovery safeguards, and build

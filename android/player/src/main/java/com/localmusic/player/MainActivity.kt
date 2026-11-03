@@ -273,6 +273,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
     var playlistCreating by remember { mutableStateOf(false) }
     var playlistNamingText by remember { mutableStateOf("") }
     var playlistDeleting by remember { mutableStateOf<Playlist?>(null) }
+    var queueClearing by remember { mutableStateOf(false) }
     fun openPlaylistPicker(ids: List<TrackId>) { playlistPickerName = ""; playlistPicker = ids }
     fun playlistArgs(id: PlaylistId, entry: String? = null, shuffle: Boolean = false) = Bundle().apply {
         putString("id", id.value.toString()); entry?.let { putString("entry", it) }; putBoolean("shuffle", shuffle)
@@ -422,9 +423,20 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                 "Queue" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { Section("Play Next & manual queue") }
                     val manual = playback.optJSONArray("manual")
+                    val manualIds = playback.optJSONArray("manualIds")
+                    val editable = manualIds != null && manual != null && manualIds.length() == manual.length()
+                    val count = playback.optInt("manualCount")
                     if (manual == null || manual.length() == 0) item { Text("Use a song’s menu to queue it. Duplicate songs are allowed.") }
-                    items(manual?.length() ?: 0) { index -> Text("${index + 1}. ${library.tracks.firstOrNull { it.id.value.toString() == manual!!.optString(index) }?.tags?.title ?: "Unavailable song"}") }
-                    item { Text("${playback.optInt("manualCount")} manual entries; showing up to 60."); Section("Listening sequence") }
+                    // Keys bind each row to its occurrence identity, so an open menu follows its song when rows shift.
+                    items(manual?.length() ?: 0, key = { manualIds?.optString(it).orEmpty().ifEmpty { "row-$it" } }) { index ->
+                        val track = library.tracks.firstOrNull { it.id.value.toString() == manual!!.optString(index) }
+                        val entryId = manualIds?.optString(index).orEmpty()
+                        ManualQueueRow(index, manual?.length() ?: 0, track, ready && editable && entryId.isNotBlank(),
+                            move = { target -> send(PlaybackService.QUEUE_MOVE, Bundle().apply { putString("entry", entryId); putInt("index", target) }) },
+                            remove = { send(PlaybackService.QUEUE_REMOVE, Bundle().apply { putString("entry", entryId) }) })
+                    }
+                    if (count > 0) item { TextButton(enabled = ready, onClick = { queueClearing = true }) { Text("Clear queue") } }
+                    item { Text("$count manual entries; only the first 60 can be edited here."); Section("Listening sequence") }
                     val sequence = playback.optJSONArray("sequence")
                     items(sequence?.length() ?: 0) { index -> Text("${index + 1}. ${library.tracks.firstOrNull { it.id.value.toString() == sequence!!.optString(index) }?.tags?.title ?: "Unavailable song"}") }
                     item { Text("${playback.optInt("sequenceCount")} remaining; showing up to 60. Browsing and sorting keep this sequence unchanged.") }
@@ -517,7 +529,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     EditHistory(library, { nativeBatch = it }, actions)
                     Text("Playlists are saved with your chosen order, including repeated songs. App-data backup, processing controls, widget and artist biographies are not included yet.")
                     Section("About this preview")
-                    Text("Local Music 0.3.0\nSaved playlists, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
+                    Text("Local Music 0.4.0\nSaved playlists and queue editing, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
                 }
             }
         }
@@ -570,6 +582,10 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
         text = { Text("The saved playlist and its ordered entries are deleted. Songs, favorites and other playlists stay untouched.") },
         confirmButton = { TextButton(onClick = { send(PlaybackService.PLAYLIST_DELETE, Bundle().apply { putString("id", target.id.value.toString()) }); playlistDeleting = null }) { Text("Delete") } },
         dismissButton = { TextButton(onClick = { playlistDeleting = null }) { Text("Cancel") } }) }
+    if (queueClearing) AlertDialog(onDismissRequest = { queueClearing = false }, title = { Text("Clear the queue?") },
+        text = { Text("Pending next-up songs are removed. The song that is playing, its position, history and shuffle stay untouched.") },
+        confirmButton = { TextButton(enabled = ready, onClick = { send(PlaybackService.QUEUE_CLEAR, Bundle.EMPTY); queueClearing = false }) { Text("Clear queue") } },
+        dismissButton = { TextButton(onClick = { queueClearing = false }) { Text("Cancel") } })
     editing?.let { tracks -> TagEditorDialog(tracks, library, send, actions, { nativeBatch = it }) { editing = null } }
     nativeBatch?.let { batch -> NativePreviewDialog(batch, library, send, actions) { nativeBatch = null } }
     if (licenses) {
@@ -594,6 +610,22 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                 DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; rename() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() })
+            } } })
+}
+
+@Composable private fun ManualQueueRow(index: Int, total: Int, track: Track?, editable: Boolean,
+    move: (Int) -> Unit, remove: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    ListItem(
+        leadingContent = { Text("${index + 1}.") },
+        headlineContent = { Text(track?.tags?.title ?: "Unavailable song", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(if (track == null) "Not in the library yet; scan again or remove this entry."
+            else artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        trailingContent = { Box { TextButton(onClick = { menu = true }, enabled = editable) { Text("More") }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0, onClick = { menu = false; move(index - 1) })
+                DropdownMenuItem(text = { Text("Move down") }, enabled = index < total - 1, onClick = { menu = false; move(index + 1) })
+                DropdownMenuItem(text = { Text("Remove entry") }, onClick = { menu = false; remove() })
             } } })
 }
 
