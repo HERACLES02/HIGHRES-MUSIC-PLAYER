@@ -24,6 +24,7 @@ interface PlayerDao {
     @Query("DELETE FROM playlist WHERE id=:id") suspend fun deletePlaylist(id: String)
     @Query("DELETE FROM playlist_entry WHERE playlistId=:id") suspend fun deletePlaylistEntries(id: String)
     @Insert suspend fun insertEntry(row: PlaylistEntryRow)
+    @Query("SELECT * FROM playlist_entry WHERE id=:id") suspend fun entry(id: String): PlaylistEntryRow?
     @Query("DELETE FROM playlist_entry WHERE playlistId=:playlistId") suspend fun clearEntries(playlistId: String)
     @Query("SELECT * FROM playlist_entry WHERE playlistId=:playlistId ORDER BY rank") suspend fun entries(playlistId: String): List<PlaylistEntryRow>
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun favorite(row: FavoriteRow)
@@ -41,6 +42,7 @@ interface PlayerDao {
     @Query("SELECT * FROM session_problem ORDER BY savedAtMs,id") suspend fun problems(): List<SessionProblemRow>
     @Upsert suspend fun putResume(row: ResumeRow)
     @Query("SELECT * FROM resume_state WHERE trackId=:id") suspend fun resume(id: String): ResumeRow?
+    @Query("DELETE FROM resume_state WHERE trackId=:id") suspend fun deleteResume(id: String)
     @Upsert suspend fun putGrant(row: FolderGrantRow)
     @Query("SELECT * FROM folder_grant ORDER BY id") suspend fun grants(): List<FolderGrantRow>
     @Upsert suspend fun putExtra(row: LibraryExtraRow)

@@ -134,10 +134,10 @@ class LibraryScanner(private val context: Context, private val store: MusicStore
         val stamp = "${source.stamp.sizeBytes}:${source.stamp.modifiedMs}"
         var tags = prior?.tags ?: fallbackTags; var audio = prior?.audio ?: fallbackAudio
         var embeddedPending: String? = null
-        if (detail.artworkStamp != stamp || detail.artworkPath?.let { !File(it).exists() } == true) {
+        if (detail.artworkStamp != stamp || detail.artworkPath?.let { !File(it).exists() } == true || !detail.replayGainScanned) {
             val art = File.createTempFile("embedded-", ".tmp", context.cacheDir)
             try {
-                val read = resolver.openFileDescriptor(Uri.parse(source.uri), "r")?.use { pfd -> JSONObject(NativeTags.read("/proc/self/fd/${pfd.fd}", art.path)) }
+                val read = resolver.openFileDescriptor(Uri.parse(source.uri), "r")?.use { pfd -> JSONObject(NativeTags.readDescriptor(pfd.fd, art.path)) }
                     ?: error("Cannot read song")
                 val p = read.getJSONObject("properties")
                 fun values(k: String): List<String> = p.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
@@ -146,7 +146,8 @@ class LibraryScanner(private val context: Context, private val store: MusicStore
                 audio = AudioProperties(read.optLong("durationMs").coerceAtLeast(0), fallbackAudio.mimeType,
                     read.optInt("sampleRateHz").takeIf { it > 0 }, read.optInt("channels").takeIf { it > 0 }, read.optInt("bits").takeIf { it > 0 })
                 val cover = if (art.length() > 0) runCatching { LocalArtwork(context).resize(art, false) }.getOrNull() else null
-                detail = detail.copy(artworkPath = cover, artworkStamp = stamp)
+                val gainKeys=listOf("REPLAYGAIN_TRACK_GAIN","REPLAYGAIN_ALBUM_GAIN","REPLAYGAIN_TRACK_PEAK","REPLAYGAIN_ALBUM_PEAK")
+                detail = detail.copy(artworkPath=cover,artworkStamp=stamp,replayGainTags=gainKeys.mapNotNull{k->value(k)?.takeIf{it.length<=100}?.let{k to it}}.toMap(),replayGainScanned=true)
                 val lyrics = value("LYRICS") ?: value("USLT") ?: value("SYNCEDLYRICS") ?: value("UNSYNCEDLYRICS")
                 if (!lyrics.isNullOrBlank() && lyrics.length <= LrcParser.MAX_CHARS) {
                     // Saved only after the track row exists below.

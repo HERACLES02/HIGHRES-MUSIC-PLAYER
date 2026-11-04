@@ -14,6 +14,72 @@ sealed interface SessionLoad {
 
 /** One future service owns session writes. Every multi-row mutation is an immediate Room transaction. */
 class PlayerRepository(private val database: PlayerDatabase) {
+    suspend fun captureBackup(preferences: BackupPreferences): AppBackup = transaction {
+        val tracks = tracks()
+        val session = when (val saved = loadSession()) {
+            SessionLoad.Empty -> null
+            is SessionLoad.Restored -> saved.queue.snapshot()
+            is SessionLoad.Unavailable -> error("Saved session needs recovery before backup: ${saved.reason}")
+        }
+        AppBackup(tracks, playlists().map { (playlist, _) ->
+            BackupPlaylist(playlist, requireNotNull(playlist(playlist.id)).second)
+        }, tracks.flatMap { lyricVersions(it.id) }, tracks.mapNotNull { t ->
+            dao.selectedLyrics(t.id.value.toString())?.let { t.id to uuid(it.versionId) }
+        }.toMap(), extras(), tracks.mapNotNull { dao.resume(it.id.value.toString()) }, folderGrants(), session, preferences)
+    }
+    suspend fun restoreBackup(state: AppBackup, assets: Map<String, String>, receipt: String) {
+        BackupArchive.validate(state)
+        val referenced = BackupArchive.artworkReferences(state)
+        require(assets.keys == referenced && assets.values.all { it.isNotBlank() }) { "Restored artwork is incomplete." }
+        require(receipt.length in 1..200)
+        transaction {
+            check(loadSession() !is SessionLoad.Unavailable) { "Saved session needs recovery before restore." }
+            for (track in state.tracks) for (source in track.sources) {
+                val owner = dao.source(source.uri)?.trackId
+                require(owner == null || owner == track.id.value.toString()) { "A backup source belongs to a different song in this library. Restore into the original library or a fresh installation." }
+            }
+            for (playlist in state.playlists) for (entry in playlist.entries) {
+                val existing = dao.entry(entry.id.value.toString())
+                require(existing == null || (existing.playlistId == playlist.playlist.id.value.toString() && existing.trackId == entry.trackId.value.toString())) {
+                    "A playlist occurrence belongs to a different playlist or song."
+                }
+            }
+            val folders = folderGrants().associateBy { it.treeUri }.toMutableMap()
+            val folderIds = folderGrants().associateBy { it.id }
+            val remapped = mutableMapOf<UUID, UUID>()
+            for (folder in state.folders) {
+                val existing = folders[folder.treeUri]
+                if (existing != null) remapped[folder.id] = existing.id
+                else {
+                    require(folderIds[folder.id] == null) { "A folder identity refers to a different folder." }
+                    val restored = folder.copy(persistedFlags = 0)
+                    saveFolderGrant(restored); folders[folder.treeUri] = restored; remapped[folder.id] = folder.id
+                }
+            }
+            for (track in state.tracks) {
+                if (dao.track(track.id.value.toString()) == null) saveTrack(track.copy(availability = Availability.MISSING,
+                    sources = track.sources.map { s -> s.copy(folderGrantId = s.folderGrantId?.let { remapped[it] ?: it }) }))
+                setFavorite(track.id, track.favorite)
+            }
+            // Immutable text/provenance conflicts abort the entire transaction, including rows above.
+            for (lyrics in state.lyrics) saveLyrics(lyrics)
+            for (track in state.tracks) {
+                selectLyrics(track.id, state.selections[track.id])
+                val detail = state.extras[track.id] ?: LibraryExtras()
+                val override = detail.artworkOverride?.let { if (it.isEmpty()) "" else assets.getValue(it) }
+                val old = extra(track.id)
+                saveExtra(track.id, detail.copy(artworkOverride = override, artworkPath = old.artworkPath, artworkStamp = old.artworkStamp))
+            }
+            for (playlist in state.playlists) persistPlaylist(playlist.playlist, playlist.entries)
+            state.session?.let { saveSession(it, System.currentTimeMillis()) }
+            for (track in state.tracks) dao.deleteResume(track.id.value.toString())
+            for (resume in state.resumes) dao.putResume(resume)
+            dao.putSession(SessionRow("restore_receipt", 1, receipt, hash(receipt), System.currentTimeMillis()))
+        }
+    }
+    suspend fun hasRestoreReceipt(receipt: String): Boolean = dao.session("restore_receipt")?.let {
+        it.payload == receipt && it.sha256 == hash(receipt)
+    } == true
     private val dao get() = database.records()
     private suspend fun <T> transaction(block: suspend () -> T): T = database.useWriterConnection { connection ->
         connection.withTransaction(Transactor.SQLiteTransactionType.IMMEDIATE) { block() }
@@ -171,6 +237,11 @@ class PlayerRepository(private val database: PlayerDatabase) {
             val old = dao.extra(key)?.let { LibraryExtras.decode(it.payload) } ?: LibraryExtras()
             dao.putExtra(LibraryExtraRow(key, old.copy(tagFields = old.tagFields + patch.fields, overridesVersion = old.overridesVersion + 1).encode()))
         }
+    }
+    suspend fun saveAppArtwork(ids:List<TrackId>,path:String,source:String,credit:String)=transaction{
+        require(ids.isNotEmpty()&&ids.size<=5000&&source.startsWith("https://")&&credit.length<=2000)
+        require(ids.all{dao.track(it.value.toString())!=null}){"A song is no longer in the library."}
+        for(id in ids){val old=extra(id);saveExtra(id,old.copy(artworkOverride=path,artworkSourceUrl=source,artworkCredit=credit,overridesVersion=old.overridesVersion+1))}
     }
     suspend fun saveAppOverrides(values: Map<TrackId, MusicTags>) = transaction {
         for ((id, tags) in values) {

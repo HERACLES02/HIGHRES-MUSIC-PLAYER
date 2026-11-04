@@ -10,8 +10,9 @@ android {
         applicationId = "com.localmusic.player"
         minSdk = 30
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.6.0-playlist-files"
+        testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
+        versionCode = 14
+        versionName = "0.9.4-cover-reading"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }

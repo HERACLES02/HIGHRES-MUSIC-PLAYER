@@ -17,11 +17,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Tag-preservation evidence is missing or stale.' }
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
-    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') @verificationArgs --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') ':player-core:selfTest' ':player-data:selfTest' ':player:assembleDebug' ':player:lintDebug'
+    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') @verificationArgs --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') ':player-core:selfTest' ':player-data:selfTest' ':player:assembleDebug' ':player:assembleDebugAndroidTest' ':player:lintDebug'
     if ($LASTEXITCODE -ne 0) { throw 'Player build or checks failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-player-data.py')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen Room schemas changed.' }
-    $apk = Join-Path $projectRoot 'releases/local-music-0.6.0-playlist-files.apk'
+    $apk = Join-Path $projectRoot 'releases/local-music-0.9.4.apk'
     Copy-Item -LiteralPath (Join-Path $projectRoot 'player/build/outputs/apk/debug/player-debug.apk') -Destination $apk -Force
     & (Join-Path $tools 'sdk/build-tools/35.0.0/apksigner.bat') verify --verbose $apk
     if ($LASTEXITCODE -ne 0) { throw 'Player signature verification failed.' }

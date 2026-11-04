@@ -38,7 +38,7 @@ private suspend fun persistence(path: Path) {
     repo.saveLyrics(lyrics); repo.saveLyrics(alternate, select = true)
     val grant = FolderGrant(UUID.randomUUID(), "content://tree/music", 3, 1); repo.saveFolderGrant(grant)
     val queue = ListeningQueue().apply {
-        start(listOf(id(1), id(2)), 0); addToQueue(id(1)); addToQueue(id(1)); addToQueue(id(2)); updatePosition(43000)
+        start(listOf(id(1), id(2)), 0, origin = "Playlist · Offline list"); addToQueue(id(1)); addToQueue(id(1)); addToQueue(id(2)); updatePosition(43000)
         removeOccurrence(upcomingManual[0].id) // edited-queue retention: remove one duplicate occurrence…
         moveOccurrence(upcomingManual.last().id, 0) // …and move the remaining other song to play next
     }
@@ -250,6 +250,10 @@ private suspend fun codecChecks() {
     val q = ListeningQueue().apply { start(listOf(id(1), id(2)), 0); updatePosition(42000); addToQueue(id(1)); addToQueue(id(1)) }
     val encoded = SessionCodec.encode(q.snapshot())
     expect(SessionCodec.decode(encoded) == q.snapshot(), "JSON wire round trip")
+    expect(!encoded.contains("\"origin\"") && SessionCodec.decode(encoded).origin == null, "Legacy session without origin remains readable")
+    val named=q.snapshot().copy(origin="Folder · Music/বাংলা")
+    expect(SessionCodec.decode(SessionCodec.encode(named)) == named, "Listening origin survives explicit JSON round trip")
+    fails { SessionCodec.decode(encoded.replaceFirst("{", "{\"origin\":123,")) }
     expect(!encoded.contains("isPlaying") && !encoded.contains("autoplay"), "Wire format never persists playback authority")
     for (bad in listOf("", "[]", "{}", "{bad", encoded.replace("\"version\":1", "\"version\":2"),
         encoded.replace("\"repeat\":\"OFF\"", "\"repeat\":\"bad\""), encoded.replace("\"cursor\":0", "\"cursor\":-5"))) {
@@ -302,7 +306,7 @@ fun main() = runBlocking {
     check(directory.parent == testRoot.toRealPath()) { "Temporary test directory escaped the intended root" }
     var primary: Throwable? = null
     try {
-        providerChecks(); codecChecks(); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
+        enrichmentChecks(); audioCodecChecks(); providerChecks(); codecChecks(); backupArchiveChecks(); backupRepositoryChecks(directory.resolve("backup.db")); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
         versions(directory.resolve("versions.db")); migration(directory.resolve("migration.db"))
         playlistOperations(directory.resolve("playlists.db"))
         migrationFrom2(directory.resolve("from-installed-v2.db")); invalidDatabase(directory.resolve("invalid.db"))

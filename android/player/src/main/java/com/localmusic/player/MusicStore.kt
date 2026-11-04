@@ -24,11 +24,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 private val Context.musicPreferences by preferencesDataStore("local-music-settings")
-data class MusicPreferences(val appearance: String = "System", val autoScan: Boolean = false)
+data class MusicPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap())
 data class LyricsChoice(val receipt: String, val candidate: LyricsCandidate)
 
 data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Map<TrackId, Long> = emptyMap(),
@@ -44,6 +46,7 @@ class MusicApplication : Application() {
 
 /** Owns database access, never an audio engine or playback position timer. */
 class MusicStore(private val context: Context, private val scope: CoroutineScope) {
+    val artistLookup by lazy{ArtistLookup(context,this)}
     private val editClaims = mutableMapOf<TrackId, Int>()
     private var editOperations = 0
     @Synchronized fun beginEdit() { editOperations++; mutable.update { it.copy(editBusy = true) } }
@@ -52,8 +55,8 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     @Synchronized fun releaseEdits(ids: Set<TrackId>) { for (id in ids) { val count = (editClaims[id] ?: 0) - 1; if (count <= 0) editClaims.remove(id) else editClaims[id] = count } }
     @Synchronized fun isEditing(id: TrackId?) = id != null && (editClaims[id] ?: 0) > 0
     private val choices = java.util.concurrent.ConcurrentHashMap<String, LyricsCandidate>()
-    suspend fun searchLyrics(query: String): List<LyricsChoice> = withContext(Dispatchers.IO) {
-        val results = lyricsSearch.search(query)
+    suspend fun searchLyrics(query:String,source:LyricsSource=LyricsSource.LRCLIB,artist:String="",title:String=""):List<LyricsChoice> = withContext(Dispatchers.IO) {
+        val results=runInterruptible{when(source){LyricsSource.LRCLIB->lyricsSearch.search(query);LyricsSource.OVH->lyricsOvh.search(artist,title)}}
         if (choices.size > 80) choices.clear()
         results.map { candidate -> val key = java.util.UUID.randomUUID().toString(); choices[key] = candidate; LyricsChoice(key, candidate) }
     }
@@ -66,18 +69,63 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
             try { output.write(untilMs.toString().toByteArray()); file.finishWrite(output) } catch (e: Exception) { file.failWrite(output); throw e }
         }
     }) }
+    private val lyricsOvh by lazy { LyricsOvhClient(object:LyricsCooldown{
+        private val file=android.util.AtomicFile(java.io.File(context.filesDir,"lyrics-ovh-cooldown"))
+        override fun read():Long=try{file.openRead().bufferedReader().use{it.readText().toLong()}}catch(_:java.io.FileNotFoundException){0}
+        override fun write(untilMs:Long){val output=file.startWrite();try{output.write(untilMs.toString().toByteArray());file.finishWrite(output)}catch(e:Exception){file.failWrite(output);throw e}}
+    }) }
     private val database = scope.async { openPlayerDatabase(context) }
     suspend fun repository() = PlayerRepository(database.await())
     private val mutable = MutableStateFlow(LibraryState())
     val state = mutable.asStateFlow()
-    private val saves = Channel<QueueSnapshot>(Channel.UNLIMITED)
+    private sealed interface SessionTask {
+        data class Save(val snapshot: QueueSnapshot): SessionTask
+        data class Barrier(val result: CompletableDeferred<Unit>): SessionTask
+    }
+    @Volatile var maintenance = false
+        private set
+    fun setMaintenance(value: Boolean) { maintenance = value }
+    private val saves = Channel<SessionTask>(Channel.UNLIMITED)
     val operationMutex = Mutex()
-    val preferences = context.musicPreferences.data.catch { emit(emptyPreferences()) }.map {
-        MusicPreferences(it[stringPreferencesKey("appearance")] ?: "System", it[booleanPreferencesKey("autoScan")] ?: false)
+    private fun readPreferences(values:Preferences):BackupPreferences {
+        val extended=values[stringPreferencesKey("listeningTools")]?.let(PreferenceCodec::decode)?:BackupPreferences()
+        return extended.copy(appearance=values[stringPreferencesKey("appearance")]?:extended.appearance,
+            autoScan=values[booleanPreferencesKey("autoScan")]?:extended.autoScan,homeGrid=values[booleanPreferencesKey("homeGrid")]?:extended.homeGrid)
+    }
+    val preferences = context.musicPreferences.data.catch { emit(emptyPreferences()) }.map { values ->
+        val p=readPreferences(values);MusicPreferences(p.appearance,p.autoScan,p.homeGrid,p.audio,p.widgets,p.artists)
     }.stateIn(scope, SharingStarted.Eagerly, MusicPreferences())
     suspend fun setPreferences(appearance: String, autoScan: Boolean) {
+        AppBackups(context,this).recoverPreferences()
         require(appearance in setOf("System", "Light", "Dark", "AMOLED"))
         context.musicPreferences.edit { it[stringPreferencesKey("appearance")] = appearance; it[booleanPreferencesKey("autoScan")] = autoScan }
+    }
+    suspend fun setHomeGrid(grid:Boolean){AppBackups(context,this).recoverPreferences();context.musicPreferences.edit{it[booleanPreferencesKey("homeGrid")]=grid}}
+    suspend fun backupPreferences(): BackupPreferences {
+        return readPreferences(context.musicPreferences.data.first())
+    }
+    private suspend fun updateTools(transform:(BackupPreferences)->BackupPreferences){
+        AppBackups(context,this).recoverPreferences()
+        context.musicPreferences.edit{values->
+        val encoded=PreferenceCodec.encode(transform(readPreferences(values)));PreferenceCodec.decode(encoded)
+        values[stringPreferencesKey("listeningTools")]=encoded
+    }}
+    suspend fun setAudio(value:AudioSettings)=updateTools{it.copy(audio=value)}
+    suspend fun setWidgets(value:WidgetSettings)=updateTools{it.copy(widgets=value)}
+    suspend fun setArtist(name:String,value:ArtistProfile?)=updateTools{old->
+        val key=ArtistProfile.key(name);require(key.isNotBlank()&&key.length<=300)
+        val profiles=if(value==null)old.artists-key else old.artists+(key to value)
+        require(profiles.size<=100){"Saved artist limit is 100. Remove a saved match before adding another."}
+        old.copy(artists=profiles)
+    }
+    suspend fun restorePreferences(value: BackupPreferences) {
+        require(value.appearance in setOf("System", "Light", "Dark", "AMOLED"))
+        context.musicPreferences.edit {
+            it[stringPreferencesKey("appearance")] = value.appearance
+            it[booleanPreferencesKey("autoScan")] = value.autoScan
+            it[booleanPreferencesKey("homeGrid")] = value.homeGrid
+            it[stringPreferencesKey("listeningTools")]=PreferenceCodec.encode(value)
+        }
     }
     init {
         val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
@@ -86,21 +134,33 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         context.contentResolver.registerContentObserver(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, observer)
         scope.launch { preferences.map { it.autoScan }.distinctUntilChanged().collect { enabled -> if (enabled) requestScan() } }
         scope.launch {
-            for (snapshot in saves) try {
+            var saveFailure: Exception? = null
+            for (task in saves) {
+                if (task is SessionTask.Barrier) {
+                    val failure = saveFailure
+                    if (failure == null) task.result.complete(Unit) else task.result.completeExceptionally(failure)
+                    continue
+                }
+                val snapshot = (task as SessionTask.Save).snapshot
+                try {
                 repository().saveSession(snapshot, System.currentTimeMillis())
+                saveFailure = null
                 val track = snapshot.history.getOrNull(snapshot.historyCursor)?.trackId
                 if (track != null) {
                     val position = repository().continuePosition(track)
                     mutable.update { it.copy(continues = it.continues - track + if (position == null) emptyMap() else mapOf(track to position)) }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error("Session could not be saved: ${e.message}") }
+            catch (e: Exception) { saveFailure = e; error("Session could not be saved: ${e.message}") }
+            }
         }
     }
-    fun persist(snapshot: QueueSnapshot) { saves.trySend(snapshot) }
+    fun persist(snapshot: QueueSnapshot) { if (!maintenance) saves.trySend(SessionTask.Save(snapshot)) }
+    suspend fun flushSessionSaves() { val done = CompletableDeferred<Unit>(); saves.send(SessionTask.Barrier(done)); done.await() }
     fun error(text: String) { mutable.update { it.copy(error = text) } }
     fun clearError() { mutable.update { it.copy(error = "") } }
     suspend fun initialize() {
+        AppBackups(context, this).recoverPreferences()
         FileEdits(context, this).inspectRecovery()
         refresh()
     }
@@ -131,6 +191,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         mutable.update { it.copy(playlists = playlists, revision = it.revision + 1) }
     }
     fun requestScan() {
+        if (maintenance) return
         mutable.update { it.copy(message = "Library scan queued.") }
         WorkManager.getInstance(context).enqueueUniqueWork("local-music-library", ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<LibraryScanWorker>().build())
     }

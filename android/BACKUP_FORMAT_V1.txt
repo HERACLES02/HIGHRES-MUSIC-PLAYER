@@ -1,0 +1,42 @@
+Local Music backup format v1 — implementation contract
+Historical v1 contract. Local Music 0.9+ reads v1/v2 and writes v2; see
+BACKUP_FORMAT_V2.txt for audio/preset/artist/widget fields and restore merging.
+
+Exported: stable track/source identities and metadata references, playlist names
+and ordered occurrence IDs, favorites, lyric versions/selections/adjustments,
+app-only tag edits, chosen app-only artwork, resume positions, paused queue and
+appearance/auto-scan/Home-view preferences. Folder references are metadata only.
+
+Regenerated: embedded/neighboring cover caches, scan results and source access.
+Excluded: music/audio files, edit originals/staged files/journals, signing keys,
+credentials, diagnostics and temporary online-search results. This archive is
+not a music backup or a backup of file-edit recovery originals.
+
+Archive: ZIP with manifest.json, data.json and optional art/<sha256>.img entries.
+Manifest version 1 declares each data/art entry length and SHA-256. Entry names
+are whitelisted, unique and flat apart from art/. Reject duplicate identities,
+foreign references, conflicting source ownership, unknown versions, unsupported
+URI schemes, malformed/truncated data and hash/length mismatches before import.
+Limits: 32 MiB total uncompressed payload, 8 MiB data.json, 2 MiB per artwork,
+2,002 entries. Never extract an untrusted entry name to the filesystem.
+
+Restore preview: counts and clear policy before explicit confirmation. Restore
+backed-up app data by UUID, preserving unrelated newer records. Same-ID playlists
+are replaced in the database transaction. Existing source metadata stays current;
+new tracks retain their backup IDs and need scanning/access checks. Never merge
+track UUIDs based on filename/title. Reject URI/lyric/occurrence identity conflicts.
+An archived session is restored paused; absent session leaves the current queue
+paused. Imported URI strings do not grant Android permissions. Folder access may
+need to be chosen again. No music-file write occurs.
+
+Application: stage verified artwork privately first. Pause playback and block new
+commands/session saves while restoring; serialize with scans/edits. Flush pending
+session saves. Apply database records and a restore receipt in one transaction.
+Use a durable pending-preferences record: on startup, the database receipt decides
+whether to complete imported preferences or restore the original preference values.
+Do not delete recovery journals or old artwork during restore. A database error
+rolls back its complete transaction; temporary unreferenced artwork is harmless.
+
+Export uses Android's save picker and is read back/validated before success.
+Cancel before restore confirmation leaves application data unchanged. No automatic
+file matching, online requests, uploads, permission grants or music copying.

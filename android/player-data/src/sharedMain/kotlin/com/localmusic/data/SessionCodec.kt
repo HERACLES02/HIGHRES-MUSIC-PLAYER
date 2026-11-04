@@ -35,6 +35,7 @@ object SessionCodec {
             put("heard", JsonArray(snapshot.heard.map { JsonPrimitive(it.value.toString()) }))
             put("shuffle", snapshot.shuffle); put("repeat", snapshot.repeat.name)
             put("positionMs", snapshot.positionMs); put("completed", snapshot.completed)
+            snapshot.origin?.let { put("origin", it) }
         }.toString().also { require(it.length <= MAX_CHARS) { "Snapshot too large" } }
     }
 
@@ -54,11 +55,12 @@ object SessionCodec {
         val heard = root.getValue("heard").jsonArray.also { require(it.size <= 100000) }
             .map { EntryId(id(it.jsonPrimitive.content)) }
         require(heard.toSet().size == heard.size)
+        val origin = root["origin"]?.takeUnless { it == JsonNull }?.jsonPrimitive?.also { require(it.isString) }?.content
         val result = QueueSnapshot(version, entries(root, "collection", 100000), entries(root, "order", 100000),
             root.number("cursor").int, entries(root, "history", 1000),
             root.number("historyCursor").int, entries(root, "manual", 10000), heard.toSet(),
             root.flag("shuffle"), RepeatMode.valueOf(root.getValue("repeat").jsonPrimitive.content),
-            root.number("positionMs").long, root.flag("completed"))
+            root.number("positionMs").long, root.flag("completed"), origin)
         require(ListeningQueue().restore(result)) { "Invalid queue snapshot" }
         return result
     }

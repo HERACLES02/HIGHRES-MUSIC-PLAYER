@@ -8,7 +8,8 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
     val artworkPath: String? = null, val artworkStamp: String? = null, val artworkOverride: String? = null,
     val tagsOverride: MusicTags? = null, val sidecarUri: String? = null,
     val sidecarVersion: String? = null, val embeddedVersion: String? = null, val tagFields: Map<String, String> = emptyMap(),
-    val overridesVersion: Long = 0, val lyricsAdjustmentMs: Long? = null) {
+    val overridesVersion:Long=0,val lyricsAdjustmentMs:Long?=null,val replayGainTags:Map<String,String> = emptyMap(),val replayGainScanned:Boolean=false,
+    val artworkCredit:String?=null,val artworkSourceUrl:String?=null) {
     init { require(lyricsAdjustmentMs == null || lyricsAdjustmentMs in -86_400_000L..86_400_000L) }
     fun encode(): String = buildJsonObject {
         put("version", 1)
@@ -21,6 +22,8 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
         put("tagFields", JsonObject(tagFields.mapValues { JsonPrimitive(it.value) }))
         put("overridesVersion", overridesVersion)
         put("lyricsAdjustmentMs", lyricsAdjustmentMs)
+        put("replayGainTags",JsonObject(replayGainTags.mapValues{JsonPrimitive(it.value)}));put("replayGainScanned",replayGainScanned)
+        put("artworkCredit",artworkCredit);put("artworkSourceUrl",artworkSourceUrl)
     }.toString()
     companion object {
         fun decode(text: String): LibraryExtras {
@@ -31,7 +34,8 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
             fun map(k: String) = o[k]?.jsonObject?.mapValues { it.value.jsonPrimitive.content }.orEmpty()
             return LibraryExtras(map("folders"), map("canonical"), optional("artworkPath"), optional("artworkStamp"), optional("artworkOverride"),
                 o["tagsOverride"]?.takeUnless { it is JsonNull }?.let { ModelCodec.tags(it.toString()) }, optional("sidecarUri"), optional("sidecarVersion"), optional("embeddedVersion"), map("tagFields"), o["overridesVersion"]?.jsonPrimitive?.long ?: 0,
-                o["lyricsAdjustmentMs"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.long)
+                o["lyricsAdjustmentMs"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.long,map("replayGainTags"),o["replayGainScanned"]?.jsonPrimitive?.boolean?:false,
+                optional("artworkCredit"),optional("artworkSourceUrl"))
         }
     }
 }

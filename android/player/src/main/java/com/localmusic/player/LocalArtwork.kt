@@ -11,17 +11,18 @@ import java.io.File
 import java.security.MessageDigest
 
 class LocalArtwork(private val context: Context) {
-    fun import(uri: Uri, crop: Boolean): String {
+    fun import(uri:Uri,crop:Boolean,durable:Boolean=true,preview:Boolean=false):String {
         val raw = File.createTempFile("art-", ".tmp", context.cacheDir)
         try {
             context.contentResolver.openInputStream(uri)?.use { input -> raw.outputStream().use { output ->
                 val buffer = ByteArray(32768); var total = 0
                 while (true) { val n = input.read(buffer); if (n < 0) break; total += n; require(total <= 16 * 1024 * 1024) { "Choose an image smaller than 16 MB." }; output.write(buffer, 0, n) }
             } } ?: error("Cannot read this image")
-            return resize(raw, true, crop)
+            return resize(raw,durable,crop,preview)
         } finally { raw.delete() }
     }
-    fun resize(raw: File, durable: Boolean, crop: Boolean = false): String {
+    fun resize(raw:File,durable:Boolean,crop:Boolean=false,preview:Boolean=false):String {
+        require(!preview||!durable)
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(raw.path, bounds)
         require(bounds.outWidth in 1..16384 && bounds.outHeight in 1..16384 && bounds.outWidth.toLong() * bounds.outHeight <= 64_000_000) { "Unsupported or excessively large image" }
@@ -44,7 +45,7 @@ class LocalArtwork(private val context: Context) {
         val scaled = Bitmap.createScaledBitmap(working, (working.width * ratio).toInt().coerceAtLeast(1), (working.height * ratio).toInt().coerceAtLeast(1), true)
         val opaque = Bitmap.createBitmap(scaled.width, scaled.height, Bitmap.Config.ARGB_8888)
         Canvas(opaque).apply { drawColor(Color.BLACK); drawBitmap(scaled, 0f, 0f, null) }
-        val directory = File(if (durable) context.filesDir else context.cacheDir, if (durable) "artwork-overrides" else "embedded-art").apply { mkdirs() }
+        val directory = File(if(durable)context.filesDir else context.cacheDir,if(preview)"artist-previews" else if(durable)"artwork-overrides" else "embedded-art").apply{mkdirs()}
         val temp = File.createTempFile("image-", ".tmp", directory)
         try {
             temp.outputStream().use { check(opaque.compress(Bitmap.CompressFormat.JPEG, 92, it)) }

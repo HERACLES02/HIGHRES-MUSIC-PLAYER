@@ -1,0 +1,196 @@
+package com.localmusic.player
+
+import android.os.Bundle
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.localmusic.core.*
+import kotlinx.coroutines.*
+
+@Composable
+fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit) {
+    var open by remember(track.id) { mutableStateOf(false) }
+    fun args() = Bundle().apply { putString("id", track.id.value.toString()) }
+    Box {
+        IconButton(onClick = { open = true }, enabled = ready) { Icon(PlayerGlyph.More, "Options for ${track.tags.title}") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text(if (track.favorite) "Remove favorite" else "Add favorite") }, onClick = { open = false; send(PlaybackService.FAVORITE, args()) })
+            DropdownMenuItem(text = { Text("Play Next") }, onClick = { open = false; send(PlaybackService.NEXT, args()) })
+            DropdownMenuItem(text = { Text("Add to Queue") }, onClick = { open = false; send(PlaybackService.ADD, args()) })
+            DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { open = false; addToPlaylist() })
+            DropdownMenuItem(text = { Text("Details") }, onClick = { open = false; details() })
+        }
+    }
+}
+
+@Composable
+fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
+    onSearch: (String) -> Unit, changeGrid: (Boolean) -> Unit, scan: () -> Unit,
+    play: (List<Track>, Int, Boolean, String) -> Unit, send: (String, Bundle) -> Unit,
+    addToPlaylist: (Track) -> Unit, details: (Track) -> Unit, openPlaylist: (Playlist) -> Unit, allPlaylists: () -> Unit, allSongs: () -> Unit) {
+    val tracks = remember(library.tracks, search) { library.tracks.filter {
+        (it.tags.title + " " + it.tags.artists.joinToString(" ") + " " + it.tags.album.orEmpty()).contains(search, true)
+    }.sortedByDescending { it.addedAtMs } }
+    val favorites = remember(tracks) { tracks.filter { it.favorite } }
+    val continues = remember(tracks, library.continues) { tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE } }
+    LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(136.dp) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
+            OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("Search your music") }, leadingIcon = { Icon(PlayerGlyph.Search, null) },
+                trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(PlayerGlyph.Close, "Clear search") } })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("${tracks.size} songs", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                IconToggleButton(checked = grid, onCheckedChange = { changeGrid(true) }, enabled = ready) { Icon(PlayerGlyph.Grid, "Grid view") }
+                IconToggleButton(checked = !grid, onCheckedChange = { changeGrid(false) }, enabled = ready) { Icon(PlayerGlyph.List, "List view") }
+            }
+            if (library.tracks.isEmpty()) {
+                Text("Scan music on your phone or choose a music folder in Settings.")
+                Button(onClick = scan, enabled = ready && !library.scanning) { Text("Find my music") }
+            } else if (tracks.isEmpty()) Text("No matching music. Try another search.")
+        } }
+        if (search.isBlank() && continues.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { Text("Continue listening", style = MaterialTheme.typography.titleLarge) }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(continues.take(12), key = { it.id.value.toString() }) { track ->
+                        ElevatedCard(onClick = { play(listOf(track), 0, true, "Continue listening") }, enabled = ready, modifier = Modifier.width(180.dp)) {
+                            CoverArt(store?.artwork(track.id), track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
+                            Column(Modifier.padding(12.dp)) {
+                                Text(track.tags.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                                val saved = library.continues[track.id] ?: 0
+                                Text("Continue at ${saved / 60000}:${"%02d".format(saved / 1000 % 60)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (search.isBlank()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Your playlists", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    TextButton(onClick = allPlaylists) { Text("View all") }
+                }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                if (library.playlists.isEmpty()) OutlinedCard(onClick = allPlaylists, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(PlayerGlyph.Playlists, null, Modifier.size(36.dp)); Spacer(Modifier.width(16.dp))
+                        Column { Text("Make a playlist", style = MaterialTheme.typography.titleMedium); Text("Collect favorites or import a playlist file.") }
+                    }
+                } else LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(library.playlists.take(12), key = { it.first.id.value.toString() }) { (playlist, count) ->
+                        Column(Modifier.width(160.dp).clickable { openPlaylist(playlist) }) {
+                            PlaylistCover(playlist, store, library.revision, Modifier.fillMaxWidth().aspectRatio(1f))
+                            Text(playlist.name, Modifier.padding(top = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                            Text("$count songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (search.isBlank()) "Recently added" else "Search results", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                if (search.isBlank()) TextButton(onClick = allSongs) { Text("View all") }
+            }
+        }
+        items(if (search.isBlank()) tracks.take(if (grid) 8 else 5) else tracks, key = { "recent-${it.id}" }) { track ->
+            HomeTrack(track, store?.artwork(track.id), grid, ready, { play(tracks, tracks.indexOf(track), false, "Home · Recently added") },
+                send, { addToPlaylist(track) }, { details(track) })
+        }
+        if (search.isBlank() && favorites.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { Text("Favorites", style = MaterialTheme.typography.titleLarge) }
+            items(favorites.take(10), key = { "favorite-${it.id}" }) { track ->
+                HomeTrack(track, store?.artwork(track.id), grid, ready, { play(favorites, favorites.indexOf(track), false, "Favorites") },
+                    send, { addToPlaylist(track) }, { details(track) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean, play: () -> Unit,
+    send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit) {
+    val enabled = ready && track.availability == Availability.AVAILABLE
+    if (grid) Column(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = play)) {
+        CoverArt(art, track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(top = 8.dp)) {
+                Text(track.tags.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                Text(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (track.availability != Availability.AVAILABLE) Text("Unavailable", style = MaterialTheme.typography.labelSmall)
+            }
+            TrackMenu(track, ready, send, addToPlaylist, details)
+        }
+    } else ListItem(modifier = Modifier.clickable(enabled = enabled, onClick = play),
+        leadingContent = { CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
+        headlineContent = { Text(track.tags.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        supportingContent = { Text(track.tags.artists.joinToString(", ") + if (enabled) "" else " · Unavailable", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details) })
+}
+
+@Composable
+fun PlaylistCard(playlist: Playlist, count: Int, store: MusicStore?, revision: Long, open: () -> Unit,
+    play: () -> Unit, shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit) {
+    var menu by remember(playlist.id) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().clickable(onClick = open)) {
+        PlaylistCover(playlist, store, revision, Modifier.fillMaxWidth().aspectRatio(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(top = 8.dp)) {
+                Text(playlist.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                Text("$count songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for ${playlist.name}") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Play") }, enabled = count > 0, onClick = { menu = false; play() })
+                    DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; rename() })
+                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifier: Modifier = Modifier) {
+    var covers by remember(playlist.id) { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(playlist.id, revision, store) {
+        try {
+            val currentStore = store ?: return@LaunchedEffect
+            covers = withContext(Dispatchers.IO) { currentStore.repository().playlist(playlist.id)?.second.orEmpty().take(128).mapNotNull { currentStore.artwork(it.trackId) }.distinct().take(4) }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { covers = emptyList() } // Artwork is optional; the saved playlist remains available.
+    }
+        Surface(modifier, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+            if (covers.isEmpty()) Box(Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer))), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(PlayerGlyph.Playlists, null, Modifier.size(52.dp))
+                    Text(playlist.name.take(1).uppercase(), style = MaterialTheme.typography.headlineMedium)
+                }
+            }
+            else if (covers.size == 1) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize())
+            else Column {
+                repeat(2) { row -> Row(Modifier.weight(1f)) { repeat(2) { column ->
+                    CoverArt(covers.getOrNull((row * 2 + column) % covers.size), playlist.name, Modifier.weight(1f).fillMaxHeight())
+                } } }
+            }
+        }
+}

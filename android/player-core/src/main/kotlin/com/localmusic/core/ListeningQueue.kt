@@ -8,7 +8,7 @@ data class Selection(val entry: QueueEntry, val positionMs: Long)
 data class QueueSnapshot(val version: Int = 1, val collection: List<QueueEntry>, val order: List<QueueEntry>,
     val cursor: Int, val history: List<QueueEntry>, val historyCursor: Int, val manual: List<QueueEntry>,
     val heard: Set<EntryId>, val shuffle: Boolean, val repeat: RepeatMode, val positionMs: Long,
-    val completed: Boolean)
+    val completed: Boolean, val origin: String? = null)
 
 object ResumeRules {
     fun position(savedMs: Long, durationMs: Long?, completed: Boolean = false): Long = when {
@@ -29,6 +29,7 @@ class ListeningQueue(private val random: Random = Random.Default) {
     private var historyCursor = -1
     private var manual = emptyList<QueueEntry>()
     private var heard = emptySet<EntryId>()
+    private var origin: String? = null
     var shuffle = false; private set
     var repeat = RepeatMode.OFF
     var positionMs = 0L; private set
@@ -40,8 +41,10 @@ class ListeningQueue(private val random: Random = Random.Default) {
     val listeningCollection: List<QueueEntry> get() = collection.toList()
 
     fun start(tracks: List<TrackId>, selectedIndex: Int, shuffled: Boolean = false,
-              resumeMs: Long = 0, durationMs: Long? = null): Selection {
+              resumeMs: Long = 0, durationMs: Long? = null, origin: String? = null): Selection {
         require(selectedIndex in tracks.indices)
+        require(origin == null || origin.length <= 200) { "Listening origin is too long." }
+        this.origin = origin
         collection = tracks.map { QueueEntry(EntryId.new(), it) }
         val selected = collection[selectedIndex]
         shuffle = shuffled
@@ -144,11 +147,11 @@ class ListeningQueue(private val random: Random = Random.Default) {
 
     fun snapshot() = QueueSnapshot(collection = collection.toList(), order = order.toList(), cursor = cursor,
         history = history.toList(), historyCursor = historyCursor, manual = manual.toList(), heard = heard.toSet(),
-        shuffle = shuffle, repeat = repeat, positionMs = positionMs, completed = completed)
+        shuffle = shuffle, repeat = repeat, positionMs = positionMs, completed = completed, origin = origin)
 
     /** Reject malformed/unknown versions without partially changing the live state. Missing tracks remain referenced. */
     fun restore(saved: QueueSnapshot, currentDurationMs: Long? = null): Boolean {
-        if (saved.version != 1 || saved.collection.size > 100000 || saved.order.size > 100000 ||
+        if (saved.version != 1 || (saved.origin?.length ?: 0) > 200 || saved.collection.size > 100000 || saved.order.size > 100000 ||
             saved.history.size > 1000 || saved.manual.size > 10000) return false
         val ids = saved.collection.map { it.id }
         val idSet = ids.toSet()
@@ -172,6 +175,7 @@ class ListeningQueue(private val random: Random = Random.Default) {
         collection = saved.collection.toList(); order = saved.order.toList(); cursor = saved.cursor
         history = saved.history.toList(); historyCursor = saved.historyCursor; manual = saved.manual.toList()
         heard = saved.heard.toSet(); shuffle = saved.shuffle; repeat = saved.repeat
+        origin = saved.origin
         positionMs = ResumeRules.position(saved.positionMs, currentDurationMs, saved.completed)
         completed = false; isPlaying = false
         return true

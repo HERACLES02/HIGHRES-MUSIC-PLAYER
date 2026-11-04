@@ -19,12 +19,18 @@
 #include <stdexcept>
 #include <set>
 #include <map>
+#ifdef __ANDROID__
+#include <unistd.h>
+#endif
 
 namespace localtags {
 class BoundedReadStream : public TagLib::FileStream {
   size_t consumed=0, calls=0;
 public:
   explicit BoundedReadStream(const char* path):TagLib::FileStream(path,true) {}
+#ifdef __ANDROID__
+  explicit BoundedReadStream(int descriptor):TagLib::FileStream(descriptor,true) {}
+#endif
   TagLib::ByteVector readBlock(size_t length) override {
     constexpr size_t limit=32*1024*1024;
     if(++calls>250000||length>limit-consumed)throw std::runtime_error("Metadata read exceeds safe limits");
@@ -44,8 +50,8 @@ static std::string quote(const std::string& s) {
 static void valid(TagLib::FileRef& file) {
   if(file.isNull()||!file.file()||!file.file()->isValid()||!file.audioProperties()) throw std::runtime_error("Unsupported or invalid metadata container");
 }
-std::string read(const std::string& path,const std::string& artworkPath) {
-  BoundedReadStream stream(path.c_str()); TagLib::FileRef f(&stream); valid(f);
+static std::string readMetadata(TagLib::IOStream& stream,const std::string& artworkPath) {
+  TagLib::FileRef f(&stream); valid(f);
   auto p=f.properties(); auto a=f.audioProperties();
   std::ostringstream out; out<<"{\"properties\":{"; bool first=true;
   for(auto it=p.begin();it!=p.end();++it) {
@@ -81,6 +87,23 @@ std::string read(const std::string& path,const std::string& artworkPath) {
   }
   out<<'}'; auto result=out.str();if(result.size()>2*1024*1024)throw std::runtime_error("Metadata response exceeds safe limits");return result;
 }
+std::string read(const std::string& path,const std::string& artworkPath) {
+  BoundedReadStream stream(path.c_str()); return readMetadata(stream,artworkPath);
+}
+#ifdef __ANDROID__
+std::string readDescriptor(int descriptor,const std::string& artworkPath) {
+  // Own only a duplicate; ParcelFileDescriptor remains responsible for its handle.
+  struct Descriptor {
+    int value;
+    ~Descriptor() { if(value>=0)close(value); }
+  } duplicate{dup(descriptor)};
+  if(duplicate.value<0)throw std::runtime_error("Cannot duplicate metadata descriptor");
+  BoundedReadStream stream(duplicate.value);
+  if(!stream.isOpen())throw std::runtime_error("Cannot open metadata descriptor");
+  duplicate.value=-1; // FileStream now owns and closes the duplicate, including on errors.
+  return readMetadata(stream,artworkPath);
+}
+#endif
 void edit(const std::string& path,const std::vector<std::pair<std::string,std::string>>& fields,int coverMode,const std::string& coverPath,const std::string& mime) {
   const std::set<std::string> allowed={"TITLE","ARTIST","ALBUMARTIST","ALBUM","TRACKNUMBER","DISCNUMBER","DATE","GENRE","COMMENT"};
   TagLib::FileRef f(path.c_str()); valid(f);

@@ -1,6 +1,7 @@
 package com.localmusic.data
 
 import kotlinx.serialization.json.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 fun providerChecks() {
     var checks = 0
@@ -38,4 +39,33 @@ fun providerChecks() {
     time += 1000; response = LyricsHttpResponse(503, "text/plain", "Busy", "2")
     expect(runCatching { restarted.search("A&B") }.isFailure && until >= time + 2000)
     println("LRCLIB fixture-transport checks passed: $checks assertions (no live provider calls).")
+    checks=0;until=0;time=10000;calls=0
+    response=LyricsHttpResponse(200,"application/json","""{"lyrics":"An original fixture line\nAnother line"}""")
+    val ovh=LyricsOvhClient(cooldown,LyricsTransport{url,headers->
+        val parsed=url.toHttpUrl()
+        calls++;expect(parsed.scheme=="https"&&parsed.host=="api.lyrics.ovh"&&parsed.pathSegments==listOf("v1","A/B","Title & guest")&&parsed.query==null)
+        expect(headers.getValue("User-Agent").startsWith("LocalMusic/"));response
+    }){time}
+    expect(calls==0)
+    val extra=ovh.search("A/B","Title & guest").single()
+    expect(extra.plain=="An original fixture line\nAnother line"&&extra.synchronized==null)
+    expect(extra.sourceUrl.startsWith("https://api.lyrics.ovh/")&&extra.providerId.startsWith("lyrics.ovh:"))
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure&&calls==1)
+    time+=1000;response=LyricsHttpResponse(404,"application/json","{}")
+    expect(ovh.search("A/B","Title & guest").isEmpty())
+    time+=1000;response=LyricsHttpResponse(429,"application/json","{}","20")
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure&&until>=time+20000)
+    val countBefore=calls;expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure&&calls==countBefore)
+    time=until+1;response=LyricsHttpResponse(200,"text/html","not lyrics")
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure)
+    time+=1000;response=LyricsHttpResponse(200,"application/json","""{"lyrics":"   "}""")
+    expect(ovh.search("A/B","Title & guest").isEmpty())
+    expect(runCatching{ovh.search(" ","Title")}.isFailure)
+    time+=1000;response=LyricsHttpResponse(200,"application/json","""{"lyrics":123}""")
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure)
+    time+=1000;response=LyricsHttpResponse(200,"application/json","{")
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure)
+    time+=1000;response=LyricsHttpResponse(503,"text/plain","Busy","2")
+    expect(runCatching{ovh.search("A/B","Title & guest")}.isFailure&&until>=time+2000)
+    println("Lyrics.ovh fixture-transport checks passed: $checks assertions (no live provider calls).")
 }

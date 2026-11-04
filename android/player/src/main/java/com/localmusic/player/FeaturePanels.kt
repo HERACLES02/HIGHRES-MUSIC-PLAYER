@@ -17,6 +17,7 @@ import androidx.media3.session.MediaController
 import coil3.compose.AsyncImage
 import com.localmusic.core.*
 import com.localmusic.data.FileEditRow
+import com.localmusic.data.LyricsSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalUriHandler
@@ -26,22 +27,24 @@ import java.util.UUID
 
 data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track>) -> Unit,
     val importLyrics: (Track) -> Unit, val exportLyrics: (Track, String) -> Unit,
-    val commit: (List<FileEditRow>) -> Unit, val undo: (FileEditRow) -> Unit, val recovery: (FileEditRow) -> Unit)
+    val commit: (List<FileEditRow>) -> Unit, val undo: (FileEditRow) -> Unit, val recovery: (FileEditRow) -> Unit,
+    val createBackup: () -> Unit, val restoreBackup: () -> Unit, val backupBusy: Boolean)
 
 @Composable fun CoverArt(path: String?, title: String, modifier: Modifier = Modifier) {
     Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
         if (path != null) AsyncImage(model = File(path), contentDescription = "Cover for $title", contentScale = ContentScale.Fit)
-        else Box(Modifier.padding(10.dp)) { Text("♫", style = MaterialTheme.typography.headlineMedium) }
+        else Box(Modifier.padding(10.dp), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(PlayerGlyph.Music, "No cover artwork", Modifier.size(32.dp)) }
     }
 }
 
 @Composable fun LyricsPanel(track: Track, store: MusicStore?, revision: Long, positionMs: Long, controller: MediaController?,
-    send: (String, Bundle) -> Unit, actions: FeatureActions) {
+    send: (String, Bundle) -> Unit, actions: FeatureActions, expanded: Boolean = false) {
     var versions by remember(track.id) { mutableStateOf(emptyList<SavedLyrics>()) }
     var selected by remember(track.id) { mutableStateOf<SavedLyrics?>(null) }
     var loadError by remember(track.id) { mutableStateOf("") }
     var edit by remember(track.id) { mutableStateOf(false) }
     var showVersions by remember(track.id) { mutableStateOf(false) }
+    var showTools by remember(track.id) { mutableStateOf(!expanded) }
     var search by remember(track.id) { mutableStateOf(false) }
     LaunchedEffect(track.id, revision) {
         try {
@@ -54,12 +57,15 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     val adjustment = store?.state?.value?.details?.get(track.id)?.lyricsAdjustmentMs ?: selected?.timingAdjustmentMs ?: 0
     val timeline = remember(lyrics, adjustment) { lyrics?.let { LyricsTimeline(it, adjustment) } }
     val active = timeline?.activeIndices(positionMs).orEmpty()
-    Text("Lyrics", style = MaterialTheme.typography.titleLarge)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text("Lyrics", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        if (expanded) IconButton(onClick = { showTools = !showTools }) { Icon(PlayerGlyph.More, "Lyrics actions and timing") }
+    }
     if (loadError.isNotBlank()) Text(loadError, color = MaterialTheme.colorScheme.error)
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (showTools) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TextButton(onClick = { edit = true }) { Text("Paste / edit") }
         TextButton(onClick = { actions.importLyrics(track) }) { Text("Import LRC") }
-        TextButton(onClick = { search = true }) { Text("Search LRCLIB…") }
+        TextButton(onClick = { search = true }) { Text("Find lyrics…") }
         if (versions.isNotEmpty()) TextButton(onClick = { showVersions = !showVersions }) { Text("Versions (${versions.size})") }
         selected?.let { value -> TextButton(onClick = { actions.exportLyrics(track, value.originalText) }) { Text("Export") } }
     }
@@ -73,19 +79,20 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     }
     when (lyrics?.kind) {
         LyricsKind.INSTRUMENTAL -> Text("Instrumental")
-        LyricsKind.PLAIN -> Text(lyrics.plainLines.joinToString("\n"))
+        LyricsKind.PLAIN -> Text(lyrics.plainLines.joinToString("\n"), style = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
         LyricsKind.SYNCHRONIZED -> {
             val list = rememberLazyListState()
             LaunchedEffect(active.firstOrNull()) { active.firstOrNull()?.let { list.animateScrollToItem((it - 2).coerceAtLeast(0)) } }
-            LazyColumn(Modifier.fillMaxWidth().height(300.dp), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().height(if (expanded) 400.dp else 300.dp), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(lyrics.lines) { index, line ->
                     Text(line.text.ifBlank { "…" }, modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(timeline!!.seekPosition(index)) }.padding(vertical = 8.dp),
                         color = if (index in active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (index in active) FontWeight.Bold else FontWeight.Normal)
+                        fontWeight = if (index in active) FontWeight.Bold else FontWeight.Normal,
+                        style = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
                 }
             }
             val offset = adjustment
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showTools) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { send(PlaybackService.LYRICS_OFFSET, Bundle().apply { putString("id", track.id.value.toString()); putLong("offset", (offset - 250).coerceAtLeast(-LrcParser.MAX_ADJUSTMENT_MS)) }) }) { Text("Earlier 0.25s") }
                 TextButton(onClick = { send(PlaybackService.LYRICS_OFFSET, Bundle().apply { putString("id", track.id.value.toString()); putLong("offset", (offset + 250).coerceAtMost(LrcParser.MAX_ADJUSTMENT_MS)) }) }) { Text("Later 0.25s") }
             }
@@ -97,26 +104,37 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     if (edit) LyricsEditorDialog(track, selected?.originalText.orEmpty(), positionMs, send, selected?.instrumental == true) { edit = false }
     if (search && store != null) LyricsSearchDialog(track, store, send) { search = false }
     val opener = LocalUriHandler.current
-    selected?.takeIf { it.providerId?.startsWith("lrclib:") == true }?.sourceUrl?.let { url ->
-        TextButton(onClick = { opener.openUri(url) }) { Text("Source: LRCLIB") }
+    selected?.takeIf { it.providerId?.let{p->p.startsWith("lrclib:")||p.startsWith("lyrics.ovh:")} == true }?.let { saved ->
+        saved.sourceUrl?.let{url->TextButton(onClick={runCatching{opener.openUri(url)}}){Text("Source: "+if(saved.providerId?.startsWith("lrclib:")==true)"LRCLIB" else "Lyrics.ovh")}}
     }
 }
 
 @Composable private fun LyricsSearchDialog(track: Track, store: MusicStore, send: (String, Bundle) -> Unit, dismiss: () -> Unit) {
     var query by remember { mutableStateOf("${track.tags.title} ${track.tags.artists.joinToString(" ")}") }
+    var source by remember { mutableStateOf(LyricsSource.LRCLIB) }
+    var artist by remember { mutableStateOf(track.tags.artists.joinToString(", ")) }
+    var title by remember { mutableStateOf(track.tags.title) }
     var results by remember { mutableStateOf(emptyList<LyricsChoice>()) }
     var selected by remember { mutableStateOf<LyricsChoice?>(null) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Find lyrics on LRCLIB") }, text = {
+    val opener=LocalUriHandler.current
+    AlertDialog(onDismissRequest = dismiss, title = { Text("Find lyrics") }, text = {
         Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Search sends this query to LRCLIB. Only the version you choose is saved for offline use; your music tags stay unchanged.")
-            OutlinedTextField(query, { if (it.length <= 300) query = it }, label = { Text("Title, artist, album or manual query") })
-            Button(enabled = !busy && query.isNotBlank(), onClick = {
-                busy = true; message = ""; selected = null
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){LyricsSource.entries.forEach{item->
+                FilterChip(source==item,{source=item;results=emptyList();selected=null;message=""},enabled=!busy,label={Text(item.label)})}}
+            Text("Search sends these details to ${source.label}. Review before saving for offline use. Your music tags stay unchanged.")
+            if(source==LyricsSource.LRCLIB)OutlinedTextField(query, { if (it.length <= 300) query = it },enabled=!busy,label = { Text("Title, artist, album or manual query") })
+            else {
+                Text("Lyrics.ovh finds plain lyrics by artist and title. Timing is not supplied.",style=MaterialTheme.typography.bodySmall)
+                OutlinedTextField(artist,{artist=it.take(300)},enabled=!busy,label={Text("Artist")})
+                OutlinedTextField(title,{title=it.take(300)},enabled=!busy,label={Text("Song title")})
+            }
+            Button(enabled = !busy && (if(source==LyricsSource.LRCLIB)query.isNotBlank() else artist.isNotBlank()&&title.isNotBlank()), onClick = {
+                busy = true; message = ""; selected = null;results=emptyList()
                 scope.launch {
-                    try { results = store.searchLyrics(query); if (results.isEmpty()) message = "No matching versions. Try another query." }
+                    try { results = store.searchLyrics(query,source,artist,title); if (results.isEmpty()) message = "No matching versions. Try another source or spelling." }
                     catch (e: CancellationException) { throw e }
                     catch (e: Exception) { message = e.message ?: "Search failed; saved lyrics are unchanged." }
                     finally { busy = false }
@@ -125,13 +143,20 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
             if (message.isNotBlank()) Text(message)
             results.forEach { choice ->
                 val value = choice.candidate
-                TextButton(onClick = { selected = choice }) { Text("${value.title} — ${value.artist}\n${value.album} · ${value.durationSeconds.toInt()}s · ${if (value.instrumental) "instrumental" else if (!value.synchronized.isNullOrBlank()) "synchronized" else "plain text"}") }
+                TextButton(onClick = { selected = choice }) { Text("${value.title} — ${value.artist}\n${value.source.label} · ${if(value.source==LyricsSource.LRCLIB)"${value.album} · ${value.durationSeconds.toInt()}s · " else ""}${if (value.instrumental) "instrumental" else if (!value.synchronized.isNullOrBlank()) "synchronized" else "plain text"}") }
             }
             selected?.candidate?.let { value ->
                 Text("Preview: ${value.title}", fontWeight = FontWeight.Bold)
-                Text("Duration difference: ${kotlin.math.abs(value.durationSeconds - track.audio.durationMs / 1000.0).toInt()}s. Confirm the right recording/version.")
+                Text(if(value.source==LyricsSource.LRCLIB)"Duration difference: ${kotlin.math.abs(value.durationSeconds - track.audio.durationMs / 1000.0).toInt()}s. Confirm the right recording/version." else "Duration is unavailable. Confirm these lyrics match your recording.")
                 Text(if (value.instrumental) "Instrumental" else value.text.take(12000))
                 if (value.text.length > 12000) Text("Preview shortened; the complete chosen text will be cached.")
+            }
+            HorizontalDivider();Text("Open elsewhere",style=MaterialTheme.typography.titleSmall)
+            Text("Spotify and Genius open externally. Their lyrics are not imported here.",style=MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                val externalQuery=java.net.URLEncoder.encode(if(source==LyricsSource.LRCLIB)query else "$title $artist","UTF-8").replace("+","%20")
+                TextButton(onClick={runCatching{opener.openUri("https://open.spotify.com/search/$externalQuery")}.onFailure{message="Could not open Spotify."}}){Text("Spotify")}
+                TextButton(onClick={runCatching{opener.openUri("https://genius.com/search?q=$externalQuery")}.onFailure{message="Could not open Genius."}}){Text("Genius")}
             }
         }
     }, confirmButton = { TextButton(enabled = selected?.candidate?.let { it.instrumental || it.text.isNotBlank() } == true, onClick = {

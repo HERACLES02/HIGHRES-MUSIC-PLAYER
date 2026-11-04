@@ -7,18 +7,22 @@ import okhttp3.Request
 import java.io.ByteArrayOutputStream
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
+enum class LyricsSource(val label:String) { LRCLIB("LRCLIB"), OVH("Lyrics.ovh") }
 data class LyricsCandidate(val id: Long, val title: String, val artist: String, val album: String,
-    val durationSeconds: Double, val instrumental: Boolean, val plain: String?, val synchronized: String?) {
+    val durationSeconds: Double, val instrumental: Boolean, val plain: String?, val synchronized: String?,val source:LyricsSource=LyricsSource.LRCLIB) {
     val text: String get() = synchronized?.takeIf { it.isNotBlank() } ?: plain.orEmpty()
-    val sourceUrl: String get() = "https://lrclib.net/api/get/$id"
+    val sourceUrl: String get() = if(source==LyricsSource.LRCLIB)"https://lrclib.net/api/get/$id" else lyricsOvhUrl(artist,title)
+    val providerId:String get()=if(source==LyricsSource.LRCLIB)"lrclib:$id" else "lyrics.ovh:"+java.util.UUID.nameUUIDFromBytes((artist+"\u0000"+title).toByteArray(Charsets.UTF_8))
 }
+internal fun lyricsOvhUrl(artist:String,title:String)="https://api.lyrics.ovh/v1/".toHttpUrl().newBuilder().addPathSegment(artist).addPathSegment(title).build().toString()
 interface LyricsCooldown { fun read(): Long; fun write(untilMs: Long) }
 data class LyricsHttpResponse(val status: Int, val contentType: String, val body: String, val retryAfter: String? = null)
 fun interface LyricsTransport { fun request(url: String, headers: Map<String, String>): LyricsHttpResponse }
-private class OkHttpLyricsTransport : LyricsTransport {
+internal class OkHttpLyricsTransport : LyricsTransport {
     private val client = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS)
-        .callTimeout(15, TimeUnit.SECONDS).retryOnConnectionFailure(false).build()
+        .callTimeout(15, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
     override fun request(url: String, headers: Map<String, String>): LyricsHttpResponse {
         val builder = Request.Builder().url(url)
         headers.forEach { (key, value) -> builder.header(key, value) }
@@ -45,7 +49,7 @@ class LrclibClient(private val cooldown: LyricsCooldown, private val transport: 
         val url = "https://lrclib.net/api/search?q=" + URLEncoder.encode(query.trim(), "UTF-8")
         nextRequestAt = time + 350
         val response = transport.request(url, mapOf("Accept" to "application/json",
-            "User-Agent" to "LocalMusic/0.2.0 (+https://github.com/HERACLES02/HIGHRES-MUSIC-PLAYER)"))
+            "User-Agent" to "LocalMusic/0.9.1 (+https://github.com/HERACLES02/HIGHRES-MUSIC-PLAYER)"))
         if (response.status == 429 || response.status == 503) {
             val seconds = response.retryAfter?.toLongOrNull()?.coerceAtLeast(1) ?: 30L
             val current = now()

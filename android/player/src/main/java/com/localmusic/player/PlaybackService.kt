@@ -17,6 +17,9 @@ import java.util.UUID
 import org.json.JSONObject
 import android.net.Uri
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Mutex
+import com.localmusic.data.BackupBundle
+import com.localmusic.data.AudioCodec
 
 class PlaybackService : MediaLibraryService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -24,9 +27,18 @@ class PlaybackService : MediaLibraryService() {
     private var session: MediaLibrarySession? = null
     private var storage: MusicStore? = null
     private var scan: Job? = null
-    private fun publish() { session?.setSessionExtras(authority.extras()) }
+    private val commands = Mutex()
+    private var backupPreview: Pair<String, BackupBundle>? = null
+    private lateinit var widgets:WidgetUpdates
+    private fun publish() {
+        session?.setSessionExtras(authority.extras())
+        if(::widgets.isInitialized){val track=authority.current
+            widgets.publish(if(track==null)WidgetSnapshot()else WidgetSnapshot(track.id.value.toString(),track.tags.title.take(300),if(track.availability==Availability.AVAILABLE)track.tags.artists.joinToString(", ").take(300)else "Unavailable · open app",storage?.artwork(track.id),authority.engine.playWhenReady))
+        }
+    }
     override fun onCreate() {
         super.onCreate()
+        widgets=WidgetUpdates(this,scope)
         authority = PlaybackAuthority(this, ::publish)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         session = MediaLibrarySession.Builder(this, authority.player, callbacks).setId("local-music")
@@ -36,6 +48,8 @@ class PlaybackService : MediaLibraryService() {
             try {
                 storage = (application as MusicApplication).storage.await()
                 authority.initialize(storage!!)
+                scope.launch{storage!!.preferences.collect{prefs->authority.audioSettingsChanged(prefs.audio);widgets.invalidate();publish()}}
+                storage!!.state.collect { authority.libraryChanged() }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { storage?.error("Could not open the library: ${e.message}") }
         }
@@ -55,16 +69,50 @@ class PlaybackService : MediaLibraryService() {
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             val future = SettableFuture.create<SessionResult>()
             scope.launch {
+                commands.withLock {
                 try {
                     val store = storage ?: error("Library is still opening. Try again shortly.")
                     check(authority.ready) { "Library is still opening." }
                     val result = Bundle()
                     when (command.customAction) {
+                        AUDIO_SETTINGS -> {val value=AudioCodec.settings(requireNotNull(args.getString("settings")));store.setAudio(value);authority.audioSettingsChanged(value)}
+                        WIDGET_SETTINGS -> {store.setWidgets(WidgetSettings(args.getString("theme")?:"Match app",args.getBoolean("artwork",true)));widgets.invalidate();publish()}
+                        WIDGET_CONTROL -> when(args.getString("control")){
+                            "toggle"->if(authority.engine.playWhenReady)authority.pause()else{
+                                // A user widget click may resume a background/cold service. Establish
+                                // its media foreground notification before Android 15 audio focus.
+                                if(authority.current?.availability==Availability.AVAILABLE)onUpdateNotification(session,true)
+                                try{authority.play()}finally{onUpdateNotification(session,authority.engine.playWhenReady)}
+                            }
+                            "next"->authority.advance();"previous"->authority.previous();else->error("Unknown widget control.")
+                        }
+                        ARTIST_SAVE -> store.artistLookup.saveArtist(requireNotNull(args.getString("name")),requireNotNull(args.getString("receipt")))
+                        ARTIST_CLEAR -> store.artistLookup.removeArtist(requireNotNull(args.getString("name")))
+                        ARTIST_NOTE -> store.artistLookup.saveNote(requireNotNull(args.getString("name")),args.getString("text").orEmpty())
+                        ARTIST_PHOTO -> store.artistLookup.savePhoto(requireNotNull(args.getString("name")),Uri.parse(requireNotNull(args.getString("uri"))))
+                        COVER_SAVE -> store.operationMutex.withLock{store.artistLookup.saveCover(requireNotNull(args.getStringArrayList("ids")).map(PlaybackAuthority::id),requireNotNull(args.getString("receipt")))}
+                        BACKUP_EXPORT -> backupOperation(store) {
+                            AppBackups(this@PlaybackService, store).export(Uri.parse(requireNotNull(args.getString("uri"))))
+                        }
+                        BACKUP_PREVIEW -> {
+                            backupPreview = null
+                            val bundle = AppBackups(this@PlaybackService, store).preview(Uri.parse(requireNotNull(args.getString("uri"))))
+                            val token = UUID.randomUUID().toString()
+                            backupPreview = token to bundle
+                            result.putString("token", token)
+                            result.putString("summary", "${bundle.state.tracks.size} song references\n${bundle.state.playlists.size} playlists\n${bundle.state.tracks.count { it.favorite }} favorites\n${bundle.state.lyrics.size} lyric versions\n${bundle.assets.size} chosen images\n${bundle.state.preferences.artists.size} saved artists\n${bundle.state.preferences.audio.presets.size} saved EQ presets")
+                        }
+                        BACKUP_RESTORE -> {
+                            val prepared = requireNotNull(backupPreview?.takeIf { it.first == args.getString("token") }) { "Backup preview expired. Choose the file again." }
+                            backupOperation(store) { AppBackups(this@PlaybackService, store).restore(prepared.second) }
+                            backupPreview = null
+                        }
+                        BACKUP_CANCEL -> backupPreview = null
                         START -> {
                             val ids = requireNotNull(args.getStringArrayList("ids")).map(PlaybackAuthority::id)
                             val index = args.getInt("index", 0)
                             val resume = if (args.getBoolean("continue")) store.repository().continuePosition(ids[index]) ?: 0 else 0
-                            authority.start(ids, index, resume)
+                            authority.start(ids,index,resume,shuffled=if(args.containsKey("shuffle"))args.getBoolean("shuffle")else null,origin=args.getString("origin"))
                         }
                         NEXT -> authority.enqueue(PlaybackAuthority.id(requireNotNull(args.getString("id"))), true)
                         ADD -> authority.enqueue(PlaybackAuthority.id(requireNotNull(args.getString("id"))), false)
@@ -73,6 +121,7 @@ class PlaybackService : MediaLibraryService() {
                         CANCEL_SCAN -> store.cancelScan()
                         ADD_FOLDER -> store.addFolder(Uri.parse(requireNotNull(args.getString("uri"))), args.getInt("flags"))
                         PREFERENCES -> store.setPreferences(args.getString("appearance") ?: "System", args.getBoolean("autoScan"))
+                        HOME_VIEW -> store.setHomeGrid(args.getBoolean("grid", true))
                         LYRICS_SAVE -> {
                             val id = PlaybackAuthority.id(requireNotNull(args.getString("id")))
                             var text = args.getString("text").orEmpty()
@@ -107,7 +156,7 @@ class PlaybackService : MediaLibraryService() {
                             val choice = store.chosenLyrics(requireNotNull(args.getString("receipt")))
                             LrcParser.parse(choice.text, choice.instrumental)
                             store.repository().saveLyrics(SavedLyrics(UUID.randomUUID(), id, choice.text, LyricsOrigin.USER_SELECTED,
-                                providerId = "lrclib:${choice.id}", sourceUrl = choice.sourceUrl, instrumental = choice.instrumental), select = true)
+                                providerId = choice.providerId, sourceUrl = choice.sourceUrl, instrumental = choice.instrumental), select = true)
                             store.refresh()
                         }
                         APP_TAGS -> {
@@ -125,7 +174,7 @@ class PlaybackService : MediaLibraryService() {
                             val path = if (args.getBoolean("remove")) "" else withContext(Dispatchers.IO) {
                                 LocalArtwork(this@PlaybackService).import(Uri.parse(requireNotNull(args.getString("uri"))), args.getBoolean("crop", true))
                             }
-                            store.operationMutex.withLock { for (id in ids) store.repository().updateExtra(id) { it.copy(artworkOverride = path, overridesVersion = it.overridesVersion + 1) } }; store.refresh()
+                            store.operationMutex.withLock { for (id in ids) store.repository().updateExtra(id) { it.copy(artworkOverride=path,artworkCredit=null,artworkSourceUrl=null,overridesVersion=it.overridesVersion+1) } };store.refresh()
                         }
                         EDIT_PREPARE -> {
                             check(!store.state.value.scanning) { "Wait for the scan to finish before preparing file edits." }
@@ -196,7 +245,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         PLAYLIST_START -> {
                             val id = PlaylistId(UUID.fromString(requireNotNull(args.getString("id"))))
-                            val (_, entries) = store.repository().playlist(id) ?: error("The playlist was already deleted.")
+                            val (playlist, entries) = store.repository().playlist(id) ?: error("The playlist was already deleted.")
                             val known = store.state.value.tracks.associateBy { it.id }
                             // One captured copy at press time: available occurrences in saved order. The saved list keeps everything.
                             val playable = entries.filter { known[it.trackId]?.availability == Availability.AVAILABLE }
@@ -205,7 +254,7 @@ class PlaybackService : MediaLibraryService() {
                                 entries.firstOrNull { it.id == EntryId(UUID.fromString(wanted)) }
                             }
                             val index = startEntry?.let { target -> playable.indexOfFirst { it.id == target.id } }?.takeIf { it >= 0 } ?: 0
-                            authority.start(playable.map { it.trackId }, index, 0, args.getBoolean("shuffle"))
+                            authority.start(playable.map { it.trackId }, index, 0, args.getBoolean("shuffle"), "Playlist · ${playlist.name}")
                         }
                         QUEUE_REMOVE -> authority.removeFromQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))))
                         QUEUE_MOVE -> authority.moveInQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))), args.getInt("index"))
@@ -224,7 +273,8 @@ class PlaybackService : MediaLibraryService() {
                 } catch (e: CancellationException) { future.cancel(false); throw e }
                 catch (e: Exception) {
                     storage?.error(e.message ?: "Command could not be completed.")
-                    future.set(SessionResult(SessionError.ERROR_BAD_VALUE))
+                    future.set(SessionResult(SessionError.ERROR_BAD_VALUE, Bundle().apply { putString("message", e.message ?: "Command could not be completed.") }))
+                }
                 }
             }
             return future
@@ -246,6 +296,20 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(LibraryResult.ofItemList(items, params))
         }
     }
+    private suspend fun backupOperation(store: MusicStore, action: suspend () -> Unit) = store.operationMutex.withLock {
+        check(!store.state.value.editBusy && !store.state.value.scanning) { "Wait for the scan or file edit to finish before transferring a backup." }
+        authority.suspendForRestore()
+        store.setMaintenance(true)
+        try {
+            store.flushSessionSaves()
+            action()
+        } finally {
+            withContext(NonCancellable) {
+                try { store.refresh(); authority.reopenAfterRestore(store) }
+                finally { store.setMaintenance(false) }
+            }
+        }
+    }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -257,6 +321,18 @@ class PlaybackService : MediaLibraryService() {
         scope.cancel(); super.onDestroy()
     }
     companion object {
+        const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
+        const val WIDGET_SETTINGS="com.localmusic.player.WIDGET_SETTINGS"
+        const val WIDGET_CONTROL="com.localmusic.player.WIDGET_CONTROL"
+        const val ARTIST_SAVE="com.localmusic.player.ARTIST_SAVE"
+        const val ARTIST_CLEAR="com.localmusic.player.ARTIST_CLEAR"
+        const val ARTIST_NOTE="com.localmusic.player.ARTIST_NOTE"
+        const val ARTIST_PHOTO="com.localmusic.player.ARTIST_PHOTO"
+        const val COVER_SAVE="com.localmusic.player.COVER_SAVE"
+        const val BACKUP_EXPORT = "com.localmusic.player.BACKUP_EXPORT"
+        const val BACKUP_PREVIEW = "com.localmusic.player.BACKUP_PREVIEW"
+        const val BACKUP_RESTORE = "com.localmusic.player.BACKUP_RESTORE"
+        const val BACKUP_CANCEL = "com.localmusic.player.BACKUP_CANCEL"
         const val START = "com.localmusic.player.START_COLLECTION"
         const val NEXT = "com.localmusic.player.PLAY_NEXT"
         const val ADD = "com.localmusic.player.ADD_QUEUE"
@@ -267,6 +343,7 @@ class PlaybackService : MediaLibraryService() {
         const val EXPORT = "com.localmusic.player.EXPORT_REPORT"
         const val ADD_FOLDER = "com.localmusic.player.ADD_FOLDER"
         const val PREFERENCES = "com.localmusic.player.PREFERENCES"
+        const val HOME_VIEW = "com.localmusic.player.HOME_VIEW"
         const val LYRICS_SAVE = "com.localmusic.player.LYRICS_SAVE"
         const val LYRICS_SELECT = "com.localmusic.player.LYRICS_SELECT"
         const val LYRICS_OFFSET = "com.localmusic.player.LYRICS_OFFSET"
@@ -293,7 +370,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES,
+        val ACTIONS = setOf(AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

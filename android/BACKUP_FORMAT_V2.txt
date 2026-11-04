@@ -1,0 +1,28 @@
+LOCAL MUSIC BACKUP FORMAT V2 (0.9+)
+
+V2 keeps the v1 ZIP manifest / SHA-256 / bounded-entry contract and adds extended
+preferences: audio settings, saved EQ presets, widget theme/artwork choice and
+saved artist matches with biography/image sources, licensing and chosen images.
+Artist images use the same portable art/<sha256>.img entries as track artwork.
+Private filesystem paths are staged/remapped; URI strings grant no permission.
+
+The new app reads v1 and v2. The writer emits v2 in both manifest and data.json;
+their versions must agree. The old app rejects v2 before applying changes.
+V1 supplies off/default feature settings when decoded. At application time,
+artist records and preset-bank entries are merged, keeping unrelated newer keys.
+Imported matches/names replace the corresponding stored values. Current effect
+selection and widget choices follow the imported settings. Limits are checked
+before changes; no silent truncation of newer presets/artist notes.
+
+Unchanged: one Room restore transaction with receipt, drained/blocked session
+writes, paused playback, scan/edit exclusion, private artwork staging and durable
+pending preferences. Startup/next preference update completes the committed
+target or restores the originals based on the receipt. The complete extended
+preference record participates in that recovery. Room schema stays v3.
+
+Music/audio files, keys, edit originals/staged files and file-edit recovery
+journals are excluded. Online-search result caches are excluded. Selected artist
+notes, photos and provenance are included. Widget placement on the launcher is
+managed by Android and must be recreated on a new installation; its app settings
+are included. Preserved unrelated artist/preset entries are subject to aggregate
+limits (100 each); if exceeded, reject the restore and retain existing data.
