@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
@@ -42,6 +43,7 @@ import coil3.compose.AsyncImage
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
+    private val playlistUi by viewModels<PlaylistUiState>()
     private var controller by mutableStateOf<MediaController?>(null)
     private var sessionState by mutableStateOf(JSONObject())
     private var connectionError by mutableStateOf("")
@@ -67,6 +69,51 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) { permissionMessage = "Could not retain folder access: ${e.message}" }
     }
     private val coverPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pickedCover = uri }
+    private val playlistFilePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) playlistUi.readPlaylist(application as MusicApplication, uri)
+    }
+    private val playlistFileExport = registerForActivityResult(object : ActivityResultContracts.CreateDocument("text/plain") {
+        override fun createIntent(context: android.content.Context, input: String): Intent = super.createIntent(context, input).apply {
+            type = when (input.substringAfterLast('.')) {
+                "m3u8" -> "application/vnd.apple.mpegurl"
+                "m3u" -> "audio/x-mpegurl"
+                else -> "audio/x-scpls"
+            }
+        }
+    }) { uri ->
+        playlistUi.savePlaylist(application as MusicApplication, uri)
+    }
+    private fun exportPlaylist(playlist: Playlist, format: PlaylistFileFormat) {
+        exportScope.launch {
+            val filename = playlistUi.prepareExport(application as MusicApplication, playlist, format) ?: return@launch
+            try { playlistFileExport.launch(filename) }
+            catch (e: Exception) { playlistUi.pendingExport.value = null; playlistUi.fileMessage.value = "Could not open the save picker: ${e.message}" }
+        }
+    }
+    private fun confirmPlaylistImport() {
+        val ui = playlistUi
+        val preview = ui.importPreview.value ?: return
+        val connected = controller ?: return
+        if (!sessionState.optBoolean("ready") || ui.fileBusy.value) return
+        val ids = preview.matches.mapNotNull { it.id }
+        if ((ids.isEmpty() && preview.matches.isNotEmpty()) || ui.importName.value.isBlank()) return
+        ui.fileBusy.value = true
+        val call = try { connected.sendCustomCommand(SessionCommand(PlaybackService.PLAYLIST_IMPORT, Bundle.EMPTY), Bundle().apply {
+            putString("name", ui.importName.value)
+            putStringArrayList("ids", ArrayList(ids.map { it.value.toString() }))
+        }) } catch (e: Exception) {
+            ui.fileBusy.value = false; ui.fileMessage.value = "Could not submit import: ${e.message}"; return
+        }
+        call.addListener({
+            try {
+                if (call.get().resultCode == androidx.media3.session.SessionResult.RESULT_SUCCESS) {
+                    ui.importPreview.value = null
+                    ui.fileMessage.value = "Imported ${ids.size} entries into a new playlist; ${preview.matches.size - ids.size} skipped."
+                } else ui.fileMessage.value = "Import could not complete. Check the library error and try again."
+            } catch (e: Exception) { ui.fileMessage.value = "Import result unavailable. Check the playlist list before retrying." }
+            finally { ui.fileBusy.value = false }
+        }, ContextCompat.getMainExecutor(applicationContext))
+    }
     private val lyricPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val track = lyricTarget
         if (uri != null && track != null) exportScope.launch {
@@ -186,7 +233,7 @@ class MainActivity : ComponentActivity() {
                 else lightColorScheme(primary = Color(0xFF245E4B), secondary = Color(0xFF3B6068))) {
                 Surface(Modifier.fillMaxSize()) {
                     val library = store?.state?.collectAsState()?.value ?: LibraryState()
-                    MusicScreen(library, controller, sessionState,
+                    MusicScreen(playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,
                         listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"),
                         ::send, store, preferences, FeatureActions(
                             pickFolder = { folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) },
@@ -251,7 +298,8 @@ private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = 
 }
 
 @Composable
-private fun MusicScreen(library: LibraryState, controller: MediaController?, playback: JSONObject, message: String,
+private fun MusicScreen(playlistUi: PlaylistUiState, confirmImport: () -> Unit, pickPlaylist: () -> Unit,
+    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, message: String,
     send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
     onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit) {
     var screen by rememberSaveable { mutableStateOf("Home") }
@@ -265,14 +313,14 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
     var selecting by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf(emptySet<TrackId>()) }
     var licenses by remember { mutableStateOf(false) }
-    var playlistDetail by remember { mutableStateOf<Playlist?>(null) }
+    var playlistDetail by playlistUi.detail
     var playlistDetailLoad by remember { mutableStateOf<Pair<PlaylistId, List<PlaylistEntry>>?>(null) }
-    var playlistPicker by remember { mutableStateOf<List<TrackId>?>(null) }
-    var playlistPickerName by remember { mutableStateOf("") }
-    var playlistNaming by remember { mutableStateOf<Playlist?>(null) }
-    var playlistCreating by remember { mutableStateOf(false) }
-    var playlistNamingText by remember { mutableStateOf("") }
-    var playlistDeleting by remember { mutableStateOf<Playlist?>(null) }
+    var playlistPicker by playlistUi.picker
+    var playlistPickerName by playlistUi.pickerName
+    var playlistNaming by playlistUi.naming
+    var playlistCreating by playlistUi.creating
+    var playlistNamingText by playlistUi.namingText
+    var playlistDeleting by playlistUi.deleting
     var queueClearing by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
     fun openPlaylistPicker(ids: List<TrackId>) { playlistPickerName = ""; playlistPicker = ids }
@@ -450,6 +498,9 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     item { Text("${playback.optInt("sequenceCount")} remaining; showing up to 60. Browsing and sorting keep this sequence unchanged.") }
                 }
                 "Playlists" -> {
+                    val transferBusy = playlistUi.fileBusy.value || playlistUi.pendingExport.value != null
+                    TextButton(enabled = ready && !transferBusy && playlistUi.importPreview.value == null, onClick = pickPlaylist) { Text("Import playlist file") }
+                    if (playlistUi.fileMessage.value.isNotBlank()) Text(playlistUi.fileMessage.value, modifier = Modifier.padding(horizontal = 16.dp))
                     val detail = playlistDetail
                     if (detail == null) {
                         Column(Modifier.weight(1f)) {
@@ -473,7 +524,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                         }
                     } else {
                         val stored = library.playlists.firstOrNull { it.first.id == detail.id }?.first ?: detail
-                        LaunchedEffect(stored.id, library.revision) {
+                        LaunchedEffect(stored.id, library.revision, store) {
                             val repository = store?.repository() ?: return@LaunchedEffect
                             val loaded = withContext(Dispatchers.IO) { repository.playlist(stored.id) }
                             if (loaded == null) { playlistDetail = null; playlistDetailLoad = null }
@@ -484,6 +535,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                         Column(Modifier.weight(1f)) {
                             TextButton(onClick = { playlistDetail = null }) { Text("‹ All playlists") }
                             Text(stored.name, style = MaterialTheme.typography.headlineMedium)
+                            TextButton(enabled = ready && !transferBusy, onClick = { playlistUi.exportTarget.value = stored }) { Text("Export playlist file") }
                             val count = playlistDetailEntries.size
                             val loadedHere = playlistDetailLoad?.takeIf { it.first == stored.id } != null
                             Text(when {
@@ -537,11 +589,12 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     EditHistory(library, { nativeBatch = it }, actions)
                     Text("Playlists are saved with your chosen order, including repeated songs. App-data backup, processing controls, widget and artist biographies are not included yet.")
                     Section("About this preview")
-                    Text("Local Music 0.5.0\nSleep timer, queue editing and saved playlists, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
+                    Text("Local Music 0.6.0\nM3U/M3U8 and PLS playlist import/export. Playlist drafts stay open when you rotate. Sleep timer, queue editing, offline folders, covers, lyrics and reviewed tag edits. No account needed.")
                 }
             }
         }
     }
+    PlaylistFileDialogs(playlistUi, ready, confirmImport, exportPlaylist)
     details?.let { track -> AlertDialog(onDismissRequest = { details = null }, title = { Text(track.tags.title) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(artist(track)); Text("Album: ${track.tags.album ?: "Unknown"}")
@@ -561,7 +614,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
             text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (library.playlists.isEmpty()) Text("Create your first playlist below.")
                 library.playlists.forEach { (playlist, _) ->
-                    TextButton(onClick = { send(PlaybackService.PLAYLIST_ADD, Bundle().apply {
+                    TextButton(enabled = ready, onClick = { send(PlaybackService.PLAYLIST_ADD, Bundle().apply {
                         putString("id", playlist.id.value.toString()); putStringArrayList("ids", ArrayList(ids.map { it.value.toString() })) })
                         playlistPicker = null }) { Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
@@ -569,7 +622,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
                     label = { Text("Or create a new playlist") }, singleLine = true)
                 Text("A repeated song is added again as its own entry. Each playlist keeps its own saved order.", style = MaterialTheme.typography.bodySmall)
             } },
-            confirmButton = { TextButton(enabled = playlistPickerName.isNotBlank(),
+            confirmButton = { TextButton(enabled = ready && playlistPickerName.isNotBlank(),
                 onClick = { send(PlaybackService.PLAYLIST_CREATE, Bundle().apply {
                     putString("name", playlistPickerName); putStringArrayList("ids", ArrayList(ids.map { it.value.toString() })) })
                 playlistPicker = null }) { Text("Create and add") } },
@@ -580,7 +633,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
         AlertDialog(onDismissRequest = { playlistCreating = false; playlistNaming = null },
             title = { Text(if (target == null) "New playlist" else "Rename playlist") },
             text = { Column { OutlinedTextField(playlistNamingText, { playlistNamingText = it.take(Playlists.MAX_NAME_CHARS) }, label = { Text("Playlist name") }, singleLine = true) } },
-            confirmButton = { TextButton(enabled = playlistNamingText.isNotBlank(), onClick = {
+            confirmButton = { TextButton(enabled = ready && playlistNamingText.isNotBlank(), onClick = {
                 if (target == null) send(PlaybackService.PLAYLIST_CREATE, Bundle().apply { putString("name", playlistNamingText) })
                 else send(PlaybackService.PLAYLIST_RENAME, Bundle().apply { putString("id", target.id.value.toString()); putString("name", playlistNamingText) })
                 playlistCreating = false; playlistNaming = null }) { Text(if (target == null) "Create" else "Rename") } },
@@ -588,7 +641,7 @@ private fun MusicScreen(library: LibraryState, controller: MediaController?, pla
     }
     playlistDeleting?.let { target -> AlertDialog(onDismissRequest = { playlistDeleting = null }, title = { Text("Delete ${target.name}?") },
         text = { Text("The saved playlist and its ordered entries are deleted. Songs, favorites and other playlists stay untouched.") },
-        confirmButton = { TextButton(onClick = { send(PlaybackService.PLAYLIST_DELETE, Bundle().apply { putString("id", target.id.value.toString()) }); playlistDeleting = null }) { Text("Delete") } },
+        confirmButton = { TextButton(enabled = ready, onClick = { send(PlaybackService.PLAYLIST_DELETE, Bundle().apply { putString("id", target.id.value.toString()) }); playlistDeleting = null }) { Text("Delete") } },
         dismissButton = { TextButton(onClick = { playlistDeleting = null }) { Text("Cancel") } }) }
     if (queueClearing) AlertDialog(onDismissRequest = { queueClearing = false }, title = { Text("Clear the queue?") },
         text = { Text("Pending next-up songs are removed. The song that is playing, its position, history and shuffle stay untouched.") },

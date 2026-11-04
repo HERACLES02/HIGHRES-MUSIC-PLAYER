@@ -162,13 +162,13 @@ class PlaybackService : MediaLibraryService() {
                             } } finally { authority.reopenAfterEdit(setOf(PlaybackAuthority.id(row.trackId))); store.endEdit() }
                         }
                         EDIT_RECOVERY_REVIEW -> result.putString("sha", FileEdits(this@PlaybackService, store).recoveryHash(requireNotNull(args.getString("edit"))))
-                        PLAYLIST_CREATE, PLAYLIST_ADD -> {
+                        PLAYLIST_CREATE, PLAYLIST_ADD, PLAYLIST_IMPORT -> {
                             val ids = args.getStringArrayList("ids")?.map(PlaybackAuthority::id) ?: emptyList()
-                            require(ids.distinct().size == ids.size) { "Pick each song once; add it again later as a repeated entry." }
+                            require(command.customAction == PLAYLIST_IMPORT || ids.distinct().size == ids.size) { "Pick each song once; add it again later as a repeated entry." }
                             require(ids.size <= Playlists.MAX_ENTRIES) { "Playlists are limited to ${Playlists.MAX_ENTRIES} entries." }
                             val known = store.state.value.tracks.associateBy { it.id }
                             require(ids.all { known.containsKey(it) }) { "A song is no longer in the library. Scan and try again." }
-                            val playlist = if (command.customAction == PLAYLIST_CREATE) {
+                            val playlist = if (command.customAction != PLAYLIST_ADD) {
                                 store.repository().createPlaylist(requireNotNull(args.getString("name")), ids)
                             } else {
                                 store.repository().playlist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))))?.first
@@ -176,7 +176,7 @@ class PlaybackService : MediaLibraryService() {
                             }
                             if (command.customAction == PLAYLIST_ADD && ids.isNotEmpty())
                                 store.repository().addPlaylistEntries(playlist.id, ids)
-                            if (command.customAction == PLAYLIST_CREATE) result.putString("id", playlist.id.value.toString())
+                            if (command.customAction != PLAYLIST_ADD) result.putString("id", playlist.id.value.toString())
                             store.refreshPlaylists()
                         }
                         PLAYLIST_RENAME -> {
@@ -280,6 +280,7 @@ class PlaybackService : MediaLibraryService() {
         const val EDIT_RECOVER = "com.localmusic.player.EDIT_RECOVER"
         const val EDIT_RECOVERY_REVIEW = "com.localmusic.player.EDIT_RECOVERY_REVIEW"
         const val PLAYLIST_CREATE = "com.localmusic.player.PLAYLIST_CREATE"
+        const val PLAYLIST_IMPORT = "com.localmusic.player.PLAYLIST_IMPORT"
         const val PLAYLIST_RENAME = "com.localmusic.player.PLAYLIST_RENAME"
         const val PLAYLIST_DELETE = "com.localmusic.player.PLAYLIST_DELETE"
         const val PLAYLIST_ADD = "com.localmusic.player.PLAYLIST_ADD"
@@ -294,7 +295,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
         val ACTIONS = setOf(START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
-            EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
+            EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)
     }
 }

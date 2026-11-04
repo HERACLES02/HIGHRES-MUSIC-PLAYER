@@ -10,8 +10,8 @@ android {
         applicationId = "com.localmusic.player"
         minSdk = 30
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.5.0-sleep-timer"
+        versionCode = 7
+        versionName = "0.6.0-playlist-files"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }

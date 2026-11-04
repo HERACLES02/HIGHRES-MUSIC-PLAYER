@@ -286,6 +286,6 @@ private fun identityChecks() {
 }
 
 fun main() {
-    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks()
+    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

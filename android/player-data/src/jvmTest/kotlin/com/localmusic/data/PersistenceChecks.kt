@@ -120,6 +120,18 @@ private suspend fun playlistOperations(path: Path) {
     fails { repo.createPlaylist("   ") }
     fails { repo.removePlaylistEntry(first.id, EntryId.new()) }
     fails { repo.addPlaylistEntries(PlaylistId.new(), listOf(id(1))) }
+    val importedIds = com.localmusic.core.PlaylistFiles.match(
+        com.localmusic.core.PlaylistFiles.parse("#EXTM3U\na.flac\nb.flac\na.flac\n", com.localmusic.core.PlaylistFileFormat.M3U),
+        listOf(com.localmusic.core.PlaylistFileSong(id(1), listOf("a.flac")), com.localmusic.core.PlaylistFileSong(id(2), listOf("b.flac"))))
+        .mapNotNull { it.id }
+    val imported = repo.createPlaylist("Imported fixture", importedIds)
+    val importEntries = repo.playlist(imported.id)!!.second
+    expect(importEntries.map { it.trackId } == listOf(id(1), id(2), id(1)), "File import preserves parsed order and duplicate songs")
+    expect(importEntries.map { it.id }.distinct().size == 3, "Each imported occurrence receives its own identity")
+    db.close()
+    db = openPlayerDatabase(path.toString()); repo = PlayerRepository(db)
+    expect(repo.playlist(imported.id)!!.second == importEntries, "Imported occurrences persist across disk reopen")
+    expect(repo.playlist(second.id)!!.second.isEmpty(), "File import leaves existing playlists untouched")
     db.close()
 }
 

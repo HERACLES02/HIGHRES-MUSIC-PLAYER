@@ -273,7 +273,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
-        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.5.0-sleep-timer")
+        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.6.0-playlist-files")
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))
