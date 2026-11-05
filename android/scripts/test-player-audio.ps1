@@ -1,4 +1,4 @@
-param([string]$EmulatorSerial = '127.0.0.1:5561', [int]$AdbServerPort = 5038, [string]$ArtworkFixtureUri)
+param([string]$EmulatorSerial = '127.0.0.1:5561', [int]$AdbServerPort = 5038, [string]$ArtworkFixtureUri, [string]$SeekFixtureUri)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $projectRoot '.tools'
@@ -28,4 +28,10 @@ try {
     $result | Write-Output
     if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch "INSTRUMENTATION_RESULT: checksPassed=$expected" -or
         ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw 'Artwork regression checks failed.' }
+    if ($SeekFixtureUri) {
+        $result = & $adb @deviceArgs shell am instrument -r -w -e suite seek -e seekBuffer production -e fixtureUri $SeekFixtureUri 'com.localmusic.player.test/com.localmusic.player.AudioProcessorChecks'
+        $result | Write-Output
+        if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch 'INSTRUMENTATION_RESULT: checksPassed=1' -or
+            ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw 'Native seek regression checks failed.' }
+    }
 } finally { Pop-Location }

@@ -3,13 +3,31 @@ Local Music - requested UI increments (5 November 2026)
 [x] 1. Notification: add an X action to stop playback and dismiss the player.
         Preserved selection and 0:02 position; paused/playing close and resume
         verified on the emulator. Phone check pending in 0.10.2.
-[ ] 2. Long press: open the same options as the three-dot menu for songs,
-        albums and playlists; inspect folder and artist actions where relevant.
-[ ] 3. Artwork: provide a larger cover display / size option.
-[ ] 4. Favorites: remove its interface, controls and Home block.
+[x] 2. Long press: open the same options as the three-dot menu for songs,
+        albums and playlists, including folder and artist rows.
+        Matching long-press/dots menus verified on the emulator in 0.10.3.
+        Phone acceptance pending.
+[x] 3. Artwork: Compact / Large / Full width in Settings; larger default.
+        Preference round-trip and legacy backup checks passed. Emulator sizes
+        630 / 840 / 954 pixels; restart retains the chosen size.
+[x] 4. Favorites: removed its interface, controls and Home block.
         Keep existing saved data intact for backup compatibility.
-[ ] 5. Performance: investigate measured slow paths after the UI increments.
-        Include SD-card FLAC large seeks; do not infer a fix from emulator speed.
+[x] 5. Local performance pass: bulk library/resume reads, cached artwork paths,
+        indexed track lookup, cached collection groups and indexed playlist rows.
+        Real SQLite benchmark: 200 tracks, 801 SELECTs before / 3-4 after;
+        bulk resume read: one SELECT, with matching filtering and song metadata.
 
-Deliver one useful increment at a time. No commit/push requested.
+[x] 6. Chosen-folder-only scanning/library, preserved playlist identities,
+        simplified player header/metadata and responsive artwork/spacing.
+        Collection position and visible playlist song numbering removed.
+        Full build and isolated native scope/playback/layout checks passed.
+
+Remaining phone acceptance
+[x] User broadly accepted the edits preceding 0.10.6.
+[x] User confirmed the 0.10.6 changes work on the phone.
+[ ] Large seeks in SD-card FLAC files: 0.10.7 output startup improvement is
+    locally verified; specific phone delay remains open until listening feedback.
+
+Implementation completed through 0.10.6; full build and targeted native
+folder/playback/layout checks passed. New changes are local and uncommitted.
 High-resolution/bit-perfect and Direct USB remain separately scheduled.

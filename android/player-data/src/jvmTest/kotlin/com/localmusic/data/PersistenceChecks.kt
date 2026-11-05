@@ -306,6 +306,7 @@ fun main() = runBlocking {
     check(directory.parent == testRoot.toRealPath()) { "Temporary test directory escaped the intended root" }
     var primary: Throwable? = null
     try {
+        libraryReadChecks(directory.resolve("library-read.db"))
         enrichmentChecks(); audioCodecChecks(); providerChecks(); codecChecks(); backupArchiveChecks(); backupRepositoryChecks(directory.resolve("backup.db")); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
         versions(directory.resolve("versions.db")); migration(directory.resolve("migration.db"))
         playlistOperations(directory.resolve("playlists.db"))

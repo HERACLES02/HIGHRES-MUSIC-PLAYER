@@ -16,7 +16,7 @@ import java.util.zip.ZipOutputStream
 import kotlinx.serialization.json.*
 
 data class BackupPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
-    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap())
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large")
 data class BackupPlaylist(val playlist: Playlist, val entries: List<PlaylistEntry>)
 data class AppBackup(val tracks: List<Track> = emptyList(), val playlists: List<BackupPlaylist> = emptyList(),
     val lyrics: List<SavedLyrics> = emptyList(), val selections: Map<TrackId, UUID> = emptyMap(),

@@ -35,17 +35,27 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
                 }
             }
         }
+        SettingsCard("Now Playing artwork") {
+            Text("Choose how much space the album cover uses.", style = MaterialTheme.typography.bodyMedium)
+            PlayerActions {
+                listOf("Compact", "Large", "Full width").forEach { size ->
+                    FilterChip(selected = preferences.artworkSize == size, enabled = ready,
+                        onClick = { send(PlaybackService.ARTWORK_SIZE, Bundle().apply { putString("size", size) }) },
+                        label = { Text(size) })
+                }
+            }
+        }
         SettingsCard("Music library") {
-            Text("Find music on your phone or SD card. Saved playlists keep their references if a file goes missing.",
+            Text("Only chosen folders and their subfolders are scanned. Add a folder below to include its music.",
                 style = MaterialTheme.typography.bodyMedium)
             Button(onClick = scan, enabled = ready && !library.scanning, modifier = Modifier.fillMaxWidth()) {
-                Icon(PlayerGlyph.Scan, null); Spacer(Modifier.width(8.dp)); Text("Allow access / scan music")
+                Icon(PlayerGlyph.Scan, null); Spacer(Modifier.width(8.dp)); Text("Scan chosen folders")
             }
             OutlinedButton(onClick = actions.pickFolder, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Choose music folder / SD card") }
             library.folders.forEach { folder ->
                 Text(Uri.parse(folder.treeUri).lastPathSegment ?: "Music folder", style = MaterialTheme.typography.bodySmall)
             }
-            SettingSwitch("Rescan when music changes", preferences.autoScan, ready) { value ->
+            SettingSwitch("Rescan chosen folders when music changes", preferences.autoScan, ready) { value ->
                 send(PlaybackService.PREFERENCES, Bundle().apply {
                     putString("appearance", preferences.appearance); putBoolean("autoScan", value)
                 })
@@ -53,7 +63,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
             if (library.message.isNotBlank()) Text(library.message, style = MaterialTheme.typography.bodySmall)
         }
         SettingsCard("Backup & restore") {
-            Text("Save playlists, favorites, lyrics, chosen covers, settings and the paused queue. Music files are stored separately.")
+            Text("Save playlists, lyrics, chosen covers, settings and the paused queue. Music files are stored separately.")
             Text("Playback pauses during backup or restore.", style = MaterialTheme.typography.bodySmall)
             PlayerActions {
                 FilledTonalButton(onClick = actions.createBackup, enabled = ready && !actions.backupBusy && !library.scanning && !library.editBusy) { Text("Create backup") }

@@ -13,6 +13,12 @@ fun backupArchiveChecks() {
     var count=0
     fun verify(ok:Boolean,label:String){count++;check(ok){"Backup archive: $label"}}
     fun rejects(label:String,action:()->Unit){var rejected=false;try{action()}catch(_:Exception){rejected=true};verify(rejected,label)}
+    val legacyPreferences = """{"version":1,"appearance":"System","autoScan":false,"homeGrid":true}"""
+    fun encodedArtwork(text: String) = Json.parseToJsonElement(PreferenceCodec.encode(PreferenceCodec.decode(text))).jsonObject["artworkSize"]?.jsonPrimitive?.content
+    verify(encodedArtwork(legacyPreferences) == "Large", "legacy settings default to large artwork")
+    val compactPreferences = legacyPreferences.dropLast(1) + ",\"artworkSize\":\"Compact\"}"
+    verify(encodedArtwork(compactPreferences) == "Compact", "artwork size survives preference round-trip")
+    rejects("invalid artwork size rejected") { PreferenceCodec.decode(legacyPreferences.dropLast(1) + ",\"artworkSize\":\"huge\"}") }
     val id=TrackId(UUID(0,101));val pid=PlaylistId(UUID(0,102));val lyricId=UUID(0,103)
     val track=Track(id,MusicTags("বাংলা",listOf("Artist")),AudioProperties(100000,"audio/flac",96000,2,24),
         listOf(TrackSource("content://media/external/audio/media/101",SourceKind.MEDIA_STORE,ContentStamp(1024,2))),Availability.AVAILABLE,1,true)

@@ -119,7 +119,7 @@ class PlaybackService : MediaLibraryService() {
                             val token = UUID.randomUUID().toString()
                             backupPreview = token to bundle
                             result.putString("token", token)
-                            result.putString("summary", "${bundle.state.tracks.size} song references\n${bundle.state.playlists.size} playlists\n${bundle.state.tracks.count { it.favorite }} favorites\n${bundle.state.lyrics.size} lyric versions\n${bundle.assets.size} chosen images\n${bundle.state.preferences.artists.size} saved artists\n${bundle.state.preferences.audio.presets.size} saved EQ presets")
+                            result.putString("summary", "${bundle.state.tracks.size} song references\n${bundle.state.playlists.size} playlists\n${bundle.state.lyrics.size} lyric versions\n${bundle.assets.size} chosen images\n${bundle.state.preferences.artists.size} saved artists\n${bundle.state.preferences.audio.presets.size} saved EQ presets")
                         }
                         BACKUP_RESTORE -> {
                             val prepared = requireNotNull(backupPreview?.takeIf { it.first == args.getString("token") }) { "Backup preview expired. Choose the file again." }
@@ -141,6 +141,7 @@ class PlaybackService : MediaLibraryService() {
                         ADD_FOLDER -> store.addFolder(Uri.parse(requireNotNull(args.getString("uri"))), args.getInt("flags"))
                         PREFERENCES -> store.setPreferences(args.getString("appearance") ?: "System", args.getBoolean("autoScan"))
                         HOME_VIEW -> store.setHomeGrid(args.getBoolean("grid", true))
+                        ARTWORK_SIZE -> store.setArtworkSize(requireNotNull(args.getString("size")))
                         LYRICS_SAVE -> {
                             val id = PlaybackAuthority.id(requireNotNull(args.getString("id")))
                             var text = args.getString("text").orEmpty()
@@ -372,6 +373,7 @@ class PlaybackService : MediaLibraryService() {
         const val EXPORT = "com.localmusic.player.EXPORT_REPORT"
         const val ADD_FOLDER = "com.localmusic.player.ADD_FOLDER"
         const val PREFERENCES = "com.localmusic.player.PREFERENCES"
+        const val ARTWORK_SIZE = "com.localmusic.player.ARTWORK_SIZE"
         const val HOME_VIEW = "com.localmusic.player.HOME_VIEW"
         const val LYRICS_SAVE = "com.localmusic.player.LYRICS_SAVE"
         const val LYRICS_SELECT = "com.localmusic.player.LYRICS_SELECT"
@@ -399,7 +401,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW,
+        val ACTIONS = setOf(AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

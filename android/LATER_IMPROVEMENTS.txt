@@ -1,0 +1,25 @@
+Local Music - deferred until the stable version
+
+User requested keeping these ideas for later, while addressing stability first.
+Research compared popular Android music players on 5 November 2026.
+
+1. Sorting by artist/album/year/duration/filename and disc-then-track album order.
+2. Manage/remove chosen folders, exclude subfolders and repair lost access.
+3. Drag reordering and bulk queue/playlist entry actions.
+4. Genre browsing and better multi-artist/compilation organization.
+5. Search filenames/folders/lyrics, separate words, typos and grouped results.
+6. Listening history, play counts and rule-based smart playlists.
+7. Artwork colors, library grid sizes and configurable Home sections.
+8. Word-synced/TTML lyrics and line timing editor.
+9. Parametric EQ, broader AutoEQ formats, speed/pitch and headphone presets.
+
+Optional: custom playlist covers, saved queues, scrobbling and richer car browsing.
+Favorites stays removed. No streaming expansion is scheduled.
+High-resolution/bit-perfect and Direct USB remain separately deferred.
+
+References:
+https://github.com/namidaco/namida
+https://github.com/RetroMusicPlayer/RetroMusicPlayer
+https://github.com/OxygenCobalt/Auxio
+https://github.com/FoedusProgramme/Gramophone
+https://github.com/zyrouge/symphony

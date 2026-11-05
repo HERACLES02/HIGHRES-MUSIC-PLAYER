@@ -1,8 +1,6 @@
 package com.localmusic.player
 
-import android.content.ContentUris
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.DocumentsContract as Docs
 import android.provider.MediaStore
@@ -13,7 +11,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-/** Enumerates only granted folders and the readable music index; it never edits music. */
+/** Enumerates only explicitly selected folders and their subfolders; it never edits music. */
 class LibraryScanner(private val context: Context, private val store: MusicStore) {
     private lateinit var tracks: MutableMap<TrackId, Track>
     private lateinit var extras: MutableMap<TrackId, LibraryExtras>
@@ -26,18 +24,15 @@ class LibraryScanner(private val context: Context, private val store: MusicStore
     private val resolver get() = context.contentResolver
     suspend fun run(): Unit = withContext(Dispatchers.IO) {
         val repo = store.repository()
+        val chosenFolders = repo.folderGrants()
+        if (chosenFolders.isEmpty()) {
+            store.scanProgress(0, "Choose a music folder to start scanning.")
+            return@withContext
+        }
         tracks = repo.tracks().associateBy { it.id }.toMutableMap()
         extras = repo.extras().toMutableMap()
         blocked = repo.edits().filter { it.phase in setOf("WRITING", "UNDO_WRITING", "NEEDS_RECOVERY") }.map { it.trackId }.toSet()
-        if (context.checkSelfPermission(MusicStore.audioPermission()) == PackageManager.PERMISSION_GRANTED) {
-            for (volume in MediaStore.getExternalVolumeNames(context)) {
-                ensureActive()
-                try { mediaVolume(volume); completed += "media:$volume" }
-                catch (e: CancellationException) { throw e }
-                catch (_: Exception) { failed++ }
-            }
-        }
-        for (folder in repo.folderGrants()) {
+        for (folder in chosenFolders) {
             ensureActive()
             try { documents(folder); completed += "folder:${folder.id}" }
             catch (e: CancellationException) { throw e }
@@ -45,45 +40,29 @@ class LibraryScanner(private val context: Context, private val store: MusicStore
         }
         val volumes = MediaStore.getExternalVolumeNames(context)
         val grants = resolver.persistedUriPermissions.filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
-        val folders = repo.folderGrants().associateBy { it.id }
+        val folders = chosenFolders.associateBy { it.id }
+        val selected = folders.keys
         for (track in tracks.values) {
             ensureActive()
             if (track.id.value.toString() in blocked) continue
+            if (!FolderScanPolicy.includes(track, selected)) {
+                repo.markUnavailable(track.id, Availability.MISSING)
+                continue
+            }
             if (track.sources.any { it.uri in seen }) { repo.markUnavailable(track.id, Availability.AVAILABLE); continue }
-            fun scope(s: TrackSource) = if (s.kind == SourceKind.MEDIA_STORE) "media:${Uri.parse(s.uri).pathSegments.firstOrNull()}" else "folder:${s.folderGrantId}"
-            val unavailable = if (track.sources.all { scope(it) in completed }) Availability.MISSING
-                else if (track.sources.all { if (it.kind == SourceKind.MEDIA_STORE) context.checkSelfPermission(MusicStore.audioPermission()) != PackageManager.PERMISSION_GRANTED
-                    else folders[it.folderGrantId]?.treeUri !in grants }) Availability.PERMISSION_LOST
-                else if (track.sources.all {
-                    if (it.kind == SourceKind.MEDIA_STORE) Uri.parse(it.uri).pathSegments.firstOrNull() !in volumes
-                    else {
-                        val uri = Uri.parse(it.uri)
-                        val volume = runCatching { Docs.getDocumentId(uri).substringBefore(':').lowercase() }.getOrNull()
-                        uri.authority == "com.android.externalstorage.documents" && volume !in volumes.map { v -> if (v == "external_primary") "primary" else v.lowercase() }
-                    }
+            val relevant = track.sources.filter { it.kind == SourceKind.DOCUMENT && it.folderGrantId in selected }
+            fun scope(s: TrackSource) = "folder:${s.folderGrantId}"
+            val unavailable = if (relevant.all { scope(it) in completed }) Availability.MISSING
+                else if (relevant.all { folders[it.folderGrantId]?.treeUri !in grants }) Availability.PERMISSION_LOST
+                else if (relevant.all {
+                    val uri = Uri.parse(it.uri)
+                    val volume = runCatching { Docs.getDocumentId(uri).substringBefore(':').lowercase() }.getOrNull()
+                    uri.authority == "com.android.externalstorage.documents" && volume !in volumes.map { v -> if (v == "external_primary") "primary" else v.lowercase() }
                 }) Availability.VOLUME_UNMOUNTED
                 else null
             if (unavailable != null) repo.markUnavailable(track.id, unavailable)
         }
-        store.scanProgress(scanned, "$scanned music entries checked; $failed could not be read; $ambiguous uncertain matches kept for review.")
-    }
-    private suspend fun mediaVolume(volume: String) {
-        val projection = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.MIME_TYPE,
-            MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DATE_MODIFIED, MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.RELATIVE_PATH, MediaStore.Audio.Media.ALBUM_ARTIST)
-        requireNotNull(resolver.query(MediaStore.Audio.Media.getContentUri(volume), projection, "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null)).use { c ->
-            while (c.moveToNext()) {
-                currentCoroutineContext().ensureActive()
-                val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.getContentUri(volume), c.getLong(0)).toString()
-                val path = c.getString(9).orEmpty(); val name = c.getString(8) ?: "Untitled"
-                val tags = MusicTags(c.getString(1)?.takeIf { it.isNotBlank() } ?: name,
-                    listOfNotNull(c.getString(2)?.takeUnless { it == "<unknown>" }), c.getString(10), c.getString(3))
-                accept(TrackSource(uri, SourceKind.MEDIA_STORE, ContentStamp(c.getLong(6).coerceAtLeast(0), c.getLong(7).takeIf { it > 0 }?.times(1000))),
-                    tags, AudioProperties(c.getLong(4).coerceAtLeast(0), c.getString(5) ?: "audio/*", null, null, null),
-                    LocalFileIdentity.key(volume, path + name), LocalFileIdentity.key(volume, path + name)?.substringBeforeLast('/') ?: "$volume:/$path", null)
-            }
-        }
+        store.scanProgress(scanned, "$scanned entries in chosen folders checked; $failed could not be read; $ambiguous uncertain matches kept for review.")
     }
     private data class Doc(val id: String, val name: String, val mime: String, val size: Long, val modified: Long?)
     private fun children(tree: Uri, parent: String): List<Doc> {

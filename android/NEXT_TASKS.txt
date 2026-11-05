@@ -1,17 +1,21 @@
 Local Music - work queue
 
-Current: requested UI changes, one increment at a time
-- 0.10.2 notification close: stop/dismiss while preserving queue and position.
-- Then long-press menus, larger artwork options, and removal of Favorites UI.
+Current: stabilize playback before adding features
+- 0.10.7 reduces Android 12+ PCM output startup threshold; phone seek check pending.
+- 0.10.6 adds chosen-folder-only scanning and a simpler adaptive Now Playing.
+- User confirmed the 0.10.6 changes work on the phone.
+- 0.10.5 menus, artwork sizes and Favorites UI removal broadly accepted.
+- Library/resume loading now uses bulk reads; rendering uses cached paths/indexes.
 - Checklist: UI_CHANGE_CHECKLIST.txt.
-- Performance investigation follows these UI increments.
+- Local performance pass completed; SD-card large-seek delay remains open.
 
 Pending phone confirmation
-- 0.10.0 UI, long-name scrolling, lyrics swipe/import and widgets.
 - Embedded covers and source-quality details after rescanning.
 - Large seeks in SD-card FLAC files.
 
-Next: high-resolution / bit-perfect audio and Direct USB
+Later improvements: LATER_IMPROVEMENTS.txt (deferred until stable).
+
+Deferred: high-resolution / bit-perfect audio and Direct USB
 - Preserve source bit depth through software decoding and PCM buffers.
 - Implement supported high-resolution and bit-perfect output paths.
 - Verify requested versus actual output behavior on supported devices.

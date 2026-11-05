@@ -15,11 +15,18 @@ import java.nio.ByteOrder
 class AudioProcessorChecks : Instrumentation() {
     private var suite: String? = null
     private var fixtureUri: String? = null
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); suite = arguments?.getString("suite"); fixtureUri = arguments?.getString("fixtureUri"); start() }
+    private var seekVariant: String? = null
+    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); suite = arguments?.getString("suite"); fixtureUri = arguments?.getString("fixtureUri"); seekVariant = arguments?.getString("seekBuffer"); start() }
 
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "seek") {
+                results.putString("stream", "\n" + SeekChecks.run(this, requireNotNull(fixtureUri), seekVariant))
+                results.putInt("checksPassed", 1)
+                finish(Activity.RESULT_OK, results)
+                return
+            }
             if (suite == "artwork") {
                 val count = ArtworkChecks.run(targetContext, fixtureUri)
                 results.putInt("checksPassed", count)

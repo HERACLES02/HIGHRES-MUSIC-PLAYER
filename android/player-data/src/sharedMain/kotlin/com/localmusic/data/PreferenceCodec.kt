@@ -13,7 +13,7 @@ object PreferenceCodec {
         return incoming.copy(artists=artists,audio=incoming.audio.copy(presets=presets)).also{decode(encode(it))}
     }
     fun encode(value:BackupPreferences):String=buildJsonObject{
-        put("version",1);put("appearance",value.appearance);put("autoScan",value.autoScan);put("homeGrid",value.homeGrid)
+        put("version",1);put("appearance",value.appearance);put("autoScan",value.autoScan);put("homeGrid",value.homeGrid);put("artworkSize",value.artworkSize)
         put("audio",Json.parseToJsonElement(AudioCodec.settings(value.audio)))
         put("widgets",buildJsonObject{put("theme",value.widgets.theme);put("artwork",value.widgets.artwork)})
         put("artists",JsonObject(value.artists.mapValues{(_,p)->buildJsonObject{
@@ -33,6 +33,6 @@ object PreferenceCodec {
         }.orEmpty()
         val widgets=o["widgets"]?.jsonObject?.let{WidgetSettings(it.getValue("theme").jsonPrimitive.content,it.getValue("artwork").jsonPrimitive.boolean)}?:WidgetSettings()
         return BackupPreferences(o.getValue("appearance").jsonPrimitive.content,o.getValue("autoScan").jsonPrimitive.boolean,o.getValue("homeGrid").jsonPrimitive.boolean,
-            o["audio"]?.let{AudioCodec.settings(it.toString())}?:AudioSettings(),widgets,artists).also{require(it.appearance in setOf("System","Light","Dark","AMOLED"))}
+            o["audio"]?.let{AudioCodec.settings(it.toString())}?:AudioSettings(),widgets,artists,o["artworkSize"]?.jsonPrimitive?.content ?: "Large").also{require(it.appearance in setOf("System","Light","Dark","AMOLED"));require(it.artworkSize in setOf("Compact","Large","Full width"))}
     }
 }

@@ -32,7 +32,7 @@ fun ArtworkCredits(detail:LibraryExtras?){
 
 @Composable
 fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:MusicStore?,ready:Boolean,ui:ListeningToolsUi,
-    send:(String,Bundle)->Unit,play:(List<Track>,Int,Boolean)->Unit,details:(Track)->Unit,addToPlaylist:(Track)->Unit,album:(Track)->Unit){
+    send:(String,Bundle)->Unit,play:(List<Track>,Int,Boolean)->Unit,details:(Track)->Unit,addToPlaylist:(Track)->Unit,album:(Track)->Unit,addCollectionToPlaylist:(List<Track>)->Unit){
     var editingNote by rememberSaveable(name){mutableStateOf(false)}
     var note by rememberSaveable(name){mutableStateOf("")}
     var photoTarget by rememberSaveable{mutableStateOf<String?>(null)}
@@ -71,14 +71,16 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
         }
         item{HorizontalDivider();Text("Albums",style=MaterialTheme.typography.titleLarge)}
         items(albums.entries.toList(),key={it.key.toString()}){entry->val first=entry.value.first()
-            ListItem(modifier=Modifier.clickable{album(first)},leadingContent={CoverArt(store?.artwork(first.id),first.tags.album.orEmpty(),Modifier.size(58.dp))},
-                headlineContent={MarqueeText(first.tags.album?:"Unknown album")},supportingContent={Text(countLabel(entry.value.size, "song"))},
-                trailingContent={TextButton(enabled=ready&&store!=null,onClick={ui.resetLookup();ui.coverTargets=entry.value}){Text("Find cover")}})
+            CollectionRow(first.tags.album ?: "Unknown album", store?.artwork(first.id), entry.value.size, "Album", ready,
+                open={album(first)}, play={play(entry.value,0,false)}, shuffle={play(entry.value,0,true)},
+                addToPlaylist={addCollectionToPlaylist(entry.value)}, extraActions=listOf("Find cover" to {ui.resetLookup();ui.coverTargets=entry.value}))
         }
         item{Text("Songs",style=MaterialTheme.typography.titleLarge)}
-        items(tracks,key={it.id.value.toString()}){track->ListItem(modifier=Modifier.clickable(enabled=ready&&track.availability==Availability.AVAILABLE){play(tracks,tracks.indexOf(track),false)},
+        items(tracks,key={it.id.value.toString()}){track->
+            val menu=remember(track.id){mutableStateOf(false)}
+            ListItem(modifier=Modifier.combinedClickable(enabled=ready,onClick={if(track.availability==Availability.AVAILABLE)play(tracks,tracks.indexOf(track),false)},onLongClickLabel="Song options",onLongClick={menu.value=true}),
             leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp))},headlineContent={MarqueeText(track.tags.title)},
-            supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)})})}
+            supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)},menu)})}
     }
     if(editingNote)AlertDialog(onDismissRequest={editingNote=false},title={Text("Artist note")},text={OutlinedTextField(note,{note=it.take(6000)},modifier=Modifier.fillMaxWidth().heightIn(min=160.dp,max=340.dp),label={Text("About this artist")})},
         confirmButton={TextButton(enabled=ready,onClick={send(PlaybackService.ARTIST_NOTE,Bundle().apply{putString("name",name);putString("text",note)});editingNote=false}){Text("Save")}},dismissButton={TextButton(onClick={editingNote=false}){Text("Cancel")}})

@@ -11,6 +11,10 @@ interface PlayerDao {
     @Upsert suspend fun putTrack(row: TrackRow)
     @Query("SELECT * FROM track WHERE id=:id") suspend fun track(id: String): TrackRow?
     @Query("SELECT id FROM track ORDER BY addedAtMs,id") suspend fun trackIds(): List<String>
+    @Query("SELECT * FROM track ORDER BY addedAtMs,id") suspend fun allTracks(): List<TrackRow>
+    @Query("SELECT * FROM track_source ORDER BY trackId,id") suspend fun allSources(): List<SourceRow>
+    @Query("SELECT * FROM favorite") suspend fun allFavorites(): List<FavoriteRow>
+    @Query("SELECT * FROM resume_state") suspend fun allResumes(): List<ResumeRow>
     @Query("UPDATE track SET availability=:availability WHERE id=:id") suspend fun availability(id: String, availability: String)
     @Query("DELETE FROM track WHERE id=:id") suspend fun deleteTrack(id: String)
     @Insert suspend fun insertSource(row: SourceRow)

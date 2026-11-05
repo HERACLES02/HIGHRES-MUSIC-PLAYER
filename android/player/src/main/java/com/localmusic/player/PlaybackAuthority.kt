@@ -13,6 +13,8 @@ import android.os.*
 import androidx.media3.common.*
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.audio.AudioSink
 import com.localmusic.core.*
 import com.localmusic.data.SessionLoad
 import kotlinx.coroutines.*
@@ -25,19 +27,22 @@ import java.util.UUID
 class PlaybackAuthority(private val context: Context, private val changed: () -> Unit) {
     private val processors=java.util.IdentityHashMap<ExoPlayer,MusicAudioProcessor>()
     private val deckTracks=java.util.IdentityHashMap<ExoPlayer,TrackId>()
+    private val outputProviders=java.util.IdentityHashMap<ExoPlayer,LocalAudioTrackProvider>()
     var engine = newEngine(false); private set
     private fun newEngine(attach:Boolean=true):ExoPlayer {
         val processor=MusicAudioProcessor()
+        val output=LocalAudioTrackProvider()
         // Local files need less prefill after a seek than the generic one-second default.
         // Keep steady-state loading and starvation recovery unchanged.
         val loadControl=DefaultLoadControl.Builder().setBufferDurationsMs(
             DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
             START_BUFFER_MS,DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS).build()
-        val value=ExoPlayer.Builder(context,MusicRenderers(context,processor)).setLoadControl(loadControl).build().apply{
+        val value=ExoPlayer.Builder(context,MusicRenderers(context,processor,output)).setLoadControl(loadControl).build().apply{
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),false)
             setWakeMode(C.WAKE_MODE_LOCAL)
         }
         processors[value]=processor
+        outputProviders[value]=output
         if(attach)listen(value)
         return value
     }
@@ -74,7 +79,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     val player = NormalSessionPlayer(this)
     val sleep = SleepTimer { android.os.SystemClock.elapsedRealtime() }
-    val current: Track? get() = store?.state?.value?.tracks?.firstOrNull { it.id == queue.current?.trackId }
+    val current: Track? get() = queue.current?.trackId?.let { store?.state?.value?.trackById?.get(it) }
     val tracks: List<Track> get() = store?.state?.value?.tracks.orEmpty()
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause("Output disconnected. Reconnect and press Play.") }
@@ -87,6 +92,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         }
     }
     private var lastPersistAt = 0L
+    private var seekDetails: JSONObject? = null
     private val tick = object : Runnable {
         override fun run() {
             if (destroyed) return
@@ -109,6 +115,23 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         handler.post(tick)
     }
     private fun listen(target:ExoPlayer){
+        target.addAnalyticsListener(object:AnalyticsListener {
+            override fun onAudioPositionAdvancing(eventTime:AnalyticsListener.EventTime,playoutStartSystemTimeMs:Long) {
+                if(target!==engine)return
+                val pending=seekDetails?:return
+                if(eventTime.realtimeMs<pending.getLong("requestedAtElapsedMs")||!engine.playWhenReady)return
+                if(kotlin.math.abs(eventTime.currentPlaybackPositionMs-pending.getLong("targetPositionMs"))>2000)return
+                pending.put("audioProgressAfterMs",eventTime.realtimeMs-pending.getLong("requestedAtElapsedMs"))
+                event("seek_audio_progress",JSONObject(pending.toString()));seekDetails=null
+            }
+            override fun onAudioTrackInitialized(eventTime:AnalyticsListener.EventTime,audioTrackConfig:AudioSink.AudioTrackConfig) {
+                if(target===engine)event("audio_output_initialized",outputProviders[target]?.startup?.json())
+            }
+            override fun onAudioUnderrun(eventTime:AnalyticsListener.EventTime,bufferSize:Int,bufferSizeMs:Long,elapsedSinceLastFeedMs:Long) {
+                if(target===engine)event("audio_underrun",JSONObject().put("bufferSizeBytes",bufferSize)
+                    .put("bufferSizeMs",bufferSizeMs).put("elapsedSinceLastFeedMs",elapsedSinceLastFeedMs))
+            }
+        })
         target.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 if (target===engine&&(reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT))
@@ -119,6 +142,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 if(!destroyed&&target===engine){event("engine_state");this@PlaybackAuthority.player.refresh();changed()}
             }
             override fun onPlaybackStateChanged(state: Int) {
+                if(target===engine&&state==Player.STATE_READY)seekDetails?.let { pending ->
+                    if(!pending.has("readyAfterMs"))pending.put("readyAfterMs",SystemClock.elapsedRealtime()-pending.getLong("requestedAtElapsedMs"))
+                }
                 if (state == Player.STATE_ENDED&&target===engine) {
                     val endedGeneration = generation
                     handler.post { if (!destroyed&&target===engine&&endedGeneration==generation&&engine.playbackState==Player.STATE_ENDED) advance(true) }
@@ -190,6 +216,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         update()
     }
     fun pause(message: String = "") {
+        seekDetails=null
         observePosition(); engine.pause(); queue.pause()
         finishFade()
         if (focusHeld) { focusHeld = false; audio.abandonAudioFocusRequest(focus) }
@@ -223,6 +250,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("fromPositionMs",engine.currentPosition).put("targetPositionMs",target)
             .put("bufferedPositionBeforeMs",engine.bufferedPosition)
             .put("totalBufferedDurationBeforeMs",engine.totalBufferedDuration)
+            .put("playingAtRequest",engine.playWhenReady)
+        seekDetails=details
         engine.seekTo(target); queue.updatePosition(target); event("seek",details); persist(); update()
     }
     fun previous() { if (!ready) return; observePosition(); val playing = queue.isPlaying; persist(); load(queue.previous(), playing) }
@@ -247,6 +276,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         else load(next, playing)
     }
     private fun load(selection: Selection?, play: Boolean) {
+        seekDetails=null
         finishFade();discardStandby();rejectedFade=null
         if (selection == null) return
         if (store?.isEditing(selection.entry.trackId) == true) {
@@ -317,7 +347,13 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     private fun persist() { if (ready && !persistenceBlocked && queue.current != null) store?.persist(queue.snapshot()) }
     private fun update() { configureDeck(engine,queue.current?.trackId);refreshLookahead(); player.refresh(); changed() }
-    fun libraryChanged() { if (ready) update() }
+    fun libraryChanged() {
+        if (!ready) return
+        if (current?.availability == Availability.AVAILABLE && error in setOf(
+                "Saved song is unavailable. Scan again or select another song.",
+                "Song unavailable. Check access or storage and scan again.")) error = ""
+        update()
+    }
 
     /** Only the engine's next occurrence is prepared; the live queue is consumed at transition. */
     private fun refreshLookahead() {
@@ -388,7 +424,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         for((deck,id)in deckTracks)configureDeck(deck,id)
         if(ready)update()
     }
-    private fun releaseDeck(deck:ExoPlayer){deck.pause();deck.release();processors.remove(deck);deckTracks.remove(deck)}
+    private fun releaseDeck(deck:ExoPlayer){deck.pause();deck.release();processors.remove(deck);deckTracks.remove(deck);outputProviders.remove(deck)}
     private fun discardStandby(){val old=standby;standby=null;standbyPlan=null;if(old!=null)releaseDeck(old)}
     private fun finishFade(completed:Boolean=false){
         handler.removeCallbacks(fadeTick)
@@ -447,7 +483,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
-        return JSONObject().put("schemaVersion", 1).put("appVersion", "0.9.2-seek-buffering")
+        return JSONObject().put("schemaVersion", 1).put("appVersion", BuildConfig.VERSION_NAME)
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
             .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))
@@ -473,6 +509,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("buffering",JSONObject().put("startAndSeekPrefillMs",START_BUFFER_MS)
                 .put("starvationRecoveryPrefillMs",DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
                 .put("limits","Prefill is media duration, not a guaranteed wall-clock seek latency. State events do not measure the time sound reaches the listener."))
+            .put("outputStartup",outputProviders[engine]?.startup?.json()?:JSONObject.NULL)
             .put("events", JSONArray(events.toString())).toString(2)
     }
     fun extras(): Bundle {

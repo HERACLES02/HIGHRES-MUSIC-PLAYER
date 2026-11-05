@@ -10,6 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -24,8 +27,8 @@ private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, 
 
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller: MediaController?, ready: Boolean,
-    store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
-    openQueue: () -> Unit, details: () -> Unit, favorite: () -> Unit,openAudio:()->Unit,openArtist:()->Unit) {
+    artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
+    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
@@ -35,34 +38,40 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
     val toggle = { if (playing) controller?.pause() else controller?.play(); Unit }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight
-        val artworkSize = if (wide) (maxHeight * 0.56f).coerceIn(96.dp, 220.dp) else minOf(maxWidth - 48.dp, 240.dp)
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val panelHeight = maxHeight
+        val portraitArtRoom = (maxHeight - 300.dp * fontScale).coerceAtLeast(96.dp)
+        val artworkSize = if (wide) {
+            val columnWidth = ((maxWidth - 80.dp) * 0.45f).coerceAtLeast(96.dp)
+            val preferred = when (artworkSizePreference) {
+                "Compact" -> minOf(maxHeight * 0.56f, 220.dp)
+                "Full width" -> columnWidth
+                else -> minOf(maxHeight * 0.72f, 300.dp)
+            }
+            minOf(columnWidth, preferred, (maxHeight - 120.dp * fontScale).coerceAtLeast(96.dp)).coerceAtLeast(96.dp)
+        } else minOf(portraitArtRoom, maxWidth - 48.dp, when (artworkSizePreference) {
+            "Compact" -> 240.dp
+            "Full width" -> 480.dp
+            else -> 320.dp
+        })
         val header: @Composable () -> Unit = {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CoverArt(art, track.tags.title, Modifier.size(artworkSize))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        MarqueeText(track.tags.title, style = MaterialTheme.typography.headlineSmall)
+                        MarqueeText(track.tags.title, style = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold))
                         MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" },
                             modifier = Modifier.clickable(onClickLabel = "Open artist page", onClick = openArtist),
+                            style = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, style = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
-                    IconToggleButton(checked = track.favorite, onCheckedChange = { favorite() }, enabled = ready) {
-                        Icon(if (track.favorite) PlayerGlyph.Heart else PlayerGlyph.HeartOutline,
-                            if (track.favorite) "Remove favorite" else "Add favorite")
-                    }
+
                 }
             }
         }
         val controls: @Composable () -> Unit = {
-            val number = playback.optInt("collectionNumber")
-            val total = playback.optInt("collectionTotal")
-            if (number > 0 && total > 0) {
-                val origin = playback.optString("collectionLabel").takeUnless { it.isBlank() }?.replace("Listening collection", "Library") ?: "Library"
-                Text("$number of $total · $origin", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            TextButton(onClick = details) { Text("Source · ${PlaybackPresentation.quality(track.audio)}", style = MaterialTheme.typography.labelMedium) }
+            TextButton(onClick = details) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
             PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
@@ -100,10 +109,10 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
         }
         if (wide) Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Column(Modifier.weight(0.45f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp)) { header() }
-            Column(Modifier.weight(0.55f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) { controls() }
-        } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) { header(); controls() }
+            Column(Modifier.weight(0.55f).fillMaxHeight().verticalScroll(rememberScrollState()).heightIn(min = panelHeight).padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) { controls() }
+        } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).heightIn(min = panelHeight).padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) { header(); controls() }
     }
     if (lyricsOpen) ModalBottomSheet(onDismissRequest = { lyricsOpen = false },
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {

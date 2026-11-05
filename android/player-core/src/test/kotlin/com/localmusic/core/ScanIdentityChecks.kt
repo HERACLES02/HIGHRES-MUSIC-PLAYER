@@ -23,5 +23,13 @@ fun scanIdentityChecks() {
     expect(LocalFileIdentity.match(track.sources[0].uri, stamp.copy(sizeBytes = 2), key, listOf(track.copy(availability = Availability.MISSING)), aliases) is SourceMatch.NeedsConfirmation)
     expect(LocalFileIdentity.match(track.sources[0].uri, stamp, key, listOf(track), aliases) == SourceMatch.Existing(id))
     expect(LocalFileIdentity.match("content://document/1", stamp, key, listOf(track), mapOf(key to setOf(id, TrackId.new()))) is SourceMatch.NeedsConfirmation)
+    val folder = java.util.UUID.randomUUID()
+    val other = java.util.UUID.randomUUID()
+    val document = track.sources.first().copy(kind = SourceKind.DOCUMENT, folderGrantId = folder)
+    expect(!FolderScanPolicy.includes(track, emptySet()))
+    expect(!FolderScanPolicy.includes(track, setOf(folder)))
+    expect(FolderScanPolicy.includes(track.copy(sources = listOf(document)), setOf(folder)))
+    expect(!FolderScanPolicy.includes(track.copy(sources = listOf(document)), setOf(other)))
+    expect(FolderScanPolicy.includes(track.copy(sources = track.sources + document), setOf(folder)))
     println("Scan identity checks passed: $checks assertions.")
 }

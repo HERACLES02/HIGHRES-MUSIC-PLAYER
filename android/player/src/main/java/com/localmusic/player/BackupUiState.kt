@@ -22,7 +22,7 @@ fun BackupRestoreDialog(ui: BackupUiState, restore: () -> Unit, cancel: () -> Un
     AlertDialog(onDismissRequest = { if (!ui.busy) cancel() }, title = { Text("Restore this backup?") },
         text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(ui.summary)
-            Text("Backed-up playlists, favorites, app-only edits, lyrics, settings and the paused queue replace their saved versions. Unrelated newer songs and playlists stay.")
+            Text("Backed-up playlists, app-only edits, lyrics, settings and the paused queue replace their saved versions. Unrelated newer songs and playlists stay.")
             Text("Saved artist matches and EQ presets are merged; unrelated newer entries stay.")
             Text("Music files are not included or changed. On a new installation, allow music access, choose your folders again and scan. Conflicting song identities cancel the restore.")
             if (ui.busy) LinearProgressIndicator(Modifier.fillMaxWidth())

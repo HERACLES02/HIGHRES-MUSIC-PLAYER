@@ -57,8 +57,9 @@ class MusicAudioProcessor:BaseAudioProcessor(){
     }
 }
 
-class MusicRenderers(context:Context,private val processor:MusicAudioProcessor):DefaultRenderersFactory(context){
+class MusicRenderers(context:Context,private val processor:MusicAudioProcessor,
+    private val output:LocalAudioTrackProvider=LocalAudioTrackProvider()):DefaultRenderersFactory(context){
     override fun buildAudioSink(context:Context,enableFloatOutput:Boolean,enableAudioTrackPlaybackParams:Boolean):AudioSink =
         DefaultAudioSink.Builder(context).setEnableFloatOutput(false).setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-            .setAudioProcessors(arrayOf(processor)).build()
+            .setAudioProcessors(arrayOf(processor)).setAudioTrackProvider(output).build()
 }

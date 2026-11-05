@@ -30,14 +30,15 @@ import kotlinx.coroutines.sync.withLock
 
 private val Context.musicPreferences by preferencesDataStore("local-music-settings")
 data class MusicPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
-    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap())
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large")
 data class LyricsChoice(val receipt: String, val candidate: LyricsCandidate)
 
 data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Map<TrackId, Long> = emptyMap(),
     val scanning: Boolean = false, val scanned: Int = 0, val message: String = "", val error: String = "",
     val details: Map<TrackId, LibraryExtras> = emptyMap(), val folders: List<FolderGrant> = emptyList(), val revision: Long = 0,
     val edits: List<FileEditRow> = emptyList(), val editBusy: Boolean = false,
-    val playlists: List<Pair<Playlist, Int>> = emptyList())
+    val playlists: List<Pair<Playlist, Int>> = emptyList(),
+    val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap())
 
 class MusicApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -93,7 +94,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
             autoScan=values[booleanPreferencesKey("autoScan")]?:extended.autoScan,homeGrid=values[booleanPreferencesKey("homeGrid")]?:extended.homeGrid)
     }
     val preferences = context.musicPreferences.data.catch { emit(emptyPreferences()) }.map { values ->
-        val p=readPreferences(values);MusicPreferences(p.appearance,p.autoScan,p.homeGrid,p.audio,p.widgets,p.artists)
+        val p=readPreferences(values);MusicPreferences(p.appearance,p.autoScan,p.homeGrid,p.audio,p.widgets,p.artists,p.artworkSize)
     }.stateIn(scope, SharingStarted.Eagerly, MusicPreferences())
     suspend fun setPreferences(appearance: String, autoScan: Boolean) {
         AppBackups(context,this).recoverPreferences()
@@ -112,6 +113,10 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }}
     suspend fun setAudio(value:AudioSettings)=updateTools{it.copy(audio=value)}
     suspend fun setWidgets(value:WidgetSettings)=updateTools{it.copy(widgets=value)}
+    suspend fun setArtworkSize(value:String) {
+        require(value in setOf("Compact","Large","Full width"))
+        updateTools{it.copy(artworkSize=value)}
+    }
     suspend fun setArtist(name:String,value:ArtistProfile?)=updateTools{old->
         val key=ArtistProfile.key(name);require(key.isNotBlank()&&key.length<=300)
         val profiles=if(value==null)old.artists-key else old.artists+(key to value)
@@ -166,19 +171,24 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }
     suspend fun refresh() = withContext(Dispatchers.IO) {
         val repo = repository()
-        if (context.checkSelfPermission(audioPermission()) != PackageManager.PERMISSION_GRANTED) {
-            for (track in repo.tracks()) if (track.availability == Availability.AVAILABLE && track.sources.all { it.kind == SourceKind.MEDIA_STORE })
-                repo.markUnavailable(track.id, Availability.PERMISSION_LOST)
-        }
         val extras = repo.extras()
-        val tracks = repo.tracks().map { t -> extras[t.id]?.let { detail ->
+        val folders = repo.folderGrants()
+        val selected = folders.mapTo(HashSet()) { it.id }
+        val allTracks = repo.tracks().map { original ->
+            val t = if (FolderScanPolicy.includes(original, selected)) original else original.copy(availability = Availability.MISSING)
+            extras[t.id]?.let { detail ->
             t.copy(tags = TagPatch(detail.tagFields).apply(detail.tagsOverride ?: t.tags))
         } ?: t }
-        val resumes = tracks.mapNotNull { t -> repo.continuePosition(t.id)?.let { t.id to it } }.toMap()
-        val folders = repo.folderGrants()
+        val tracks = allTracks.filter { FolderScanPolicy.includes(it, selected) }
+        val resumes = repo.continuePositions(tracks)
+        val existingArtwork = extras.values.mapNotNull { it.artworkOverride ?: it.artworkPath }
+            .filter { it.isNotBlank() }.distinct().filter { java.io.File(it).exists() }.toHashSet()
+        val artworkPaths = extras.mapNotNull { (id, detail) ->
+            (detail.artworkOverride ?: detail.artworkPath)?.takeIf { it in existingArtwork }?.let { id to it }
+        }.toMap()
         val edits = repo.edits()
         val playlists = repo.playlists()
-        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists) }
+        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists, trackById = allTracks.associateBy { it.id }, artworkPaths = artworkPaths) }
     }
     suspend fun favorite(id: TrackId) {
         val repo = repository(); val track = repo.track(id) ?: return
@@ -208,10 +218,9 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         repo.saveFolderGrant(FolderGrant(old?.id ?: java.util.UUID.randomUUID(), uri.toString(), flags, System.currentTimeMillis()))
         refresh(); requestScan()
     }
-    fun artwork(id: TrackId): String? {
-        val detail = state.value.details[id] ?: return null
-        return (detail.artworkOverride ?: detail.artworkPath)?.takeIf { it.isNotBlank() && java.io.File(it).exists() }
-    }
+    /** Validated on the IO refresh path; rendering and media ticks never stat artwork files. */
+    fun artwork(id: TrackId): String? = state.value.artworkPaths[id]
+
     companion object {
         fun audioPermission() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     }

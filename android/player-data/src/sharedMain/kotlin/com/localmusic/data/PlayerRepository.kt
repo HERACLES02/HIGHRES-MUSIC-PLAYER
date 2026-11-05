@@ -110,7 +110,24 @@ class PlayerRepository(private val database: PlayerDatabase) {
         dao.availability(id.value.toString(), availability.name)
     }
     /** Read-only library enumeration; unavailable tracks retain their identity and references. */
-    suspend fun tracks(): List<Track> = dao.trackIds().mapNotNull { track(TrackId(uuid(it))) }
+    suspend fun tracks(): List<Track> = transaction {
+        val rows = dao.allTracks()
+        val sources = dao.allSources().groupBy { it.trackId }
+        val favorites = dao.allFavorites().mapTo(HashSet()) { it.trackId }
+        rows.map { row -> Track(TrackId(uuid(row.id)), ModelCodec.tags(row.tagsJson), ModelCodec.audio(row.audioJson),
+            sources[row.id].orEmpty().map { source -> TrackSource(source.uri, SourceKind.valueOf(source.kind),
+                ContentStamp(source.sizeBytes, source.modifiedMs, source.sha256), source.folderGrantId?.let(::uuid)) },
+            Availability.valueOf(row.availability), row.addedAtMs, row.id in favorites) }
+    }
+    /** Reuse the already loaded durations instead of reopening each track to find its resume point. */
+    suspend fun continuePositions(tracks: List<Track>): Map<TrackId, Long> {
+        val known = tracks.associateBy { it.id.value.toString() }
+        return dao.allResumes().mapNotNull { saved ->
+            val track = known[saved.trackId] ?: return@mapNotNull null
+            saved.positionMs.takeIf { ResumeRules.isContinueCandidate(it, track.audio.durationMs.takeIf { it > 0 }, saved.completed) }
+                ?.let { track.id to it }
+        }.toMap()
+    }
     suspend fun continuePosition(id: TrackId): Long? {
         val saved = dao.resume(id.value.toString()) ?: return null
         val duration = track(id)?.audio?.durationMs?.takeIf { it > 0 }
