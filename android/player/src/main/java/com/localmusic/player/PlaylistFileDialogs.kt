@@ -35,14 +35,15 @@ fun PlaylistFileDialogs(ui: PlaylistUiState, ready: Boolean, confirmImport: () -
             dismissButton = { TextButton(enabled = !ui.fileBusy.value, onClick = { ui.importPreview.value = null }) { Text("Cancel") } })
     }
     ui.exportTarget.value?.let { playlist ->
-        AlertDialog(onDismissRequest = { ui.exportTarget.value = null }, title = { Text("Export ${playlist.name}") },
+        AlertDialog(onDismissRequest = { ui.exportTarget.value = null }, title = { Text("Export playlist") },
             text = { Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(playlist.name, style = MaterialTheme.typography.titleMedium)
                 Text("Choose a format, then choose where to save it. All formats use UTF-8 and keep order and repeated songs.")
                 Text("This saves song locations, not the music. Local storage paths require the same folder layout. Android content addresses may work only on this phone and with existing access.")
                 PlaylistFileFormat.entries.forEach { format ->
                     OutlinedButton(enabled = !ui.fileBusy.value && ui.pendingExport.value == null, onClick = {
                         ui.exportTarget.value = null; export(playlist, format)
-                    }) { Text(format.name + if (format == PlaylistFileFormat.M3U8) " (recommended)" else "") }
+                    }, modifier = Modifier.fillMaxWidth()) { Text(format.name + if (format == PlaylistFileFormat.M3U8) " (recommended)" else "") }
                 }
             } }, confirmButton = { TextButton(onClick = { ui.exportTarget.value = null }) { Text("Cancel") } })
     }

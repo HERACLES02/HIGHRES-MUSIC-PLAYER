@@ -14,7 +14,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import com.localmusic.core.*
 import kotlinx.coroutines.*
 
@@ -44,8 +47,8 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
     }.sortedByDescending { it.addedAtMs } }
     val favorites = remember(tracks) { tracks.filter { it.favorite } }
     val continues = remember(tracks, library.continues) { tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE } }
-    LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(136.dp) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
@@ -53,7 +56,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
                 label = { Text("Search your music") }, leadingIcon = { Icon(PlayerGlyph.Search, null) },
                 trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(PlayerGlyph.Close, "Clear search") } })
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${tracks.size} songs", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Text(countLabel(tracks.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 IconToggleButton(checked = grid, onCheckedChange = { changeGrid(true) }, enabled = ready) { Icon(PlayerGlyph.Grid, "Grid view") }
                 IconToggleButton(checked = !grid, onCheckedChange = { changeGrid(false) }, enabled = ready) { Icon(PlayerGlyph.List, "List view") }
             }
@@ -70,7 +73,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
                         ElevatedCard(onClick = { play(listOf(track), 0, true, "Continue listening") }, enabled = ready, modifier = Modifier.width(180.dp)) {
                             CoverArt(store?.artwork(track.id), track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
                             Column(Modifier.padding(12.dp)) {
-                                Text(track.tags.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
+                                MarqueeText(track.tags.title, style = MaterialTheme.typography.titleSmall)
                                 val saved = library.continues[track.id] ?: 0
                                 Text("Continue at ${saved / 60000}:${"%02d".format(saved / 1000 % 60)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
@@ -90,14 +93,14 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
                 if (library.playlists.isEmpty()) OutlinedCard(onClick = allPlaylists, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(PlayerGlyph.Playlists, null, Modifier.size(36.dp)); Spacer(Modifier.width(16.dp))
-                        Column { Text("Make a playlist", style = MaterialTheme.typography.titleMedium); Text("Collect favorites or import a playlist file.") }
+                        Column(Modifier.weight(1f)) { Text("Make a playlist", style = MaterialTheme.typography.titleMedium); Text("Collect favorites or import a playlist file.") }
                     }
                 } else LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(library.playlists.take(12), key = { it.first.id.value.toString() }) { (playlist, count) ->
                         Column(Modifier.width(160.dp).clickable { openPlaylist(playlist) }) {
                             PlaylistCover(playlist, store, library.revision, Modifier.fillMaxWidth().aspectRatio(1f))
-                            Text(playlist.name, Modifier.padding(top = 8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                            Text("$count songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            MarqueeText(playlist.name, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+                            Text(countLabel(count, "song"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -131,17 +134,16 @@ private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean,
         CoverArt(art, track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(top = 8.dp)) {
-                Text(track.tags.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                Text(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MarqueeText(track.tags.title, style = MaterialTheme.typography.titleSmall)
+                MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (track.availability != Availability.AVAILABLE) Text("Unavailable", style = MaterialTheme.typography.labelSmall)
             }
             TrackMenu(track, ready, send, addToPlaylist, details)
         }
     } else ListItem(modifier = Modifier.clickable(enabled = enabled, onClick = play),
         leadingContent = { CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
-        headlineContent = { Text(track.tags.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        supportingContent = { Text(track.tags.artists.joinToString(", ") + if (enabled) "" else " · Unavailable", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        headlineContent = { MarqueeText(track.tags.title) },
+        supportingContent = { MarqueeText(track.tags.artists.joinToString(", ") + if (enabled) "" else " · Unavailable") },
         trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details) })
 }
 
@@ -153,8 +155,8 @@ fun PlaylistCard(playlist: Playlist, count: Int, store: MusicStore?, revision: L
         PlaylistCover(playlist, store, revision, Modifier.fillMaxWidth().aspectRatio(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(top = 8.dp)) {
-                Text(playlist.name, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
-                Text("$count songs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MarqueeText(playlist.name, style = MaterialTheme.typography.titleSmall)
+                Text(countLabel(count, "song"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Box {
                 IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for ${playlist.name}") }
@@ -179,11 +181,11 @@ fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifi
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { covers = emptyList() } // Artwork is optional; the saved playlist remains available.
     }
-        Surface(modifier, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+        Surface(modifier.clearAndSetSemantics { contentDescription = "Cover for ${playlist.name}" }, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
             if (covers.isEmpty()) Box(Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer))), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(PlayerGlyph.Playlists, null, Modifier.size(52.dp))
-                    Text(playlist.name.take(1).uppercase(), style = MaterialTheme.typography.headlineMedium)
+                    Text(String(Character.toChars(playlist.name.codePointAt(0))).uppercase(), style = MaterialTheme.typography.headlineMedium)
                 }
             }
             else if (covers.size == 1) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize())

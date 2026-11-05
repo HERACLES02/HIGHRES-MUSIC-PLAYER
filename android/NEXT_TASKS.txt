@@ -1,15 +1,14 @@
 Local Music - work queue
 
-Current: UI fixes and review
-- Fix light-mode status-bar contrast.
-- Review whole-panel lyrics activation while preserving seek/button gestures.
-- Review populated playlists, Home blocks and grid/list presentation.
-- Check dark/AMOLED themes, larger text and landscape layouts.
-- Review Now Playing queue position/context and long title/artist layouts.
-- Reproduce possible navigation changes while saved screen state loads.
+Current: requested UI changes, one increment at a time
+- 0.10.2 notification close: stop/dismiss while preserving queue and position.
+- Then long-press menus, larger artwork options, and removal of Favorites UI.
+- Checklist: UI_CHANGE_CHECKLIST.txt.
+- Performance investigation follows these UI increments.
 
 Pending phone confirmation
-- 0.9.4 embedded covers and source-quality details after rescanning.
+- 0.10.0 UI, long-name scrolling, lyrics swipe/import and widgets.
+- Embedded covers and source-quality details after rescanning.
 - Large seeks in SD-card FLAC files.
 
 Next: high-resolution / bit-perfect audio and Direct USB
@@ -19,5 +18,4 @@ Next: high-resolution / bit-perfect audio and Direct USB
 - Resolve Direct USB clocking, safe volume and physical playback gates before
   enabling that mode in the daily-use player.
 
-Scheduling these tasks does not enable Direct USB or establish bit-perfect
-output. Emulator checks and app-side counters do not replace device evidence.
+Emulator checks and app-side counters do not establish bit-perfect output.

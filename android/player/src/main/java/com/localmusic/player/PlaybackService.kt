@@ -30,6 +30,7 @@ class PlaybackService : MediaLibraryService() {
     private val commands = Mutex()
     private var backupPreview: Pair<String, BackupBundle>? = null
     private lateinit var widgets:WidgetUpdates
+    private var notificationDismissed = false
     private fun publish() {
         session?.setSessionExtras(authority.extras())
         if(::widgets.isInitialized){val track=authority.current
@@ -41,8 +42,13 @@ class PlaybackService : MediaLibraryService() {
         widgets=WidgetUpdates(this,scope)
         authority = PlaybackAuthority(this, ::publish)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val closeButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
+            .setCustomIconResId(R.drawable.ic_notification_close)
+            .setDisplayName("Close player")
+            .setSessionCommand(SessionCommand(CLOSE_PLAYER, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_OVERFLOW).build()
         session = MediaLibrarySession.Builder(this, authority.player, callbacks).setId("local-music")
-            .setSessionActivity(activity).build()
+            .setSessionActivity(activity).setMediaButtonPreferences(ImmutableList.of(closeButton)).build()
         addSession(session!!)
         scope.launch {
             try {
@@ -60,11 +66,22 @@ class PlaybackService : MediaLibraryService() {
             if (!local && !controller.isTrusted) return MediaSession.ConnectionResult.reject()
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
             if (local) for (command in ACTIONS) commands.add(SessionCommand(command, Bundle.EMPTY))
+            // System UI dispatches notification custom actions through its trusted controller.
+            commands.add(SessionCommand(CLOSE_PLAYER, Bundle.EMPTY))
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailablePlayerCommands(NormalSessionPlayer.allowedCommands())
                 .setAvailableSessionCommands(commands.build()).build()
         }
         override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, command: SessionCommand,
             args: Bundle): ListenableFuture<SessionResult> {
+            if (command.customAction == CLOSE_PLAYER && (controller.uid == applicationInfo.uid || controller.isTrusted)) {
+                // Stop through the authority so the current song, queue and resume position survive.
+                // Media3 cancels the idle notification and any pending artwork notification updates.
+                authority.stop()
+                notificationDismissed = true
+                setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_NEVER)
+                pauseAllPlayersAndStopSelf()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
             if (controller.uid != applicationInfo.uid || command.customAction !in ACTIONS)
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             val future = SettableFuture.create<SessionResult>()
@@ -81,6 +98,8 @@ class PlaybackService : MediaLibraryService() {
                             "toggle"->if(authority.engine.playWhenReady)authority.pause()else{
                                 // A user widget click may resume a background/cold service. Establish
                                 // its media foreground notification before Android 15 audio focus.
+                                notificationDismissed = false
+                                setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_AFTER_STOP_OR_ERROR)
                                 if(authority.current?.availability==Availability.AVAILABLE)onUpdateNotification(session,true)
                                 try{authority.play()}finally{onUpdateNotification(session,authority.engine.playWhenReady)}
                             }
@@ -311,6 +330,15 @@ class PlaybackService : MediaLibraryService() {
         }
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        // Explicit Play starts a new notification lifetime after Close; ordinary Pause retains it.
+        if (notificationDismissed && authority.engine.playWhenReady) {
+            // The setter synchronously requests another notification update. Clear this first.
+            notificationDismissed = false
+            setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_AFTER_STOP_OR_ERROR)
+        }
+        super.onUpdateNotification(session, startInForegroundRequired)
+    }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         return START_NOT_STICKY
@@ -321,6 +349,7 @@ class PlaybackService : MediaLibraryService() {
         scope.cancel(); super.onDestroy()
     }
     companion object {
+        const val CLOSE_PLAYER = "com.localmusic.player.CLOSE_PLAYER"
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
         const val WIDGET_SETTINGS="com.localmusic.player.WIDGET_SETTINGS"
         const val WIDGET_CONTROL="com.localmusic.player.WIDGET_CONTROL"

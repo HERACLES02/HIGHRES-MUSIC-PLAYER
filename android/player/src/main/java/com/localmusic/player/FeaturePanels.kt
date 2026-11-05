@@ -9,6 +9,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.mapSaver
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -38,14 +41,14 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
 }
 
 @Composable fun LyricsPanel(track: Track, store: MusicStore?, revision: Long, positionMs: Long, controller: MediaController?,
-    send: (String, Bundle) -> Unit, actions: FeatureActions, expanded: Boolean = false) {
+    send: (String, Bundle) -> Unit, actions: FeatureActions, expanded: Boolean = false, beforeImport: () -> Unit = {}) {
     var versions by remember(track.id) { mutableStateOf(emptyList<SavedLyrics>()) }
     var selected by remember(track.id) { mutableStateOf<SavedLyrics?>(null) }
     var loadError by remember(track.id) { mutableStateOf("") }
-    var edit by remember(track.id) { mutableStateOf(false) }
-    var showVersions by remember(track.id) { mutableStateOf(false) }
-    var showTools by remember(track.id) { mutableStateOf(!expanded) }
-    var search by remember(track.id) { mutableStateOf(false) }
+    var edit by rememberSaveable(track.id) { mutableStateOf(false) }
+    var showVersions by rememberSaveable(track.id) { mutableStateOf(false) }
+    var showTools by rememberSaveable(track.id) { mutableStateOf(!expanded) }
+    var search by rememberSaveable(track.id) { mutableStateOf(false) }
     LaunchedEffect(track.id, revision) {
         try {
             val repo = store?.repository() ?: return@LaunchedEffect
@@ -62,9 +65,9 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
         if (expanded) IconButton(onClick = { showTools = !showTools }) { Icon(PlayerGlyph.More, "Lyrics actions and timing") }
     }
     if (loadError.isNotBlank()) Text(loadError, color = MaterialTheme.colorScheme.error)
-    if (showTools) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (showTools) PlayerActions() {
         TextButton(onClick = { edit = true }) { Text("Paste / edit") }
-        TextButton(onClick = { actions.importLyrics(track) }) { Text("Import LRC") }
+        TextButton(onClick = { beforeImport(); actions.importLyrics(track) }) { Text("Import LRC") }
         TextButton(onClick = { search = true }) { Text("Find lyrics…") }
         if (versions.isNotEmpty()) TextButton(onClick = { showVersions = !showVersions }) { Text("Versions (${versions.size})") }
         selected?.let { value -> TextButton(onClick = { actions.exportLyrics(track, value.originalText) }) { Text("Export") } }
@@ -92,7 +95,7 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
                 }
             }
             val offset = adjustment
-            if (showTools) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showTools) PlayerActions() {
                 TextButton(onClick = { send(PlaybackService.LYRICS_OFFSET, Bundle().apply { putString("id", track.id.value.toString()); putLong("offset", (offset - 250).coerceAtLeast(-LrcParser.MAX_ADJUSTMENT_MS)) }) }) { Text("Earlier 0.25s") }
                 TextButton(onClick = { send(PlaybackService.LYRICS_OFFSET, Bundle().apply { putString("id", track.id.value.toString()); putLong("offset", (offset + 250).coerceAtMost(LrcParser.MAX_ADJUSTMENT_MS)) }) }) { Text("Later 0.25s") }
             }
@@ -110,10 +113,10 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
 }
 
 @Composable private fun LyricsSearchDialog(track: Track, store: MusicStore, send: (String, Bundle) -> Unit, dismiss: () -> Unit) {
-    var query by remember { mutableStateOf("${track.tags.title} ${track.tags.artists.joinToString(" ")}") }
-    var source by remember { mutableStateOf(LyricsSource.LRCLIB) }
-    var artist by remember { mutableStateOf(track.tags.artists.joinToString(", ")) }
-    var title by remember { mutableStateOf(track.tags.title) }
+    var query by rememberSaveable { mutableStateOf("${track.tags.title} ${track.tags.artists.joinToString(" ")}".take(300)) }
+    var source by rememberSaveable { mutableStateOf(LyricsSource.LRCLIB) }
+    var artist by rememberSaveable { mutableStateOf(track.tags.artists.joinToString(", ").take(300)) }
+    var title by rememberSaveable { mutableStateOf(track.tags.title.take(300)) }
     var results by remember { mutableStateOf(emptyList<LyricsChoice>()) }
     var selected by remember { mutableStateOf<LyricsChoice?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -122,7 +125,7 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     val opener=LocalUriHandler.current
     AlertDialog(onDismissRequest = dismiss, title = { Text("Find lyrics") }, text = {
         Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){LyricsSource.entries.forEach{item->
+            PlayerActions(){LyricsSource.entries.forEach{item->
                 FilterChip(source==item,{source=item;results=emptyList();selected=null;message=""},enabled=!busy,label={Text(item.label)})}}
             Text("Search sends these details to ${source.label}. Review before saving for offline use. Your music tags stay unchanged.")
             if(source==LyricsSource.LRCLIB)OutlinedTextField(query, { if (it.length <= 300) query = it },enabled=!busy,label = { Text("Title, artist, album or manual query") })
@@ -153,7 +156,7 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
             }
             HorizontalDivider();Text("Open elsewhere",style=MaterialTheme.typography.titleSmall)
             Text("Spotify and Genius open externally. Their lyrics are not imported here.",style=MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            PlayerActions(){
                 val externalQuery=java.net.URLEncoder.encode(if(source==LyricsSource.LRCLIB)query else "$title $artist","UTF-8").replace("+","%20")
                 TextButton(onClick={runCatching{opener.openUri("https://open.spotify.com/search/$externalQuery")}.onFailure{message="Could not open Spotify."}}){Text("Spotify")}
                 TextButton(onClick={runCatching{opener.openUri("https://genius.com/search?q=$externalQuery")}.onFailure{message="Could not open Genius."}}){Text("Genius")}
@@ -165,15 +168,21 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
 }
 
 @Composable fun LyricsEditorDialog(track: Track, initial: String, position: Long, send: (String, Bundle) -> Unit, initiallyInstrumental: Boolean = false, dismiss: () -> Unit) {
-    var text by remember { mutableStateOf(initial) }
-    var instrumental by remember { mutableStateOf(initiallyInstrumental) }
+    if (initial.length > 200000) {
+        AlertDialog(onDismissRequest = dismiss, title = { Text("Lyrics editor limit") },
+            text = { Text("This version is too large for the editor. Your saved lyrics are unchanged. Import a file under 200,000 characters to create another version.") },
+            confirmButton = { TextButton(onClick = dismiss) { Text("Close") } })
+        return
+    }
+    var text by rememberSaveable(track.id.value.toString()) { mutableStateOf(initial) }
+    var instrumental by rememberSaveable(track.id.value.toString()) { mutableStateOf(initiallyInstrumental) }
     val parsed = remember(text, instrumental) { runCatching { LrcParser.parse(text, instrumental) } }
-    AlertDialog(onDismissRequest = dismiss, title = { Text("Lyrics · ${track.tags.title}") }, text = {
+    AlertDialog(onDismissRequest = dismiss, title = { Text("Edit lyrics") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Save a new app-private version. Existing versions and music files are kept.")
-            OutlinedTextField(text, { if (it.length <= 200000) text = it }, modifier = Modifier.fillMaxWidth().height(260.dp), label = { Text("Plain text or LRC") })
+            OutlinedTextField(text, { if (it.length <= 200000) text = it }, modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp, max = 240.dp), label = { Text("Plain text or LRC") })
             TextButton(onClick = { text += "\n" + LrcParser.stamp(position.coerceAtLeast(0), "") }) { Text("Insert current-position timestamp") }
-            Row { Checkbox(instrumental, { instrumental = it }); Text("Instrumental") }
+            SettingCheckbox("Instrumental", instrumental) { instrumental = it }
             Text(parsed.getOrNull()?.let { "Preview: ${it.kind.name.lowercase()} · ${it.lines.size} timed lines" } ?: "This version cannot be parsed.")
             if (initial.length > 200000) Text("This version is too large for the editor. Import a smaller file to create another version.")
         }
@@ -194,22 +203,27 @@ private fun fieldLabel(key: String): String = when (key) {
 
 @Composable fun TagEditorDialog(tracks: List<Track>, library: LibraryState, send: (String, Bundle) -> Unit,
     actions: FeatureActions, openNative: (String) -> Unit, dismiss: () -> Unit) {
-    val enabled = remember { mutableStateMapOf<String, Boolean>() }
-    val values = remember { mutableStateMapOf<String, String>().apply { for (key in TagPatch.KEYS) {
+    val draftKey = tracks.joinToString { it.id.value.toString() }
+    val enabled = rememberSaveable(draftKey, saver = mapSaver<SnapshotStateMap<String, Boolean>>(
+        save = { it.toMap() }, restore = { saved -> mutableStateMapOf<String, Boolean>().apply { saved.forEach { (key, value) -> put(key, value as Boolean) } } }
+    )) { mutableStateMapOf<String, Boolean>() }
+    val values = rememberSaveable(draftKey, saver = mapSaver<SnapshotStateMap<String, String>>(
+        save = { it.toMap() }, restore = { saved -> mutableStateMapOf<String, String>().apply { saved.forEach { (key, value) -> put(key, value as String) } } }
+    )) { mutableStateMapOf<String, String>().apply { for (key in TagPatch.KEYS) {
         val shared = tracks.map { tagValue(it.tags, key) }.distinct(); put(key, shared.singleOrNull().orEmpty())
     } } }
-    var preview by remember { mutableStateOf(false) }
+    var preview by rememberSaveable(draftKey) { mutableStateOf(false) }
     val fields = TagPatch.KEYS.filter { enabled[it] == true }.associateWith { values[it].orEmpty() }
     val patch = runCatching { TagPatch(fields) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (preview) "Review ${tracks.size} song(s)" else "Edit ${tracks.size} song(s)") }, text = {
+    AlertDialog(onDismissRequest = dismiss, title = { Text(if (preview) "Review ${countLabel(tracks.size, "song")}" else "Edit ${countLabel(tracks.size, "song")}") }, text = {
         Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!preview) {
                 Text("Only checked fields change. Clear explicitly to remove a value. Use one artist per line.")
                 TagPatch.KEYS.forEach { key ->
-                    Row { Checkbox(enabled[key] == true, { enabled[key] = it }); Text("Change ${fieldLabel(key).lowercase()}") }
+                    SettingCheckbox("Change ${fieldLabel(key).lowercase()}", enabled[key] == true) { enabled[key] = it }
                     OutlinedTextField(values[key].orEmpty(), { values[key] = it; enabled[key] = true }, modifier = Modifier.fillMaxWidth(), singleLine = key !in setOf("ARTIST", "COMMENT"),
-                        label = { Text(if (tracks.map { tagValue(it.tags, key) }.distinct().size > 1) "Mixed — unchanged unless checked" else "Value") })
-                    TextButton(onClick = { values[key] = ""; enabled[key] = true }) { Text("Clear this field") }
+                        label = { Text(fieldLabel(key) + if (tracks.map { tagValue(it.tags, key) }.distinct().size > 1) " (mixed)" else "") })
+                    TextButton(onClick = { values[key] = ""; enabled[key] = true }) { Text("Clear ${fieldLabel(key).lowercase()}") }
                 }
                 TextButton(onClick = { actions.pickCover(tracks) }) { Text("Choose artwork (separate edit)") }
             } else for (track in tracks) {
@@ -225,7 +239,7 @@ private fun fieldLabel(key: String): String = when (key) {
             send(PlaybackService.APP_TAGS, Bundle().apply { putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) }); dismiss()
         }) { Text("Use in this app") }
     }, dismissButton = {
-        Row {
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
             if (preview) TextButton(enabled = !library.scanning, onClick = {
                 val batch = UUID.randomUUID().toString()
                 send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) })
@@ -267,7 +281,6 @@ private fun fieldLabel(key: String): String = when (key) {
 }
 
 @Composable fun EditHistory(library: LibraryState, openBatch: (String) -> Unit, actions: FeatureActions) {
-    Text("Edits and recovery", style = MaterialTheme.typography.titleLarge)
     if (library.edits.isEmpty()) Text("No music-file edits yet.")
     library.edits.take(30).forEach { row ->
         Text(row.displayName, fontWeight = FontWeight.Bold)

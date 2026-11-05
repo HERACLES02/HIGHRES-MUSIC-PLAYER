@@ -6,6 +6,6 @@
    <TextView android:id="@+id/widget_artist" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/widget_open" android:textSize="12sp" android:textColor="#acb8ad" android:maxLines="1" android:ellipsize="end"/>
   </LinearLayout>
  </LinearLayout>
- <ImageButton android:id="@+id/widget_play" android:layout_width="48dp" android:layout_height="48dp" android:background="@android:color/transparent" android:src="@android:drawable/ic_media_play" android:contentDescription="@string/widget_play"/>
- <ImageButton android:id="@+id/widget_next" android:layout_width="48dp" android:layout_height="48dp" android:background="@android:color/transparent" android:src="@android:drawable/ic_media_next" android:contentDescription="@string/widget_next"/>
+ <ImageButton android:padding="12dp" android:id="@+id/widget_play" android:layout_width="48dp" android:layout_height="48dp" android:background="@android:color/transparent" android:src="@drawable/ic_widget_play" android:contentDescription="@string/widget_play"/>
+ <ImageButton android:padding="12dp" android:id="@+id/widget_next" android:layout_width="48dp" android:layout_height="48dp" android:background="@android:color/transparent" android:src="@drawable/ic_widget_next" android:contentDescription="@string/widget_next"/>
 </LinearLayout>

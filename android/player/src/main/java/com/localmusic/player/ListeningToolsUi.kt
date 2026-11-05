@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -78,11 +79,11 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
         item{Text("Find your sound.",style=MaterialTheme.typography.headlineMedium);Text("Normal playback",color=MaterialTheme.colorScheme.onSurfaceVariant)}
         item{ElevatedCard(onClick=openEq){Column(Modifier.fillMaxWidth().padding(18.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Equalizer",style=MaterialTheme.typography.titleLarge);Text(settings.preset.name)}
-                Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it)))},enabled=ready)}
+                Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it)))},enabled=ready, modifier=Modifier.semantics { contentDescription="Equalizer enabled" })}
             TextButton(onClick=openEq){Text("Edit EQ · import / export JSON")}
         }}}
         item{Text("Volume leveling",style=MaterialTheme.typography.titleLarge);Text("ReplayGain uses gain and peak tags stored in each file.")
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            PlayerActions(){
                 ReplayGainMode.entries.forEach{mode->FilterChip(settings.replayGain==mode,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(replayGain=mode)))},enabled=ready,label={Text(mode.name.lowercase().replaceFirstChar{it.uppercase()})})}
             }
             Text("Album keeps relative track loudness. Missing gain tags leave volume unchanged.",style=MaterialTheme.typography.bodySmall)
@@ -91,7 +92,7 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
             else if(track!=null){val tags=ReplayGainInfo.parse(detail?.replayGainTags.orEmpty());Text("Current track: ${tags.trackGainDb?.let{"$it dB"}?:"no track gain"} · album: ${tags.albumGainDb?.let{"$it dB"}?:"no album gain"}",style=MaterialTheme.typography.bodySmall)}
         }
         item{HorizontalDivider();Text("Crossfade",style=MaterialTheme.typography.titleLarge);Text("Blend the end of one track into the next.")
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){listOf(0,2,4,6).forEach{seconds->FilterChip(settings.crossfadeSeconds==seconds,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(crossfadeSeconds=seconds)))},enabled=ready,label={Text(if(seconds==0)"Off" else "${seconds}s")})}}
+            PlayerActions(){listOf(0,2,4,6).forEach{seconds->FilterChip(settings.crossfadeSeconds==seconds,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(crossfadeSeconds=seconds)))},enabled=ready,label={Text(if(seconds==0)"Off" else "${seconds}s")})}}
             Text("Off keeps gapless transitions. Repeat one and end-of-track sleep do not crossfade. Short tracks use a shorter blend.",style=MaterialTheme.typography.bodySmall)
         }
     }
@@ -99,15 +100,16 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
 
 @Composable
 fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send:(String,Bundle)->Unit){
+    var deletingPreset by remember { mutableStateOf<EqPreset?>(null) }
     val context=LocalContext.current
     var draft by remember(settings.preset){mutableStateOf(settings.preset)}
-    var naming by remember{mutableStateOf(false)};var name by remember{mutableStateOf("")}
+    var naming by rememberSaveable{mutableStateOf(false)};var name by rememberSaveable{mutableStateOf("")}
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)ui.readPreset(context,uri)}
     val exporter=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")){uri->ui.savePreset(context,uri)}
     fun apply(value:EqPreset=draft){send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(preset=value)))}
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
         item{Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Your EQ, your preset.",style=MaterialTheme.typography.headlineSmall);Text(draft.name,color=MaterialTheme.colorScheme.primary)}
-            Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it,preset=draft)))},enabled=ready)}}
+            Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it,preset=draft)))},enabled=ready, modifier=Modifier.semantics { contentDescription="Equalizer enabled" })}}
         item{val color=MaterialTheme.colorScheme.primary;val line=MaterialTheme.colorScheme.outlineVariant
             Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceContainer){Column(Modifier.padding(16.dp)){
                 Text("Band gains",style=MaterialTheme.typography.labelMedium)
@@ -133,20 +135,25 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
                 onValueChangeFinished={apply()},modifier=Modifier.semantics{contentDescription="Preamp decibels"})
             Text("Reduce preamp when boosting bands to avoid clipping.",style=MaterialTheme.typography.bodySmall)
         }
-        item{Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        item{PlayerActions(){
             FilledTonalButton(enabled=ready&&!ui.fileBusy,onClick={picker.launch(arrayOf("application/json","text/plain","application/octet-stream"))}){Text("Import JSON")}
             OutlinedButton(enabled=ready&&!ui.fileBusy,onClick={ui.pendingExport=AudioCodec.preset(draft);exporter.launch("local-music-eq.json")}){Text("Export JSON")}
         };Text("Import Local Music JSON or a single standard 10-band graphic export. Export saves Local Music JSON v1.",style=MaterialTheme.typography.bodySmall)
             if(ui.fileBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
             if(ui.message.isNotBlank())Text(ui.message)
         }
-        item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        item{PlayerActions(){
             Button(enabled=ready,onClick={name=draft.name;naming=true}){Text("Save preset")}
             OutlinedButton(enabled=ready,onClick={draft=EqPreset();apply(draft)}){Text("Reset to flat")}
         };if(settings.presets.isNotEmpty())Text("Saved presets",Modifier.padding(top=16.dp),style=MaterialTheme.typography.titleLarge)}
-        items(settings.presets,key={it.name}){preset->ListItem(headlineContent={Text(preset.name)},modifier=Modifier.clickable(enabled=ready){draft=preset;apply(preset)},
-            trailingContent={TextButton(enabled=ready,onClick={send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(presets=settings.presets.filter{it.name!=preset.name})))}){Text("Delete")}})}
+        items(settings.presets,key={it.name}){preset->ListItem(headlineContent={Text(preset.name,maxLines=2,overflow=TextOverflow.Ellipsis)},modifier=Modifier.clickable(enabled=ready){draft=preset;apply(preset)},
+            trailingContent={IconButton(enabled=ready,onClick={deletingPreset=preset}){Icon(PlayerGlyph.Close,"Delete preset ${preset.name}")}})}
     }
+    deletingPreset?.let { preset -> AlertDialog(onDismissRequest={deletingPreset=null}, title={Text("Delete this preset?")},
+        text={Text("Remove ${preset.name} from saved presets? The current sound settings stay as selected.")},
+        confirmButton={TextButton(enabled=ready,onClick={send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(presets=settings.presets.filter{it.name!=preset.name})));deletingPreset=null},
+            colors=ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.error)){Text("Delete")}},
+        dismissButton={TextButton(onClick={deletingPreset=null}){Text("Cancel")}}) }
     if(naming)AlertDialog(onDismissRequest={naming=false},title={Text("Save EQ preset")},text={OutlinedTextField(name,{name=it.take(80)},label={Text("Preset name")},singleLine=true)},
         confirmButton={TextButton(enabled=name.isNotBlank()&&(settings.presets.size<100||settings.presets.any{it.name.equals(name.trim(),true)}),onClick={
             val saved=draft.copy(name=name.trim());val bank=settings.presets.filterNot{it.name.equals(saved.name,true)}+saved
@@ -165,7 +172,7 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
 
 @Composable
 fun WidgetSettingsPanel(value:WidgetSettings,ready:Boolean,track:Track?,art:String?,send:(String,Bundle)->Unit){
-    val context=LocalContext.current;var compact by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
+    val context=LocalContext.current;var compact by rememberSaveable{mutableStateOf(false)};var message by remember{mutableStateOf("")}
     fun change(theme:String=value.theme,artwork:Boolean=value.artwork){send(PlaybackService.WIDGET_SETTINGS,Bundle().apply{putString("theme",theme);putBoolean("artwork",artwork)})}
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
         item{Text("Music, a tap away.",style=MaterialTheme.typography.headlineMedium);Text("Choose a layout for your home screen.")}
@@ -177,10 +184,10 @@ fun WidgetSettingsPanel(value:WidgetSettings,ready:Boolean,track:Track?,art:Stri
                 if(compact){Icon(PlayerGlyph.Play,"Play preview");Spacer(Modifier.width(16.dp));Icon(PlayerGlyph.Next,"Next preview")}}
             if(!compact)Row(Modifier.fillMaxWidth().padding(top=16.dp),horizontalArrangement=Arrangement.SpaceEvenly){Icon(PlayerGlyph.Previous,"Previous preview");Icon(PlayerGlyph.Play,"Play preview");Icon(PlayerGlyph.Next,"Next preview")}
         }}}
-        item{Text("Layout",style=MaterialTheme.typography.titleLarge);Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){FilterChip(!compact,{compact=false},label={Text("Artwork · 4 × 2")});FilterChip(compact,{compact=true},label={Text("Compact · 4 × 1")})}}
-        item{Text("Appearance",style=MaterialTheme.typography.titleLarge);Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        item{Text("Layout",style=MaterialTheme.typography.titleLarge);PlayerActions(){FilterChip(!compact,{compact=false},label={Text("Artwork · 4 × 2")});FilterChip(compact,{compact=true},label={Text("Compact · 4 × 1")})}}
+        item{Text("Appearance",style=MaterialTheme.typography.titleLarge);PlayerActions(){
             listOf("Match app","Light","Dark").forEach{theme->FilterChip(value.theme==theme,{change(theme=theme)},enabled=ready,label={Text(theme)})}}
-            Row(verticalAlignment=Alignment.CenterVertically){Text("Show album artwork",Modifier.weight(1f));Switch(value.artwork,{change(artwork=it)},enabled=ready)}
+            SettingSwitch("Show album artwork", value.artwork, ready) { change(artwork = it) }
         }
         item{Button(enabled=ready,onClick={val manager=AppWidgetManager.getInstance(context)
             if(manager.isRequestPinAppWidgetSupported){val provider=if(compact)CompactWidget::class.java else ArtworkWidget::class.java

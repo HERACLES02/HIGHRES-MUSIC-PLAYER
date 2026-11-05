@@ -43,11 +43,11 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
     }
     val albums=remember(tracks){tracks.groupBy{(it.tags.album.orEmpty()) to (it.tags.albumArtist?:it.tags.artists.joinToString(", "))}}
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
-        item{CoverArt(profile?.imagePath,name,Modifier.fillMaxWidth().height(180.dp));Text(name,Modifier.padding(top=12.dp),style=MaterialTheme.typography.headlineMedium)
+        item{CoverArt(profile?.imagePath,name,Modifier.fillMaxWidth().height(180.dp));MarqueeText(name,Modifier.padding(top=12.dp),style=MaterialTheme.typography.headlineMedium)
             profile?.description?.takeIf{it.isNotBlank()}?.let{Text(it,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-            Text("${tracks.size} songs · ${albums.size} albums",style=MaterialTheme.typography.bodyMedium)
+            Text(countLabel(tracks.size, "song") + " · " + countLabel(albums.size, "album"),style=MaterialTheme.typography.bodyMedium)
         }
-        item{Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Button(enabled=ready&&tracks.isNotEmpty(),onClick={play(tracks,0,false)}){Icon(PlayerGlyph.Play,null);Spacer(Modifier.width(6.dp));Text("Play artist")}
+        item{PlayerActions(){Button(enabled=ready&&tracks.isNotEmpty(),onClick={play(tracks,0,false)}){Icon(PlayerGlyph.Play,null);Spacer(Modifier.width(6.dp));Text("Play artist")}
             FilledTonalButton(enabled=ready&&tracks.isNotEmpty(),onClick={play(tracks,0,true)}){Icon(PlayerGlyph.Shuffle,null);Spacer(Modifier.width(6.dp));Text("Shuffle")}}
         }
         item{Text("About ${profile?.name?:name}",style=MaterialTheme.typography.titleLarge)
@@ -61,8 +61,8 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
                 profile.imageLicense?.let{Text(it,style=MaterialTheme.typography.bodySmall)}
                 profile.imageSourceUrl?.let{SourceLink("Image source & license",it)}
             }
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                OutlinedButton(enabled=ready&&store!=null,onClick={ui.resetLookup();ui.artistTarget=name}){Text(if(profile==null)"Find artist" else "Change / refresh match")}
+            PlayerActions(){
+                OutlinedButton(enabled=ready&&store!=null,onClick={ui.resetLookup();ui.artistTarget=name}){Text(if(profile?.identityUrl==null)"Find artist" else "Change / refresh match")}
                 TextButton(enabled=ready,onClick={note=profile?.biography.orEmpty();editingNote=true}){Text("Edit note")}
                 TextButton(enabled=ready,onClick={photoTarget=name;photo.launch(arrayOf("image/*"))}){Text("Choose photo")}
                 if(profile!=null)TextButton(enabled=ready,onClick={clear=true}){Text("Remove match")}
@@ -72,13 +72,13 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
         item{HorizontalDivider();Text("Albums",style=MaterialTheme.typography.titleLarge)}
         items(albums.entries.toList(),key={it.key.toString()}){entry->val first=entry.value.first()
             ListItem(modifier=Modifier.clickable{album(first)},leadingContent={CoverArt(store?.artwork(first.id),first.tags.album.orEmpty(),Modifier.size(58.dp))},
-                headlineContent={Text(first.tags.album?:"Unknown album",maxLines=2,overflow=TextOverflow.Ellipsis)},supportingContent={Text("${entry.value.size} songs")},
+                headlineContent={MarqueeText(first.tags.album?:"Unknown album")},supportingContent={Text(countLabel(entry.value.size, "song"))},
                 trailingContent={TextButton(enabled=ready&&store!=null,onClick={ui.resetLookup();ui.coverTargets=entry.value}){Text("Find cover")}})
         }
         item{Text("Songs",style=MaterialTheme.typography.titleLarge)}
         items(tracks,key={it.id.value.toString()}){track->ListItem(modifier=Modifier.clickable(enabled=ready&&track.availability==Availability.AVAILABLE){play(tracks,tracks.indexOf(track),false)},
-            leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp))},headlineContent={Text(track.tags.title,maxLines=2,overflow=TextOverflow.Ellipsis)},
-            supportingContent={Text(track.tags.album.orEmpty(),maxLines=1,overflow=TextOverflow.Ellipsis)},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)})})}
+            leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp))},headlineContent={MarqueeText(track.tags.title)},
+            supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)})})}
     }
     if(editingNote)AlertDialog(onDismissRequest={editingNote=false},title={Text("Artist note")},text={OutlinedTextField(note,{note=it.take(6000)},modifier=Modifier.fillMaxWidth().heightIn(min=160.dp,max=340.dp),label={Text("About this artist")})},
         confirmButton={TextButton(enabled=ready,onClick={send(PlaybackService.ARTIST_NOTE,Bundle().apply{putString("name",name);putString("text",note)});editingNote=false}){Text("Save")}},dismissButton={TextButton(onClick={editingNote=false}){Text("Cancel")}})
@@ -96,7 +96,7 @@ fun ArtistLookupDialogs(ui:ListeningToolsUi,store:MusicStore?,ready:Boolean,send
         val review=ui.artistReview
         AlertDialog(onDismissRequest={close()},title={Text(if(review==null)"Find an artist" else "Review artist match")},text={Column(Modifier.heightIn(max=460.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
             if(review==null){
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                PlayerActions(){
                     FilterChip(!wikipedia,{wikipedia=false;ui.resetLookup()},enabled=!ui.lookupBusy,label={Text("MusicBrainz")})
                     FilterChip(wikipedia,{wikipedia=true;ui.resetLookup()},enabled=!ui.lookupBusy,label={Text("Wikipedia")})
                 }
@@ -105,7 +105,7 @@ fun ArtistLookupDialogs(ui:ListeningToolsUi,store:MusicStore?,ready:Boolean,send
                 Text(if(wikipedia)"Searches English Wikipedia directly. Review the article to make sure it is your artist. Credited Commons photos are included when available."
                     else "Sends this query to MusicBrainz. A selected match can then load a linked Wikipedia biography and credited Commons image.",style=MaterialTheme.typography.bodySmall)
                 ui.artists.forEach{candidate->OutlinedCard(onClick={if(!ui.lookupBusy&&store!=null)ui.lookup{ui.artistReview=store.artistLookup.previewArtist(candidate.id)}}){Column(Modifier.fillMaxWidth().padding(12.dp)){
-                    Text(candidate.name,style=MaterialTheme.typography.titleMedium);Text(candidate.description.ifBlank{"No distinguishing details"});Text(candidate.id,style=MaterialTheme.typography.labelSmall)
+                    Text(candidate.name,style=MaterialTheme.typography.titleMedium);Text(candidate.description.ifBlank{"No distinguishing details"})
                 }}}
                 if(ui.artists.isEmpty()&&!ui.lookupBusy&&ui.lookupError.isBlank())Text("Search to see possible matches. Nothing is saved automatically.")
             }else{
@@ -140,7 +140,7 @@ fun ArtistLookupDialogs(ui:ListeningToolsUi,store:MusicStore?,ready:Boolean,send
                 Button(enabled=store!=null&&!ui.lookupBusy&&artist.isNotBlank()&&album.isNotBlank(),onClick={ui.lookup{ui.releases=store!!.artistLookup.searchCovers(artist,album)}}){Text("Search releases")}
                 Text("Searches MusicBrainz. Choose a release to preview a front cover from Cover Art Archive.",style=MaterialTheme.typography.bodySmall)
                 ui.releases.forEach{release->OutlinedCard(onClick={if(!ui.lookupBusy&&store!=null)ui.lookup{ui.coverReview=store.artistLookup.previewCover(release.id)}}){Column(Modifier.fillMaxWidth().padding(12.dp)){
-                    Text(release.title,style=MaterialTheme.typography.titleMedium);Text(release.artist);Text(listOf(release.date,release.country,release.edition).filter{it.isNotBlank()}.joinToString(" · "));Text(release.id,style=MaterialTheme.typography.labelSmall)
+                    Text(release.title,style=MaterialTheme.typography.titleMedium);Text(release.artist);Text(listOf(release.date,release.country,release.edition).filter{it.isNotBlank()}.joinToString(" · "))
                 }}}
                 if(ui.releases.isEmpty()&&!ui.lookupBusy)Text("Search to see releases. Some editions may have no available cover.")
             }else{

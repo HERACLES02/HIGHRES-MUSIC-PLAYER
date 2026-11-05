@@ -32,6 +32,7 @@ object PlayerGlyph {
     val Previous = vector("Previous", "M19,5 L8,12 L19,19 Z M4,5 L7,5 L7,19 L4,19 Z")
     val Back = vector("Back", "M20,11 L7,11 L12,6 L10.6,4.6 L3.2,12 L10.6,19.4 L12,18 L7,13 L20,13 Z")
     val Queue = vector("Queue", "M3,4 L21,4 L21,6 L3,6 Z M3,9 L21,9 L21,11 L3,11 Z M3,14 L13,14 L13,16 L3,16 Z M17,13 L23,17 L17,21 Z")
+    val Lyrics = vector("Lyrics", "M3,4 L14,4 L14,6 L3,6 Z M3,9 L14,9 L14,11 L3,11 Z M3,14 L10,14 L10,16 L3,16 Z M18,3 L22,3 L22,7 L20,7 L20,17 A4,4 0,1 1,18,13.54 Z")
     val More = vector("More", "M10,3 L14,3 L14,7 L10,7 Z M10,10 L14,10 L14,14 L10,14 Z M10,17 L14,17 L14,21 L10,21 Z")
     val Search = vector("Search", "M10,2 A8,8 0,1 0,15.6,15.6 L21,21 L22.4,19.6 L17,14.2 A8,8 0,0 0,10,2 Z M10,4 A6,6 0,1 1,10,16 A6,6 0,1 1,10,4 Z")
     val Close = vector("Close", "M5,3.6 L12,10.6 L19,3.6 L20.4,5 L13.4,12 L20.4,19 L19,20.4 L12,13.4 L5,20.4 L3.6,19 L10.6,12 L3.6,5 Z")
@@ -44,9 +45,24 @@ object PlayerGlyph {
     val Timer = vector("Timer", "M10,1 L14,1 L14,3 L10,3 Z M12,4 A9,9 0,1 0,12,22 A9,9 0,1 0,12,4 Z M12,6 A7,7 0,1 1,12,20 A7,7 0,1 1,12,6 Z M11,8 L13,8 L13,13 L17,15 L16,17 L11,14 Z")
     val Up = vector("Up", "M5,14 L12,7 L19,14 L17.5,15.5 L12,10 L6.5,15.5 Z")
     val Heart = vector("Heart", "M12,21 L3,12 C-3,4 6,-1 12,6 C18,-1 27,4 21,12 Z")
+    val HeartOutline = vector("HeartOutline", "M16.5,3 C14.76,3 13.09,3.81 12,5.09 C10.91,3.81 9.24,3 7.5,3 C4.42,3 2,5.42 2,8.5 C2,12.28 5.4,15.36 10.55,20.04 L12,21.35 L13.45,20.03 C18.6,15.36 22,12.28 22,8.5 C22,5.42 19.58,3 16.5,3 Z M12.1,18.55 L12,18.65 L11.9,18.55 C7.14,14.24 4,11.39 4,8.5 C4,6.5 5.5,5 7.5,5 C9.04,5 10.54,5.99 11.07,7.36 L12.94,7.36 C13.46,5.99 14.96,5 16.5,5 C18.5,5 20,6.5 20,8.5 C20,11.39 16.86,14.24 12.1,18.55 Z")
 }
 
 val mainDestinations = listOf("Home", "Library", "Playlists", "Settings")
+
+@Composable
+fun PlayerRail(selected: String, navigate: (String) -> Unit) {
+    NavigationRail {
+        mainDestinations.forEach { destination ->
+            NavigationRailItem(selected = selected == destination, onClick = { navigate(destination) },
+                icon = { Icon(when (destination) {
+                    "Home" -> PlayerGlyph.Home; "Library" -> PlayerGlyph.Library
+                    "Playlists" -> PlayerGlyph.Playlists; else -> PlayerGlyph.Settings
+                }, contentDescription = destination) },
+                label = { Text(destination, maxLines = 1, overflow = TextOverflow.Ellipsis) }, alwaysShowLabel = false)
+        }
+    }
+}
 
 @Composable
 fun PlayerNavigation(selected: String, navigate: (String) -> Unit) {
@@ -75,10 +91,9 @@ fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, 
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CoverArt(art, track.tags.title, Modifier.size(44.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(track.tags.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        MarqueeText(track.tags.title,
                             style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Text(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall,
+                        MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

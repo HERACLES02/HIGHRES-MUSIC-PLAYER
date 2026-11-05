@@ -58,11 +58,13 @@ class WidgetUpdates(private val context:Context,scope:CoroutineScope){
                     if(art!=null)views.setImageViewBitmap(R.id.widget_cover,art)else views.setImageViewResource(R.id.widget_cover,R.drawable.ic_local_music)
                     val open=PendingIntent.getActivity(context,id,Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                     views.setOnClickPendingIntent(R.id.widget_open,open)
-                    for((view,action,res)in listOf(Triple(R.id.widget_play,"toggle",if(snapshot.playing)android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play),Triple(R.id.widget_next,"next",android.R.drawable.ic_media_next),Triple(R.id.widget_previous,"previous",android.R.drawable.ic_media_previous))){
+                    for((view,action,res)in listOf(Triple(R.id.widget_play,"toggle",if(snapshot.playing)R.drawable.ic_widget_pause else R.drawable.ic_widget_play),Triple(R.id.widget_next,"next",R.drawable.ic_widget_next),Triple(R.id.widget_previous,"previous",R.drawable.ic_widget_previous))){
                         if(provider==CompactWidget::class.java&&view==R.id.widget_previous)continue
-                        val drawable=requireNotNull(context.getDrawable(res)).mutate().apply{setTint(color);setBounds(0,0,48,48)}
-                        val bitmap=Bitmap.createBitmap(48,48,Bitmap.Config.ARGB_8888);drawable.draw(Canvas(bitmap));views.setImageViewBitmap(view,bitmap)
-                        views.setContentDescription(view,if(action=="toggle")if(snapshot.playing)"Pause" else "Play" else action)
+                        val edge=(24f*context.resources.displayMetrics.density).toInt().coerceIn(24,192)
+                        val drawable=requireNotNull(context.getDrawable(res)).mutate().apply{setTint(color);setBounds(0,0,edge,edge)}
+                        val bitmap=Bitmap.createBitmap(edge,edge,Bitmap.Config.ARGB_8888).apply{density=context.resources.displayMetrics.densityDpi}
+                        drawable.draw(Canvas(bitmap));views.setImageViewBitmap(view,bitmap)
+                        views.setContentDescription(view,if(action=="toggle")if(snapshot.playing)"Pause" else "Play" else if(action=="previous")"Previous track"else"Next track")
                         val intent=Intent(context,WidgetControlReceiver::class.java).setAction("com.localmusic.player.WIDGET_CONTROL").setData(Uri.parse("localmusic://widget/$id/$action")).putExtra("control",action)
                         views.setOnClickPendingIntent(view,if(snapshot.id.isBlank())open else PendingIntent.getBroadcast(context,id,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
                     }
