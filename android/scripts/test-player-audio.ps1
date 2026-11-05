@@ -1,4 +1,4 @@
-param([string]$EmulatorSerial = '127.0.0.1:5561', [int]$AdbServerPort = 5038, [string]$ArtworkFixtureUri, [string]$SeekFixtureUri)
+param([string]$EmulatorSerial = '127.0.0.1:5561', [int]$AdbServerPort = 5038, [string]$ArtworkFixtureUri, [string]$SeekFixtureUri, [string]$IndexFixtureUri)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $projectRoot '.tools'
@@ -33,5 +33,15 @@ try {
         $result | Write-Output
         if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch 'INSTRUMENTATION_RESULT: checksPassed=1' -or
             ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw 'Native seek regression checks failed.' }
+    }
+    # IndexFixtureUri must identify disposable generated audio: its cache, provider copy
+    # and file-change checks deliberately mutate only test-owned copies.
+    if ($IndexFixtureUri) {
+        foreach ($suite in @('flac-index', 'flac-queue', 'flac-content')) {
+            $result = & $adb @deviceArgs shell am instrument -r -w -e suite $suite -e fixtureUri $IndexFixtureUri 'com.localmusic.player.test/com.localmusic.player.AudioProcessorChecks'
+            $result | Write-Output
+            if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch 'INSTRUMENTATION_RESULT: checksPassed=1' -or
+                ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw "FLAC $suite regression failed." }
+        }
     }
 } finally { Pop-Location }

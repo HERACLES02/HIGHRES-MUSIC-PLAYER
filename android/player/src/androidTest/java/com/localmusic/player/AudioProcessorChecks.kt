@@ -21,6 +21,26 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "flac-queue") {
+                results.putString("stream", "\n" + FlacIndexChecks.queueRegression(targetContext, requireNotNull(fixtureUri)))
+                results.putInt("checksPassed", 1)
+                finish(Activity.RESULT_OK, results)
+                return
+            }
+            if (suite == "flac-content") {
+                results.putString("stream", "\n" + FlacIndexChecks.withContentFixture(targetContext, requireNotNull(fixtureUri)) {
+                    SeekChecks.run(this, it, "production")
+                })
+                results.putInt("checksPassed", 1)
+                finish(Activity.RESULT_OK, results)
+                return
+            }
+            if (suite == "flac-index") {
+                results.putString("stream", "\n" + FlacIndexChecks.run(targetContext, requireNotNull(fixtureUri)))
+                results.putInt("checksPassed", 1)
+                finish(Activity.RESULT_OK, results)
+                return
+            }
             if (suite == "seek") {
                 results.putString("stream", "\n" + SeekChecks.run(this, requireNotNull(fixtureUri), seekVariant))
                 results.putInt("checksPassed", 1)

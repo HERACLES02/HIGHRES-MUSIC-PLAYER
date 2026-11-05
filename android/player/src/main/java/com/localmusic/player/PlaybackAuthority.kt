@@ -25,6 +25,7 @@ import java.util.UUID
 
 /** Sole service-owned queue; a second decoder is used only for an explicit crossfade. */
 class PlaybackAuthority(private val context: Context, private val changed: () -> Unit) {
+    private val seekIndexes = FlacSeekIndexes(context)
     private val processors=java.util.IdentityHashMap<ExoPlayer,MusicAudioProcessor>()
     private val deckTracks=java.util.IdentityHashMap<ExoPlayer,TrackId>()
     private val outputProviders=java.util.IdentityHashMap<ExoPlayer,LocalAudioTrackProvider>()
@@ -37,7 +38,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         val loadControl=DefaultLoadControl.Builder().setBufferDurationsMs(
             DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
             START_BUFFER_MS,DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS).build()
-        val value=ExoPlayer.Builder(context,MusicRenderers(context,processor,output)).setLoadControl(loadControl).build().apply{
+        val value=ExoPlayer.Builder(context,MusicRenderers(context,processor,output)).setLoadControl(loadControl)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, LocalFlacExtractors(seekIndexes)))
+            .build().apply{
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),false)
             setWakeMode(C.WAKE_MODE_LOCAL)
         }
@@ -122,6 +125,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 if(eventTime.realtimeMs<pending.getLong("requestedAtElapsedMs")||!engine.playWhenReady)return
                 if(kotlin.math.abs(eventTime.currentPlaybackPositionMs-pending.getLong("targetPositionMs"))>2000)return
                 pending.put("audioProgressAfterMs",eventTime.realtimeMs-pending.getLong("requestedAtElapsedMs"))
+                pending.put("flacIndexAfterSeek",seekIndexes.sourceStatus(engine.currentMediaItem?.localConfiguration?.uri))
                 event("seek_audio_progress",JSONObject(pending.toString()));seekDetails=null
             }
             override fun onAudioTrackInitialized(eventTime:AnalyticsListener.EventTime,audioTrackConfig:AudioSink.AudioTrackConfig) {
@@ -159,6 +163,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     suspend fun initialize(value: MusicStore) {
         store = value
+        seekIndexes.coordinateFileOperations(value.operationMutex)
         audioSettings=value.preferences.value.audio
         when (val saved = withContext(Dispatchers.IO) { value.repository().loadSession() }) {
             is SessionLoad.Restored -> { queue = saved.queue; load(queue.selection, false)
@@ -231,6 +236,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         finishFade();discardStandby()
         refreshLookahead()
         if (queue.current?.trackId !in ids) return
+        seekIndexes.setPlaybackWindow(null)
         pause(); engine.stop(); engine.clearMediaItems(); fileClosedForEdit = queue.current?.trackId; event("file_closed_for_edit")
     }
     fun reopenAfterEdit(ids: Set<TrackId>) {
@@ -251,7 +257,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("bufferedPositionBeforeMs",engine.bufferedPosition)
             .put("totalBufferedDurationBeforeMs",engine.totalBufferedDuration)
             .put("playingAtRequest",engine.playWhenReady)
+            .put("flacIndexAtRequest",seekIndexes.sourceStatus(engine.currentMediaItem?.localConfiguration?.uri))
         seekDetails=details
+        engine.currentMediaItem?.localConfiguration?.uri?.let { seekIndexes.noteSeek(it,"buffered_or_pending",target*1000) }
         engine.seekTo(target); queue.updatePosition(target); event("seek",details); persist(); update()
     }
     fun previous() { if (!ready) return; observePosition(); val playing = queue.isPlaying; persist(); load(queue.previous(), playing) }
@@ -278,8 +286,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     private fun load(selection: Selection?, play: Boolean) {
         seekDetails=null
         finishFade();discardStandby();rejectedFade=null
-        if (selection == null) return
+        if (selection == null) { seekIndexes.setPlaybackWindow(null); return }
         if (store?.isEditing(selection.entry.trackId) == true) {
+            seekIndexes.setPlaybackWindow(null)
             pause("File editing is in progress. Wait until it finishes."); engine.stop(); engine.clearMediaItems(); fileClosedForEdit = selection.entry.trackId; return
         }
         fileClosedForEdit = null
@@ -287,12 +296,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         generation++
         lookahead = null; lookaheadToken = null
         if (track == null || track.availability != Availability.AVAILABLE || track.sources.isEmpty()) {
+            seekIndexes.setPlaybackWindow(null)
             engine.stop(); engine.clearMediaItems(); queue.pause(); error = "Saved song is unavailable. Scan again or select another song."
             persist(); update(); return
         }
         error = ""; engine.pause()
         deckTracks[engine]=track.id;configureDeck(engine,track.id)
-        engine.setMediaItem(mediaItem(track).buildUpon().setMediaId(selection.entry.id.value.toString()).build(), selection.positionMs); engine.prepare()
+        val item = mediaItem(track).buildUpon().setMediaId(selection.entry.id.value.toString()).build()
+        seekIndexes.setPlaybackWindow(item.localConfiguration?.uri)
+        engine.setMediaItem(item, selection.positionMs); engine.prepare()
         queue.pause()
         if (play && takeFocus()) { queue.play(); engine.play() }
         persist(); update()
@@ -372,14 +384,20 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 if(plan!=null&&next!=null&&rejectedFade!=plan.next.entry.id){
                     if(standbyPlan?.matches(snapshot)!=true){
                         discardStandby();standbyPlan=plan
-                        standby=newEngine().also{deck->deckTracks[deck]=next.id;configureDeck(deck,next.id);deck.volume=0f;deck.setMediaItem(mediaItem(next).buildUpon().setMediaId(plan.next.entry.id.value.toString()).build());deck.prepare()}
+                        val item=mediaItem(next).buildUpon().setMediaId(plan.next.entry.id.value.toString()).build()
+                        seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri,item.localConfiguration?.uri)
+                        standby=newEngine().also{deck->deckTracks[deck]=next.id;configureDeck(deck,next.id);deck.volume=0f;deck.setMediaItem(item);deck.prepare()}
                     }
-                }else discardStandby()
+                    else seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri,standby?.currentMediaItem?.localConfiguration?.uri)
+                }else { discardStandby();seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri) }
             }finally{reconciling=false}
             return
         }
         discardStandby()
-        if (plan == lookahead && next != null && engine.mediaItemCount > engine.currentMediaItemIndex + 1) return
+        if (plan == lookahead && next != null && engine.mediaItemCount > engine.currentMediaItemIndex + 1) {
+            seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri,engine.getMediaItemAt(engine.currentMediaItemIndex+1).localConfiguration?.uri)
+            return
+        }
         reconciling = true
         try {
             lookahead = null; lookaheadToken = null
@@ -388,8 +406,10 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             if (plan != null && next != null) {
                 val token = UUID.randomUUID().toString()
                 lookahead = plan; lookaheadToken = token
-                engine.addMediaItem(mediaItem(next).buildUpon().setMediaId(plan.next.entry.id.value.toString()).setTag(token).build())
-            }
+                val item=mediaItem(next).buildUpon().setMediaId(plan.next.entry.id.value.toString()).setTag(token).build()
+                seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri,item.localConfiguration?.uri)
+                engine.addMediaItem(item)
+            } else seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri)
         } finally { reconciling = false }
     }
 
@@ -454,6 +474,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             store?.takeUnless{persistenceBlocked}?.persist(queue.snapshot().copy(completed=true))
             check(queue.restore(plan.after));queue.play()
             val previous=engine;engine=incoming;standby=null;standbyPlan=null
+            seekIndexes.setPlaybackWindow(engine.currentMediaItem?.localConfiguration?.uri)
             fadingOut=previous;fadeWindow=FadeWindow(minOf(window.durationMs,(duration-previous.currentPosition).coerceAtLeast(1)))
             generation++;lookahead=null;lookaheadToken=null
             incoming.volume=0f;incoming.play()
@@ -510,6 +531,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 .put("starvationRecoveryPrefillMs",DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
                 .put("limits","Prefill is media duration, not a guaranteed wall-clock seek latency. State events do not measure the time sound reaches the listener."))
             .put("outputStartup",outputProviders[engine]?.startup?.json()?:JSONObject.NULL)
+            .put("flacSeekIndexes",seekIndexes.status(engine.currentMediaItem?.localConfiguration?.uri))
             .put("events", JSONArray(events.toString())).toString(2)
     }
     fun extras(): Bundle {
@@ -535,6 +557,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         if (destroyed) return
         pause(); destroyed = true; handler.removeCallbacksAndMessages(null)
         discardStandby();finishFade()
+        seekIndexes.close()
         context.unregisterReceiver(noisy); audio.unregisterAudioDeviceCallback(removed)
         releaseDeck(engine);player.release()
     }

@@ -1,5 +1,267 @@
 # Local Music: context and continuation plan for GLM / OpenCode
 
+## Current seek checkpoint (6 November 2026)
+
+Latest local increment: `0.10.9-index-scheduling`, versionCode 24;
+`android/releases/local-music-0.10.9.apk`. The user reports 0.10.8 still
+pauses; its current report shows no usable index for the affected song.
+A generated-file regression proved that the old two-slot admission check
+permanently loses a third song's request. The user suggested reusing existing
+repository work. After reviewing Auxio/Gramophone/VLC and Media3, index jobs
+were revised using the pinned upstream Media3 managed-work/priority lifecycle
+pattern, while preserving the existing service and decoder.
+
+One worker retains bounded requests, prioritizes current over lookahead,
+cancels obsolete selections and resumes a yielded lookahead. The service
+explicitly owns the current/next source window. Reports now bind index state,
+fallback reason and last extractor strategy/target to an opaque current-source
+hash, with seek snapshots. The old report does not prove whether the phone's
+fallback was specifically queue-full, a timeout or a read failure; do not
+claim that the scheduling defect was its sole cause.
+
+Full build/pins/schemas/signature/lint and all six native suites passed,
+including the initially failing queue regression, rapid selections,
+deduplication, priority/cancellation, exact frames/cache/edit mutex and content
+provider checks. See `android/player/VERIFICATION_0_10_9.md` for artifact hash,
+source reference, evidence limits and targeted phone steps. Physical Android
+11 SD-card acceptance is still pending; unrelated Flask work is preserved.
+No dependency or licence change was made.
+
+## Previous 0.10.8 checkpoint (6 November 2026)
+
+Phone follow-up: the user reports 0.10.8 still has the issue. The new
+`local-music-normal (1).json` is a 0.10.8 export, replacing the old report
+with that name. Its four affected-song seeks take 861-1092 ms, with no usable
+index for that song. A new generated-fixture regression reproduces permanent
+loss of a third index request when both slots are occupied. This does not
+prove the phone's exact fallback reason, which the report omits. The user
+suggested using existing repository code; Media3/Auxio/Gramophone/VLC sources
+were compared. See `android/player/SEEK_FOLLOWUP_0_10_8.md` for evidence,
+licences and the proposed bounded priority/lifecycle scheduling design.
+At that initial follow-up checkpoint, only tests/docs had changed and the new
+queue regression intentionally failed. The subsequent design review and
+0.10.9 implementation are recorded above.
+
+Latest local increment: `0.10.8-seek-index`, versionCode 23;
+`android/releases/local-music-0.10.8.apk`. The user confirmed that 0.10.7
+still pauses on some songs. Their report identifies Android 11, where the
+previous Android 12+ startup-threshold change does not apply. The supplied
+FLAC has no seek table; an isolated indexed-copy experiment reproduced and
+substantially reduced its slow seeks without changing compressed audio.
+
+The player now builds bounded private FLAC indexes on IO workers and uses
+them live without rewriting songs. Cache keys cover file identity/changes;
+indexed locations are validated, with ordinary seeking as fallback. Scanner
+IO shares the store's existing file-edit/scan mutex. Full build, pins, schemas,
+signature, native PCM/artwork, exact frame comparisons, cache invalidation,
+cancellation, file-edit locking and content-provider seek checks passed.
+Paired emulator 83-second jumps: ordinary 862/880 ms, indexed 176/160 ms.
+These callbacks are not physical sound measurements or Android 11 SD evidence.
+See `android/player/VERIFICATION_0_10_8.md` for the SHA-256 and phone checklist.
+Phone confirmation is pending: allow indexing on first playback, then compare
+large forward/backward and paused seeks. Save a report if the delay persists.
+Changes remain local and uncommitted. USB/high-resolution and later features
+remain deferred. Do not repeat already accepted unrelated phone checks.
+
+## Previous UI checkpoint (5 November 2026)
+
+Latest stability increment: `0.10.7-seek-startup`, versionCode 22;
+`android/releases/local-music-0.10.7.apk`. The user confirmed 0.10.6 works, but
+large SD-card FLAC seeks still pause for about 0.2-0.5 seconds. Popular-player
+feature ideas are deferred until stable: `android/LATER_IMPROVEMENTS.txt`.
+The output now requests at most 100 ms startup fill on Android 12+ PCM while
+retaining default buffer capacity. Android 11 keeps platform behavior. Paired
+emulator measurements improved median audio-progress callback time from about
+200 to 160 ms; this is not physical sound or SD-card latency acceptance.
+Playback reports include actual startup thresholds and seek progress timing,
+and identify the current build correctly. See `android/player/VERIFICATION_0_10_7.md`.
+New changes remain local and uncommitted. Physical seek confirmation is pending.
+
+Previous checkpoint:
+Latest local increment: `0.10.6-folder-player`, versionCode 21;
+`android/releases/local-music-0.10.6.apk`. Scans and library display now use only
+chosen document folders/subfolders, without deleting legacy playlist identities.
+Now Playing has a compact Back/Search row, centered scrolling metadata and
+adaptive artwork/spacing; collection position and playlist numbering are gone.
+Full build and isolated native folder/playback/layout checks passed, including
+six selected songs with broad audio permission revoked and an indexed outsider
+excluded. See `android/player/VERIFICATION_0_10_6.md`. Phone check pending.
+The user broadly accepted the preceding 0.10.5 edits; this does not establish
+the still-open SD-card large-seek result. New changes remain uncommitted.
+
+Previous increment:
+Current local increment: `0.10.5-library-performance`, versionCode 20;
+`android/releases/local-music-0.10.5.apk`. Checklist items 2-5 are implemented:
+long-press menus (including Home and collection rows), Compact/Large/Full width
+Now Playing artwork, removal of Favorites UI, and measured library/rendering
+performance improvements. Stored favorite data and backup compatibility remain.
+New artwork preferences survive restart and backup and default to Large for old
+backups. Bulk library read profile: 801 SELECTs before / 3-4 after for 200 tracks;
+bulk resume query preserves the legacy filtering behavior using one SELECT.
+Metadata/source-order, unavailable songs and stored favorites are checked.
+See `android/player/VERIFICATION_0_10_5.md` for final evidence and phone limits.
+0.10.2 was committed and pushed as 44151e7; subsequent changes are uncommitted.
+The user authorized finishing this checklist while deferring USB/high-resolution.
+The SD-card large-seek report remains open; seek/decoder code was not changed.
+The earlier checkpoint below describes the previous 0.9.4 increment.
+
+## Previous continuation checkpoint (4 November 2026)
+
+Visual review update (5 November): the user accepted 0.9.3 playback ("okay
+okay it works") and asked to continue while tracking UI problems. Acceptance
+is recorded in `android/player/PHONE_RESULTS_0_9_3.md`; it does not itemize EQ
+states or establish the separate SD-card long-seek result.
+
+Current native increment: `0.9.4-cover-reading`, versionCode 14; deliver
+`android/releases/local-music-0.9.4.apk`. The cover failure was isolated to
+reopening media-provider descriptors through /proc/self/fd. Direct native
+reading of a duplicate of the granted descriptor fixes it, without copying
+whole tracks or editing source music. The real provider test failed before
+and passed after. Full build/pins/schemas/signature, native tag preservation,
+8 audio combinations and 5 artwork checks passed. All six fixture IDs and
+source hashes are preserved; rescan restored covers and bit-depth/rate details
+in Home, Library, mini player and Now Playing. Phone cover confirmation is
+pending. See `android/player/VERIFICATION_0_9_4.md`.
+
+The isolated local Android 17 emulator uses AVD data on D: and a private ADB
+server on 5038, explicitly targeting 127.0.0.1:5561. No personal phone was
+accessed. Appetize remains stopped. Local screenshots/instructions:
+`android/player/LOCAL_VISUAL_REVIEW.md`. Keep the continuing issue list in
+`android/player/UI_ISSUES.md`: light status-bar contrast is confirmed; whole-
+panel lyrics behavior, populated playlist/home layouts, dark/large-text states,
+Now Playing context and launch-state stability remain review items. An upward
+swipe inside the existing artwork/title surface does open lyrics; the initial
+failed gesture began outside it. No gesture or theme code changed in 0.9.4.
+
+The preceding 0.9.2 seek-prefill reduction and 0.9.3 empty-buffer correction
+are retained. The user's SD-card long-seek result remains pending; do not
+claim physical latency, audio quality, Direct USB or bit-perfect acceptance.
+
+The preceding `0.9.1-import-sources` update added explicit
+external graphic conversion/review, direct Wikipedia artist lookup, Lyrics.ovh
+plain lyrics and external Spotify/Genius search links. See
+`android/player/VERIFICATION_0_9_1.md` for checks and the focused phone steps;
+0.9.1 EQ and lookup phone acceptance is recorded above. Existing 0.9 feedback is recorded in
+`android/player/PHONE_RESULTS_0_9.md`.
+
+The preceding 0.9 feature increment followed the
+design-first checkpoint, the user said "okay complete them", authorizing all
+three features. Implemented artist pages/explicit artist and release-artwork
+lookup with offline selected content; artwork/compact launcher widgets; native
+EQ, preset bank, Local Music JSON v1 import/review/export, ReplayGain and optional
+crossfade. See `android/player/VERIFICATION_0_9.md` for source map, local evidence,
+limits and targeted phone checks. The user's broad acceptance has the EQ-import
+exception described above; it does not establish controlled audio measurements.
+
+Build with `android/build-player.ps1`; deliver `android/releases/local-music-0.9.4.apk`.
+The same service owns the queue/session and both decoders during crossfade.
+Effects start off; crossfade off preserves gapless. Current Normal processing is
+the default Media3 integer/16-bit PCM chain; high-resolution/Direct USB work is
+still deferred and no bit-perfect claim is made. The reported 0.2-second seek
+pause remains unmeasured and was not treated as fixed by these feature changes.
+
+Core: AudioEffects and ArtistProfile. Data: AudioCodec, PreferenceCodec,
+EnrichmentClient plus extended extras/backup/repository. Android: MusicAudioProcessor,
+ArtistLookup/ArtistPanels, ListeningToolsUi, PlaybackWidgets and authority/service
+integration. No dependency-pin or Room v3 schema change. Backups write v2/read
+v1-v2; all extended preferences are covered by receipt-based recovery. Newer
+unrelated saved artist notes and named presets remain during restore. Selected
+images are staged via bounded/hashed assets. See `android/BACKUP_FORMAT_V2.txt`.
+
+Provider requests are user-triggered only, with source/rights review, IDs,
+rate/cooldown/size/host bounds and interruptible lookup work. Tests use fixtures;
+0.9.1 provider connectivity and client smoke checks are documented separately;
+native 0.9.1 EQ and lookup behavior is accepted by the user.
+`android/scripts/make-listening-tools-fixtures.py` produces disposable WAV tones
+with independently checked ReplayGain tags and the example JSON under ignored
+releases. Do not use real music as a development-write fixture.
+
+Design reference: `design/listening-tools/preview.html`, 8 SVG screens per theme
+and assembled Figma-importable boards. Prototype checks (33) establish that
+prototype only. Figma creation tools were unavailable, so no remote Figma file
+was created. Native implementation is now present; do not repeat the old design
+approval pause. No commit/push/publication was requested. Preserve unrelated
+Flask work and the standing Markdown/AI-related Git exclusions.
+
+### Previous checkpoint: accepted 0.8
+
+Current native increment: `0.8.0-backup-gapless`, versionCode 9. The user
+authorized app-data backup/restore, gapless playback, playlist covers, Home
+listening sections, and removal of the Now Playing collection row.
+See `android/player/VERIFICATION_0_8.md` for scope and targeted phone checks.
+The APK is `android/releases/local-music-0.8.0.apk`; build using
+`android/build-player.ps1`. The user reported overall success, with a tiny
+approximately 0.2-second pause after seeking. See `android/player/PHONE_RESULTS_0_8.md`.
+Source inspection found a single seek on slider release and a direct engine.seekTo,
+with no explicit delay or whole-track reload. Actual latency and its cause are
+unmeasured; keep seek responsiveness open for a measured performance pass.
+
+Backup format v1 is described in `android/BACKUP_FORMAT_V1.txt` and implemented
+by player-data `BackupArchive` / `PlayerRepository`, Android `AppBackups`, and
+service-owned serialized commands. It includes app data and chosen artwork,
+not music, keys or file-edit recovery originals/journals. Restore merges by UUID,
+keeps unrelated newer records, rejects source/lyric/occurrence collisions, and
+uses a Room transaction receipt plus a durable pending-preferences journal.
+New track references remain missing until access/scan. URI strings grant no
+permission. The portable archive cannot be used as a file-edit recovery backup.
+
+Gapless uses a two-item Media3 playlist: pure `GaplessPlanner` previews the
+authoritative queue without consuming it; automatic transitions adopt the exact
+planned snapshot once. No stop/prepare happens on a valid automatic transition.
+Queue edits, repeat/shuffle, end-of-track timers and edits invalidate/evict the
+lookahead. Phone listening is required; engine events and fixture PCM equality
+do not prove audible continuity or physical output. Disposable fixtures are
+generated by `android/scripts/make-gapless-fixtures.py` under ignored releases.
+
+Home now has Continue listening cards, playlist carousel, bounded Recently added
+and Favorites sections. Grid/list and search remain. Playlist covers use distinct
+available artwork; detail headers have covers. Only the collection row in Now
+Playing was removed; queue origin persistence remains compatible.
+
+No commit/push/publication was requested. Keep unrelated Flask work untouched.
+The standing Git exclusions remain: Markdown, AI-related files and attribution.
+General performance work and audio-path engineering remain deferred; no speed or
+bit-perfect claim is made. Do not rerun accepted 0.7 checks without a relevant
+change; select the 0.8 backup/playback/UI checks instead.
+
+### Previous checkpoint: accepted 0.7
+
+Previous native increment: `0.7.0-ui`, versionCode 8, implementing the user's
+approved design from `design/ui-refresh/preview.html`. Four-tab navigation,
+Home grid/list persistence and search, compact player, symbols, native swipe-up
+lyrics sheet, source-quality labels and occurrence-based collection positions.
+`QueueSnapshot.origin` is additive/optional in JSON v1; Room schema remains v3.
+User confirmed "okay all the tests work" on 4 November 2026; see
+`android/player/PHONE_RESULTS_0_7.md` for acceptance and evidence limits.
+Further design changes and speed improvements are explicitly deferred; no
+specific performance bottleneck or benchmark has been established. Next planned
+feature: app-data backup/restore design. Do not repeat accepted basic phone checks.
+See `android/player/VERIFICATION_0_7.md` for build evidence and exact counter
+semantics. The browser prototype is not native UI
+verification. No commit/push was requested for this increment. For later Git
+publication, keep excluding Markdown and AI-related files as the user requested.
+The previous 0.6 code was committed/pushed as `da6baf2`.
+
+### Previous checkpoint: accepted 0.6
+
+Current source is `0.6.0-playlist-files`, versionCode 7. At the user's request,
+this version adds M3U/M3U8 and PLS import/export, with a matched/skipped preview,
+new-playlist confirmation, duplicate/order preservation and verified file export.
+User confirmed "okay all of the tests worked" on 4 November 2026; see
+`android/player/PHONE_RESULTS_0_6.md` for phone acceptance and evidence limits.
+See `android/player/VERIFICATION_0_6_PLAYLIST_FILES.md` for current build evidence.
+Do not repeat these accepted basic checks without a relevant change.
+The rotation-only fixes remain included (historical
+record: `android/player/VERIFICATION_0_6.md`). Drafts remain memory-only and do
+not survive process death. Older version and next-task statements
+below are historical. The sleep timer in 0.5 was already user-accepted, as
+recorded in `android/player/VERIFICATION_0_5.md`.
+
+The user deferred audio-path engineering. Continue daily-use pending tasks one
+increment at a time: narrow-screen navigation usability, then app-data
+backup/restore design. Do not reimplement the sleep timer from the older startup
+prompt. No commit, push or publication was requested.
+
 Prepared 3 November 2026 from the local checkout at `D:\music_player`.
 This is an Android-first handoff. Read the startup prompt at the end.
 

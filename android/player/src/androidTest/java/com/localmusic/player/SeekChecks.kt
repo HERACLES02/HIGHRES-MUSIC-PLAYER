@@ -14,10 +14,11 @@ import android.content.Context
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicLong
 
-/** Real extractor, decoder and sink; generated fixtures only. No library writes. */
+/** Real extractor, decoder and sink; read-only fixtures. No library writes. */
 object SeekChecks {
     fun run(test: Instrumentation, uri: String, variant: String? = null): String {
         val context=test.targetContext
+        val indexes=FlacSeekIndexes(context)
         val bytes=AtomicLong(); val opens=AtomicLong(); val firstAudio=AtomicLong()
         val firstPcm=AtomicLong();val flushed=AtomicLong();val sinkInit=AtomicLong();val ready=AtomicLong()
         var sinkBufferBytes=0
@@ -65,7 +66,7 @@ object SeekChecks {
                             }
                         }
                     })
-                    val sink=if(variant=="production") {
+                    val sink=if(variant=="production" || variant=="production-no-index") {
                         val method=MusicRenderers::class.java.getDeclaredMethod("buildAudioSink",Context::class.java,
                             Boolean::class.javaPrimitiveType,Boolean::class.javaPrimitiveType).apply { isAccessible=true }
                         method.invoke(MusicRenderers(context,MusicAudioProcessor()),context,enableFloatOutput,enableAudioTrackPlaybackParams) as DefaultAudioSink
@@ -80,8 +81,9 @@ object SeekChecks {
                     }
                 }
             }
+            val mediaSources=if(variant=="production") DefaultMediaSourceFactory(context,LocalFlacExtractors(indexes)) else DefaultMediaSourceFactory(context)
             player=ExoPlayer.Builder(context,renderers)
-                .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(factory))
+                .setMediaSourceFactory(mediaSources.setDataSourceFactory(factory))
                 .setLoadControl(load).build()
             player.addAnalyticsListener(object:AnalyticsListener {
                 override fun onAudioPositionAdvancing(eventTime:AnalyticsListener.EventTime,playoutStartSystemTimeMs:Long) {
@@ -99,6 +101,11 @@ object SeekChecks {
         }
         try {
             waitFor("initial playback"){player.isPlaying&&player.currentPosition>300}
+            if(variant=="production")waitFor("private index") {
+                val status=indexes.status()
+                status.getInt("jobs")==0 || status.toString().contains("ready") || status.toString().contains("cached")
+            }
+            if(variant=="production")output.append("privateIndex=${indexes.status()}\n")
             if(variant=="production"&&android.os.Build.VERSION.SDK_INT>=31)main {
                 // Inspect the real output, not a duplicate calculation of the policy. This field
                 // is in our pinned Media3 dependency, not a hidden Android platform API.
@@ -123,6 +130,6 @@ object SeekChecks {
             waitFor("paused seek ready"){player.playbackState==Player.STATE_READY}
             main { check(!player.playWhenReady&&!player.isPlaying){"Paused seek started playback"} }
             return output.toString()
-        } finally { main { player.release() } }
+        } finally { main { player.release() }; indexes.close() }
     }
 }
