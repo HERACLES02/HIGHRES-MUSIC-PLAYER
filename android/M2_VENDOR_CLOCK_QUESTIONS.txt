@@ -1,0 +1,30 @@
+Subject: KZ M2 USB clock synchronization documentation (VID 31b2, PID 0311)
+
+Draft only -- not sent.
+
+We are investigating direct USB playback to a KZ M2 identified as KTMicro,
+USB VID 31b2, PID 0311. Recorded descriptors show UAC1 playback interface 2,
+stereo PCM16 (alternate 1) and packed PCM24 (alternate 2), with advertised
+44.1, 48, 88.2 and 96 kHz rates. Native reports identify a full-speed link.
+
+Playback endpoint 0x04 has attributes 0x05 (asynchronous isochronous OUT),
+bInterval 1, bSynchAddress 0, and no accompanying explicit feedback endpoint.
+There is a separate mono asynchronous capture endpoint 0x84 at 48 kHz;
+we have not assumed it shares a playback clock or used it for timing.
+
+Could you provide technical documentation answering:
+
+1. What exact chip and firmware correspond to this VID/PID and descriptor layout?
+2. How should the host synchronize playback to this firmware? Does the sink
+   recover its audio clock from USB SOF/data flow, require an undocumented
+   feedback/control path, or use another mechanism? Please explain the
+   asynchronous descriptor and absent associated feedback endpoint.
+3. Is there documented host-readable render-clock error, FIFO occupancy,
+   underrun/overrun or dropped/repeated-sample telemetry? What are its units,
+   timing and read semantics?
+4. Does Standard mode bypass EQ, noise gating, compression, sample-rate
+   conversion and other processing? What does equal left/right UAC1 Feature
+   Unit 7 volume mean relative to internal per-channel gain/calibration?
+
+Successful USB submissions and selected-rate readbacks are not being treated
+as measurements of rendered samples or proof of clock synchronization.
