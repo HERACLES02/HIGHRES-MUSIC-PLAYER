@@ -23,7 +23,7 @@ Saved locally, Git-ignored:
 - Metadata-only analysis beside it: `m2-windows-enumeration-20261107.summary.json`.
 
 The trace contains an incidental audio stream of about 1.08 seconds. **Its source
-is unknown**; the agent did not initiate playback or identify a generated fixture
+is unknown**; this capture did not initiate playback or identify a generated fixture
 in this stream. Do not use its PCM for a source-to-output or balance comparison.
 No listening or physical clock measurement was performed.
 
@@ -49,7 +49,7 @@ zero statuses, accounting for reuse of IRP identifiers after completion.
 
 ### Historical first-capture shutdown and follow-up
 
-USBPcapCMD's `q` command requires a real Windows console input handle. The agent's
+USBPcapCMD's `q` command requires a real Windows console input handle. The
 headless terminal did not supply one, so sending `q` there did not stop capture.
 The parent and elevated capture worker were stopped explicitly; stopping the
 worker required Windows administrator elevation. Subsequently checked: **no
@@ -125,7 +125,7 @@ M2-only selection below after installation/restart.
    Windows M2 output, after confirming the selected output and low Windows volume.
    No listening is required; keep earphones out. Stop after about 15-20 seconds.
    Use a real Windows console and stop with USBPcapCMD's `q` command. First verify
-   shutdown works there; the agent's headless terminal did not support this.
+   shutdown works there; the headless terminal did not support this.
    No ordinary music or microphone test is needed.
 5. Review the control requests, alternate/format changes, OUT packet-length
    distribution and any IN timing stream. Windows may mix/resample the source;

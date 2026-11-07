@@ -4,17 +4,33 @@ import kotlin.math.*
 import java.util.Locale
 
 enum class ReplayGainMode { OFF, TRACK, ALBUM }
-data class EqPreset(val name:String="Flat", val preampDb:Double=0.0, val gains:List<Double> = List(10){0.0}) {
+enum class EqFilterType { PEAKING, LOW_SHELF, HIGH_SHELF }
+data class EqFilter(val type:EqFilterType=EqFilterType.PEAKING,val frequencyHz:Double=1000.0,val gainDb:Double=0.0,val q:Double=1.0) {
+    init {
+        require(frequencyHz.isFinite()&&frequencyHz in 10.0..40000.0) { "Filter frequency must be between 10 and 40,000 Hz." }
+        require(gainDb.isFinite()&&gainDb in -24.0..24.0) { "Filter gain must be between -24 and +24 dB." }
+        require(q.isFinite()&&q in 0.1..20.0) { "Filter Q must be between 0.1 and 20." }
+    }
+}
+data class EqPreset(val name:String="Flat", val preampDb:Double=0.0, val gains:List<Double> = List(10){0.0},
+    /** Null means the original fixed graphic bands; a list means a parametric preset. */
+    val filters:List<EqFilter>?=null) {
     init {
         require(name.isNotBlank()&&name.length<=80&&name.none{it.code<32}) { "Use a preset name of 1–80 characters." }
         require(preampDb.isFinite()&&preampDb in -24.0..0.0) { "Preamp must be between -24 and 0 dB." }
         require(gains.size==10&&gains.all{it.isFinite()&&it in -12.0..12.0}) { "Include 10 band gains between -12 and +12 dB." }
+        require(filters==null||filters.size in 1..20) { "A parametric preset must have between 1 and 20 filters." }
     }
-    companion object { val FREQUENCIES=listOf(31,63,125,250,500,1000,2000,4000,8000,16000) }
+    fun resolvedFilters():List<EqFilter> = filters ?: FREQUENCIES.mapIndexed{i,frequency->EqFilter(frequencyHz=frequency.toDouble(),gainDb=gains[i],q=GRAPHIC_Q)}
+    companion object {
+        val FREQUENCIES=listOf(31,63,125,250,500,1000,2000,4000,8000,16000)
+        const val GRAPHIC_Q=1.4142135623730951
+    }
 }
 data class AudioSettings(val eqEnabled:Boolean=false,val preset:EqPreset=EqPreset(),val presets:List<EqPreset> = emptyList(),
-    val replayGain:ReplayGainMode=ReplayGainMode.OFF,val crossfadeSeconds:Int=0) {
+    val replayGain:ReplayGainMode=ReplayGainMode.OFF,val crossfadeSeconds:Int=0,val preferAndroidUsb:Boolean=false) {
     init { require(crossfadeSeconds in 0..6);require(presets.size<=100&&presets.map{it.name.lowercase(Locale.ROOT)}.distinct().size==presets.size) }
+    val effectiveCrossfadeSeconds:Int get()=if(preferAndroidUsb)0 else crossfadeSeconds
 }
 data class ReplayGainInfo(val trackGainDb:Double?=null,val albumGainDb:Double?=null,val trackPeak:Double?=null,val albumPeak:Double?=null) {
     fun gainDb(mode:ReplayGainMode):Double {
@@ -34,33 +50,32 @@ data class ReplayGainInfo(val trackGainDb:Double?=null,val albumGainDb:Double?=n
 data class DspConfiguration(val settings:AudioSettings=AudioSettings(),val replayGain:ReplayGainInfo=ReplayGainInfo())
 class DspKernel {
     private var channels=0
-    private var coefficients=DoubleArray(50)
+    private var coefficients=DoubleArray(0)
     private var history=DoubleArray(0)
+    private var filterCount=0
     private var enabled=false
     private var gain=1.0
     private var targetGain=1.0
     private var smoothing=.001
     fun configure(sampleRate:Int,channels:Int,configuration:DspConfiguration) {
         require(sampleRate in 8000..768000&&channels in 1..32)
-        if(this.channels!=channels){this.channels=channels;history=DoubleArray(channels*20)}
         val settings=configuration.settings
         val gainDb=(if(settings.eqEnabled)settings.preset.preampDb else 0.0)+configuration.replayGain.gainDb(settings.replayGain)
         targetGain=10.0.pow(gainDb/20);smoothing=1.0/(sampleRate*.015)
         enabled=settings.eqEnabled||gainDb!=0.0||abs(gain-targetGain)>.000001
-        for(band in 0..9){
-            val i=band*5;val frequency=EqPreset.FREQUENCIES[band].toDouble();val db=if(settings.eqEnabled)settings.preset.gains[band] else 0.0
-            if(frequency>=sampleRate*.49||db==0.0){coefficients[i]=1.0;for(j in 1..4)coefficients[i+j]=0.0;continue}
-            // Peaking biquad, RBJ/W3C Audio EQ Cookbook, one-octave graphic bands (Q = sqrt(2)).
-            val a=10.0.pow(db/40);val omega=2*PI*frequency/sampleRate;val alpha=sin(omega)/(2*sqrt(2.0));val a0=1+alpha/a
-            coefficients[i]=(1+alpha*a)/a0;coefficients[i+1]=-2*cos(omega)/a0;coefficients[i+2]=(1-alpha*a)/a0
-            coefficients[i+3]=-2*cos(omega)/a0;coefficients[i+4]=(1-alpha/a)/a0
+        val filters=if(settings.eqEnabled)settings.preset.resolvedFilters() else emptyList()
+        filterCount=filters.size
+        coefficients=DoubleArray(filterCount*5)
+        if(this.channels!=channels||history.size!=channels*filterCount*2){this.channels=channels;history=DoubleArray(channels*filterCount*2)}
+        for((band,filter) in filters.withIndex()){
+            filter.biquadCoefficients(sampleRate).copyInto(coefficients,band*5)
         }
     }
     fun sample(value:Double,channel:Int):Double {
         if(!enabled)return value
         if(channel==0)gain+=(targetGain-gain)*smoothing
         var x=if(value.isFinite())value*gain else 0.0
-        for(band in 0..9){val c=band*5;val h=channel*20+band*2
+        for(band in 0 until filterCount){val c=band*5;val h=(channel*filterCount+band)*2
             val y=coefficients[c]*x+history[h]
             history[h]=coefficients[c+1]*x-coefficients[c+3]*y+history[h+1]
             history[h+1]=coefficients[c+2]*x-coefficients[c+4]*y;x=y

@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -19,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,7 +56,11 @@ class ListeningToolsUi:ViewModel(){
         if(fileBusy)return
         val app=context.applicationContext;fileBusy=true;importPreset=null;importNotice=""
         viewModelScope.launch{try{val imported=withContext(Dispatchers.IO){val bytes=requireNotNull(app.contentResolver.openInputStream(uri)).use{readLimited(it,AudioCodec.MAX_BYTES)}
-            val text=Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString();AudioCodec.importPreset(text)}
+            val text=Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+            val suggested=runCatching{app.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{cursor->
+                if(cursor.moveToFirst())cursor.getString(0)?.substringBeforeLast('.')?.take(80)else null
+            }}.getOrNull()
+            AudioCodec.importPreset(text,suggested)}
             importNotice=imported.notice;importPreset=imported.preset
             message="Preset validated. Review before applying."
         }catch(e:CancellationException){throw e}catch(e:Exception){message="Import failed: ${e.message}. Current EQ is unchanged."}finally{fileBusy=false}}
@@ -74,9 +78,17 @@ class ListeningToolsUi:ViewModel(){
 private fun audioArgs(value:AudioSettings)=Bundle().apply{putString("settings",AudioCodec.settings(value))}
 
 @Composable
-fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:Track?,send:(String,Bundle)->Unit,openEq:()->Unit){
+fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:Track?,send:(String,Bundle)->Unit,openEq:()->Unit,openInfo:()->Unit){
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
-        item{Text("Find your sound.",style=MaterialTheme.typography.headlineMedium);Text("Normal playback",color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        item{Text("Find your sound.",style=MaterialTheme.typography.headlineMedium);Text("Normal playback · high-precision processing",color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        item{OutlinedButton(onClick=openInfo,modifier=Modifier.fillMaxWidth()){Text("Audio info")}}
+        item{ElevatedCard{Column(Modifier.fillMaxWidth().padding(18.dp)){
+            Row(verticalAlignment=Alignment.CenterVertically){Text("Prefer Android USB high-resolution route",Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+                Switch(settings.preferAndroidUsb,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(preferAndroidUsb=it)))},enabled=ready,
+                    modifier=Modifier.semantics{contentDescription="Prefer Android USB high-resolution route"})}
+            Text("Tries the phone-managed USB route for supported stereo formats above 48 kHz. At 44.1/48 kHz, Normal buffering is retained. Switching keeps your position and pause state.",style=MaterialTheme.typography.bodySmall)
+            Text("Actual mixer format still needs verification. This uses Android's driver; experimental Direct USB remains separate.",style=MaterialTheme.typography.bodySmall)
+        }}}
         item{ElevatedCard(onClick=openEq){Column(Modifier.fillMaxWidth().padding(18.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Equalizer",style=MaterialTheme.typography.titleLarge);Text(settings.preset.name)}
                 Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it)))},enabled=ready, modifier=Modifier.semantics { contentDescription="Equalizer enabled" })}
@@ -92,7 +104,8 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
             else if(track!=null){val tags=ReplayGainInfo.parse(detail?.replayGainTags.orEmpty());Text("Current track: ${tags.trackGainDb?.let{"$it dB"}?:"no track gain"} · album: ${tags.albumGainDb?.let{"$it dB"}?:"no album gain"}",style=MaterialTheme.typography.bodySmall)}
         }
         item{HorizontalDivider();Text("Crossfade",style=MaterialTheme.typography.titleLarge);Text("Blend the end of one track into the next.")
-            PlayerActions(){listOf(0,2,4,6).forEach{seconds->FilterChip(settings.crossfadeSeconds==seconds,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(crossfadeSeconds=seconds)))},enabled=ready,label={Text(if(seconds==0)"Off" else "${seconds}s")})}}
+            PlayerActions(){listOf(0,2,4,6).forEach{seconds->FilterChip(settings.crossfadeSeconds==seconds,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(crossfadeSeconds=seconds)))},enabled=ready&&!settings.preferAndroidUsb,label={Text(if(seconds==0)"Off" else "${seconds}s")})}}
+            if(settings.preferAndroidUsb)Text("Crossfade is paused while the Android USB route is selected. Your saved crossfade choice returns when it is off.",style=MaterialTheme.typography.bodySmall)
             Text("Off keeps gapless transitions. Repeat one and end-of-track sleep do not crossfade. Short tracks use a shorter blend.",style=MaterialTheme.typography.bodySmall)
         }
     }
@@ -107,18 +120,17 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null)ui.readPreset(context,uri)}
     val exporter=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")){uri->ui.savePreset(context,uri)}
     fun apply(value:EqPreset=draft){send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(preset=value)))}
+    val parametricFilters=draft.filters
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
         item{Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Your EQ, your preset.",style=MaterialTheme.typography.headlineSmall);Text(draft.name,color=MaterialTheme.colorScheme.primary)}
             Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it,preset=draft)))},enabled=ready, modifier=Modifier.semantics { contentDescription="Equalizer enabled" })}}
-        item{val color=MaterialTheme.colorScheme.primary;val line=MaterialTheme.colorScheme.outlineVariant
-            Surface(shape=MaterialTheme.shapes.large,color=MaterialTheme.colorScheme.surfaceContainer){Column(Modifier.padding(16.dp)){
-                Text("Band gains",style=MaterialTheme.typography.labelMedium)
-                Canvas(Modifier.fillMaxWidth().height(72.dp).padding(top=12.dp)){drawLine(line,Offset(0f,size.height/2),Offset(size.width,size.height/2),1f)
-                    for(i in 0..8)drawLine(color,Offset(size.width*i/9,size.height*(.5f-draft.gains[i].toFloat()/30)),Offset(size.width*(i+1)/9,size.height*(.5f-draft.gains[i+1].toFloat()/30)),3f)}
-            }}
-        }
-        item{Text("Swipe bands sideways · gains from −12 to +12 dB",style=MaterialTheme.typography.labelMedium)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){EqPreset.FREQUENCIES.forEachIndexed{i,freq->
+        item{Text("Each filter controls its shape, center frequency, Q and gain.",style=MaterialTheme.typography.bodySmall)}
+        item{EqResponseCard(draft,settings.eqEnabled,ready){preamp->
+            val next=draft.copy(name="Custom",preampDb=preamp);draft=next;apply(next)
+        }}
+        if(parametricFilters==null){
+            item{Text("Graphic preset · 10 fixed bands",style=MaterialTheme.typography.titleMedium)}
+            item{Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){EqPreset.FREQUENCIES.forEachIndexed{i,freq->
                 Column(Modifier.width(52.dp),horizontalAlignment=Alignment.CenterHorizontally){
                     Text("%+.1f".format(draft.gains[i]),style=MaterialTheme.typography.labelSmall)
                     Box(Modifier.height(184.dp).width(48.dp),contentAlignment=Alignment.Center){
@@ -128,7 +140,25 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
                     }
                     Text(if(freq>=1000)"${freq/1000}k" else "$freq",style=MaterialTheme.typography.labelSmall)
                 }
-            }}
+            }}}
+            item{OutlinedButton(enabled=ready,onClick={draft=draft.copy(name="Custom",gains=List(10){0.0},filters=draft.resolvedFilters());apply(draft)}){Text("Edit as parametric")}}
+        }else{
+            item{Text("Parametric filters · ${parametricFilters.size} of 20",style=MaterialTheme.typography.titleMedium)}
+            items(parametricFilters.size,key={"eq-filter-$it"}){index->
+                EqFilterEditor(parametricFilters[index],ready,
+                    onChange={changed->draft=draft.copy(name="Custom",filters=parametricFilters.mapIndexed{i,filter->if(i==index)changed else filter})},
+                    onFinished={apply()},
+                    onExact={changed->
+                        val next=draft.copy(name="Custom",filters=parametricFilters.mapIndexed{i,filter->if(i==index)changed else filter})
+                        draft=next;apply(next)
+                    })
+                TextButton(enabled=ready&&parametricFilters.size>1,onClick={
+                    val next=draft.copy(name="Custom",filters=parametricFilters.filterIndexed{i,_->i!=index});draft=next;apply(next)
+                }){Text("Remove filter ${index+1}")}
+            }
+            item{OutlinedButton(enabled=ready&&parametricFilters.size<20,onClick={
+                val next=draft.copy(name="Custom",filters=parametricFilters+EqFilter(frequencyHz=1000.0+parametricFilters.size*500.0));draft=next;apply(next)
+            }){Text("Add filter")}}
         }
         item{Text("Preamp · ${"%.1f".format(draft.preampDb)} dB",style=MaterialTheme.typography.titleMedium)
             Slider(draft.preampDb.toFloat(),{draft=draft.copy(name="Custom",preampDb=it.toDouble())},enabled=ready,valueRange= -24f..0f,steps=47,
@@ -136,9 +166,9 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
             Text("Reduce preamp when boosting bands to avoid clipping.",style=MaterialTheme.typography.bodySmall)
         }
         item{PlayerActions(){
-            FilledTonalButton(enabled=ready&&!ui.fileBusy,onClick={picker.launch(arrayOf("application/json","text/plain","application/octet-stream"))}){Text("Import JSON")}
+            FilledTonalButton(enabled=ready&&!ui.fileBusy,onClick={picker.launch(arrayOf("application/json","text/plain","application/octet-stream"))}){Text("Import preset")}
             OutlinedButton(enabled=ready&&!ui.fileBusy,onClick={ui.pendingExport=AudioCodec.preset(draft);exporter.launch("local-music-eq.json")}){Text("Export JSON")}
-        };Text("Import Local Music JSON or a single standard 10-band graphic export. Export saves Local Music JSON v1.",style=MaterialTheme.typography.bodySmall)
+        };Text("Import Local Music JSON, graphic EQ JSON, or AutoEQ ParametricEQ.txt with standard PK filters. Export preserves graphic presets and saves parametric presets as Local Music JSON v2.",style=MaterialTheme.typography.bodySmall)
             if(ui.fileBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
             if(ui.message.isNotBlank())Text(ui.message)
         }
@@ -159,15 +189,43 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
             val saved=draft.copy(name=name.trim());val bank=settings.presets.filterNot{it.name.equals(saved.name,true)}+saved
             send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(preset=saved,presets=bank)));naming=false
         }){Text("Save")}},dismissButton={TextButton(onClick={naming=false}){Text("Cancel")}})
-    ui.importPreset?.let{incoming->AlertDialog(onDismissRequest={ui.importPreset=null},title={Text("Review EQ preset")},text={Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState())){
-        Text(incoming.name,style=MaterialTheme.typography.titleLarge);Text(ui.importNotice);Text("10 bands\nPreamp: ${incoming.preampDb} dB")
-        incoming.gains.forEachIndexed{i,g->Row(Modifier.fillMaxWidth().padding(vertical=3.dp)){Text("${EqPreset.FREQUENCIES[i]} Hz",Modifier.weight(1f));Text("%+.1f dB".format(g))}}
+    ui.importPreset?.let{incoming->val importedFilters=incoming.filters;AlertDialog(onDismissRequest={ui.importPreset=null},title={Text("Review EQ preset")},text={Column(Modifier.heightIn(max=420.dp).verticalScroll(rememberScrollState())){
+        Text(incoming.name,style=MaterialTheme.typography.titleLarge);Text(ui.importNotice);Text("Preamp: ${incoming.preampDb} dB")
+        if(importedFilters==null)incoming.gains.forEachIndexed{i,g->Row(Modifier.fillMaxWidth().padding(vertical=3.dp)){Text("${EqPreset.FREQUENCIES[i]} Hz",Modifier.weight(1f));Text("%+.1f dB".format(g))}}
+        else importedFilters.forEachIndexed{i,filter->Text("${i+1}. ${filter.type.name.lowercase().replace('_',' ')} · ${"%.1f".format(filter.frequencyHz)} Hz · Q ${"%.2f".format(filter.q)} · %+.1f dB".format(filter.gainDb))}
         Text("Only EQ changes. ReplayGain and crossfade stay as selected.")
-        if(incoming.gains.any{it>0})Text("This preset boosts bands. Lower the preamp if you hear distortion.")
+        if((importedFilters?.any{it.gainDb>0}?:incoming.gains.any{it>0}))Text("This preset boosts frequencies. Lower the preamp if you hear distortion.")
     }},confirmButton={TextButton(enabled=ready,onClick={val bank=settings.presets.filterNot{it.name.equals(incoming.name,true)}+incoming
         if(bank.size>100){ui.message="The saved preset bank is full. Delete a preset first.";return@TextButton}
         send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=true,preset=incoming,presets=bank)));ui.importPreset=null;ui.message=""
     }){Text("Save & use")}},dismissButton={TextButton(onClick={ui.importPreset=null;ui.message="Import cancelled. Current EQ unchanged."}){Text("Cancel")}})}
+}
+
+@Composable
+private fun EqFilterEditor(filter:EqFilter,enabled:Boolean,onChange:(EqFilter)->Unit,onFinished:()->Unit,onExact:(EqFilter)->Unit){
+    var expanded by remember{mutableStateOf(false)}
+    var exactValues by rememberSaveable{mutableStateOf(false)}
+    val minLog= kotlin.math.ln(20.0);val maxLog= kotlin.math.ln(20000.0)
+    val minQ= kotlin.math.ln(.1);val maxQ= kotlin.math.ln(20.0)
+    ElevatedCard { Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+        TextButton(enabled=enabled,onClick={exactValues=true}){Text("Enter exact values")}
+        Row(verticalAlignment=Alignment.CenterVertically){
+            Box { TextButton(enabled=enabled,onClick={expanded=true}){Text(filter.type.name.lowercase().replace('_',' '))}
+                DropdownMenu(expanded,{expanded=false}){EqFilterType.entries.forEach{type->DropdownMenuItem(text={Text(type.name.lowercase().replace('_',' '))},onClick={onChange(filter.copy(type=type));expanded=false;onFinished()})}}
+            }
+            Spacer(Modifier.weight(1f));Text("${"%.1f".format(filter.frequencyHz)} Hz",style=MaterialTheme.typography.labelLarge)
+        }
+        Text("Frequency",style=MaterialTheme.typography.labelSmall)
+        Slider(((kotlin.math.ln(filter.frequencyHz.coerceIn(20.0,20000.0))-minLog)/(maxLog-minLog)).toFloat(),{progress->
+            onChange(filter.copy(frequencyHz=kotlin.math.exp(minLog+progress*(maxLog-minLog))))
+        },enabled=enabled,valueRange=0f..1f,onValueChangeFinished=onFinished,modifier=Modifier.semantics{contentDescription="Filter frequency"})
+        Row(verticalAlignment=Alignment.CenterVertically){Text("Gain",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall);Text("%+.1f dB".format(filter.gainDb),style=MaterialTheme.typography.labelMedium)}
+        Slider(filter.gainDb.toFloat(),{onChange(filter.copy(gainDb=it.toDouble()))},enabled=enabled,valueRange= -24f..24f,steps=95,onValueChangeFinished=onFinished,modifier=Modifier.semantics{contentDescription="Filter gain"})
+        Row(verticalAlignment=Alignment.CenterVertically){Text("Q",Modifier.weight(1f),style=MaterialTheme.typography.labelSmall);Text("%.2f".format(filter.q),style=MaterialTheme.typography.labelMedium)}
+        Slider(((kotlin.math.ln(filter.q)-minQ)/(maxQ-minQ)).toFloat(),{progress->onChange(filter.copy(q=kotlin.math.exp(minQ+progress*(maxQ-minQ))))},
+            enabled=enabled,valueRange=0f..1f,onValueChangeFinished=onFinished,modifier=Modifier.semantics{contentDescription="Filter Q"})
+    }}
+    if(exactValues)EqExactValuesDialog(filter,enabled,onDismiss={exactValues=false},onApply={value->onExact(value);exactValues=false})
 }
 
 @Composable

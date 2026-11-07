@@ -21,6 +21,13 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "precision") {
+                val count = PrecisionAudioChecks.run(targetContext)
+                results.putInt("checksPassed", count)
+                results.putString("stream", "\nPrecision audio checks passed: $count\n")
+                finish(Activity.RESULT_OK, results)
+                return
+            }
             if (suite == "flac-queue") {
                 results.putString("stream", "\n" + FlacIndexChecks.queueRegression(targetContext, requireNotNull(fixtureUri)))
                 results.putInt("checksPassed", 1)

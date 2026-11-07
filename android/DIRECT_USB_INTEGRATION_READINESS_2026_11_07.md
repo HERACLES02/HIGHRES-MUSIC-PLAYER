@@ -102,7 +102,7 @@ phone installation or new endurance run was needed for test-only changes.
 ## Historical timer attempt: superseded by controlled focus request
 
 No ADB device was attached when checked; no physical phone test was performed
-by the agent. This check uses the existing Music USB Probe 0.10.0; no update or
+during this readiness review. This check uses the existing Music USB Probe 0.10.0; no update or
 Local Music change is needed. It does not test clock synchronization or balance.
 
 1. Move M2 from the PC to the phone. Select **Standard**, keep earphones out,

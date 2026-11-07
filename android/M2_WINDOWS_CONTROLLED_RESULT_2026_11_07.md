@@ -12,7 +12,7 @@ with no whole-hub or newly connected-device capture. No microphone was opened.
 This capture did not inject descriptors; the earlier trace already matched the
 347-byte Android descriptor hash. Addresses must be verified again after reconnect.
 
-The original CLI's console-key shutdown did not work in the agent's background
+The original CLI's console-key shutdown did not work in the background
 session. Two disposable GUI console probes reproduced the failure without opening
 the DAC. That approach was abandoned. A local helper now uses the installed
 USBPcap driver's public API from matching 1.5.4.0 source: set snapshot/buffer,

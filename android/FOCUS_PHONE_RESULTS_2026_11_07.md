@@ -98,7 +98,7 @@ requested permissions passed. Both APKs verify with signer SHA-256
 `51b163c3c29d8f91f65fbd03929ebb4a98aada4d32b601f2cae5a479374ec507`.
 
 No local runtime check was possible: ADB 5037/5038 listed no targets and the
-project SDK has no emulator. The agent installed nothing on the phone. Only the
+project SDK has no emulator. No phone installation was performed for this review. Only the
 new helper was built; existing app/transport suites were not repeated. The build
 initially missed a PowerShell ZIP assembly load, then passed after loading it.
 At that preparation checkpoint, runtime helper behavior and the phone result

@@ -21,7 +21,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Player build or checks failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-player-data.py')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen Room schemas changed.' }
-    $apk = Join-Path $projectRoot 'releases/local-music-0.10.9.apk'
+    $apk = Join-Path $projectRoot 'releases/local-music-0.12.3.apk'
     Copy-Item -LiteralPath (Join-Path $projectRoot 'player/build/outputs/apk/debug/player-debug.apk') -Destination $apk -Force
     & (Join-Path $tools 'sdk/build-tools/35.0.0/apksigner.bat') verify --verbose $apk
     if ($LASTEXITCODE -ne 0) { throw 'Player signature verification failed.' }

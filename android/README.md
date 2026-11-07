@@ -1,5 +1,19 @@
 # Music USB Probe: Stage A diagnostics
 
+## Daily-use Local Music player
+
+Current player: **0.12.3-audio-info**, version code 30, minimum Android 11.
+See the [player guide](player/README.md) and [current verification](player/VERIFICATION_0_12.md).
+The default Normal mode and optional Android USB preference use Android's driver.
+The separate native Direct USB diagnostic remains experimental.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build-player.ps1
+```
+
+Output: `android/releases/local-music-0.12.3.apk` (generated locally).
+The sections below are historical USB-probe and early-player checkpoints.
+
 Current player: **Local Music 0.2.0**, a separate updateable app with folders,
 artwork, lyrics and reviewed tag editing. See [handoff](PLAYER_0_2_HANDOFF.md).
 The USB probe and its Direct clocking/balance findings remain unchanged.

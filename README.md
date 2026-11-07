@@ -2,6 +2,9 @@
 
 Local high-resolution music player web app built with Flask.
 
+The standalone **Local Music Android app** is in [android/player](android/player/README.md).
+It includes an offline library, EQ, optional Android USB output and audio-path information.
+
 ## Features
 
 - Scans a local music folder from `MUSIC_DIR`

@@ -84,6 +84,8 @@ class PlaybackService : MediaLibraryService() {
             }
             if (controller.uid != applicationInfo.uid || command.customAction !in ACTIONS)
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+            if(command.customAction==AUDIO_INFO)return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS,
+                Bundle().apply{putString("audioInfo",authority.audioInfo().toString())}))
             val future = SettableFuture.create<SessionResult>()
             scope.launch {
                 commands.withLock {
@@ -352,6 +354,7 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         const val CLOSE_PLAYER = "com.localmusic.player.CLOSE_PLAYER"
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
+        const val AUDIO_INFO="com.localmusic.player.AUDIO_INFO"
         const val WIDGET_SETTINGS="com.localmusic.player.WIDGET_SETTINGS"
         const val WIDGET_CONTROL="com.localmusic.player.WIDGET_CONTROL"
         const val ARTIST_SAVE="com.localmusic.player.ARTIST_SAVE"
@@ -401,7 +404,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
+        val ACTIONS = setOf(AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

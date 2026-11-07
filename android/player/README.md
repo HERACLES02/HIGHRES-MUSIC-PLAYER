@@ -1,4 +1,44 @@
-# Local Music: first standalone player preview
+# Local Music Android player
+
+Current: **0.12.3-audio-info**, version code 30, minimum Android 11 / API 30.
+Package: `com.localmusic.player`. This standalone offline player is separate
+from the Flask player and Music USB Probe.
+
+## Audio features
+
+- Graphic and parametric EQ, exact frequency/gain/Q entry, preset import/export,
+  a labelled 48 kHz response preview and estimated headroom guidance.
+- Double-precision EQ/ReplayGain followed by float PCM; no forced 16-bit step
+  before DSP on the precision path. Float PCM has about 24 significant bits.
+- Normal output by default. The optional Android USB preference tries supported
+  stereo rates above 48 kHz; 44.1/48 kHz retain Normal buffering. Crossfade is
+  suspended while the preference is enabled, preserving the saved choice.
+- **Settings ? Audio controls & equalizer ? Audio info** shows source metadata,
+  selected mode, last reported processing/client formats and routed device.
+  Use Refresh for a new snapshot. Client format is not an active HAL/DAC measurement.
+
+On the tested OPPO A9 2020 / Android 11 / KZ M2 setup, stereo 24-bit/96 kHz
+FLAC playback opened a 96 kHz float Android USB output. Low-rate files used
+Android's 48 kHz/PCM16 mixer. A small click when switching from 48 to 96 kHz
+remains a known limitation; Normal mode was clean in the mixed-rate comparison.
+This is not a claim of bit-perfect transport or measured physical DAC precision.
+See [verification and limits](VERIFICATION_0_12.md).
+
+## Build and next work
+
+Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build-player.ps1`
+from the repository root, after the existing Android tool setup. It builds the
+player, runs core/data checks, lint and schema/signature verification, and writes
+`android/releases/local-music-0.12.3.apk`. Install as an update without clearing data.
+Generated APKs, local signing keys, reports, audio fixtures and tool caches stay local.
+
+The next planned increments are **UI polish and queue improvements**. They are
+not included in this release. Current output modes are retained; native Direct
+USB remains a separate diagnostic with unresolved hardware acceptance gates.
+
+## Archived player preview notes
+
+The following records the early 0.1/0.2 checkpoints, not the current version.
 
 **Current: 0.2.0-library-lyrics (version code 2).** Folder selection, cached covers,
 WorkManager scanning, DataStore themes, synchronized/offline/LRCLIB lyrics and

@@ -14,7 +14,8 @@ fun audioCodecChecks(){
     val incoming=BackupPreferences(audio=AudioSettings(presets=listOf(preset)))
     val merged=PreferenceCodec.mergeRestore(original,incoming)
     verify(merged.artists["new artist"]==local&&merged.audio.presets.size==2,"restore keeps unrelated newer artist notes and saved EQ presets")
-    rejects(json.replace("\"version\":1","\"version\":2"));rejects(json.replace("graphic","parametric"))
+    verify(AudioCodec.preset(json.replace("\"version\":1","\"version\":2"))==preset,"supported v2 graphic preset retains v1 gains")
+    rejects(json.replace("\"version\":1","\"version\":3"));rejects(json.replace("graphic","parametric"))
     rejects(json.replace("\"version\":1","\"version\":\"1\""))
     rejects(json.replace("local-music-eq","other-format"));rejects(json.replace("\"preampDb\":-3.0","\"preampDb\":2"))
     rejects(json.replace("\"frequencyHz\":31","\"frequencyHz\":32"));rejects(json.replace("\"frequencyHz\":63","\"frequencyHz\":31"))
@@ -22,6 +23,26 @@ fun audioCodecChecks(){
     rejects("[]");rejects(" ".repeat(131073));rejects(json.dropLast(1));rejects(json.dropLast(1)+",\"url\":\"https://example.com\"}")
     val settings=AudioSettings(true,preset,listOf(preset),ReplayGainMode.ALBUM,4)
     verify(AudioCodec.settings(AudioCodec.settings(settings))==settings,"saved preset bank and effects round-trip")
+    val usbSettings=settings.copy(preferAndroidUsb=true)
+    verify(AudioCodec.settings(AudioCodec.settings(usbSettings))==usbSettings,"Android USB route preference survives persistence")
+    verify(PreferenceCodec.decode(PreferenceCodec.encode(BackupPreferences(audio=usbSettings))).audio==usbSettings,
+        "backup preferences retain USB mode and saved crossfade choice")
+    verify(!AudioCodec.settings(AudioCodec.settings(settings)).preferAndroidUsb,"legacy settings retain Normal output")
+    for(bad in listOf(AudioCodec.settings(usbSettings).replace("\"preferAndroidUsb\":true","\"preferAndroidUsb\":\"true\""),
+        AudioCodec.settings(usbSettings).replace("\"version\":2","\"version\":1"))){
+        var rejected=false;try{AudioCodec.settings(bad)}catch(_:Exception){rejected=true};verify(rejected,"malformed route setting rejected")
+    }
+    val parametric=EqPreset("Exact controls",-6.5,filters=listOf(
+        EqFilter(EqFilterType.PEAKING,1000.25,6.0,.71),
+        EqFilter(EqFilterType.LOW_SHELF,90.5,-2.25,1.0),
+        EqFilter(EqFilterType.HIGH_SHELF,10000.0,1.5,.8)))
+    val parametricJson=AudioCodec.preset(parametric)
+    verify(AudioCodec.preset(parametricJson)==parametric,"v2 retains exact parametric shapes, values and lowered preamp")
+    verify(AudioCodec.importPreset(parametricJson).preset==parametric,"v2 parametric export imports without approximation")
+    val parametricSettings=settings.copy(preset=parametric,presets=listOf(preset,parametric))
+    verify(AudioCodec.settings(AudioCodec.settings(parametricSettings))==parametricSettings,"mixed v1/v2 preset bank survives settings persistence")
+    rejects(parametricJson.replace("\"q\":0.71","\"q\":0"))
+    rejects(parametricJson.replace("PEAKING","UNKNOWN"))
     verify(AudioCodec.preset("\uFEFF"+json)==preset,"UTF-8 BOM is accepted")
     // Representative external graphic export, including inactive shelf controls.
     val external="""[{"name":"KZ ZSN Pro","preamp":0.0,"parametric":false,"bands":[

@@ -3,7 +3,7 @@
 First increment: source/report audit and local verification. Clock synchronization
 and acoustic balance remain unresolved. No transport change or new APK is justified
 by this evidence. Direct remains experimental in Music USB Probe, separate from
-Local Music. No phone test was performed by the agent.
+Local Music. No new phone test was performed for this investigation.
 
 Subsequent resource check: the user confirms no recording equipment is available.
 See [published-source follow-up and unsent manufacturer questions](M2_CLOCK_SOURCE_RESEARCH_2026_11_07.md).

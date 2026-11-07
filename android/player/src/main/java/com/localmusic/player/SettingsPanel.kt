@@ -79,7 +79,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
         }
         SettingsCard("Playback & support") {
             Text("Normal playback", style = MaterialTheme.typography.titleMedium)
-            Text("High-resolution and Direct USB output are planned for a later update.", style = MaterialTheme.typography.bodySmall)
+            Text("Audio settings include an optional Android USB high-resolution route. Experimental Direct USB remains separate.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = notifications, modifier = Modifier.fillMaxWidth()) { Text("Playback notifications") }
             OutlinedButton(onClick = report, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Save playback report") }
         }

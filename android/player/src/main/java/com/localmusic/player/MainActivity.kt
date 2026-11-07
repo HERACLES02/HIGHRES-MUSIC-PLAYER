@@ -427,11 +427,12 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         keyboard?.hide(); screen = "Playing"
     }
     fun playPlaylist(args: Bundle) { send(PlaybackService.PLAYLIST_START, args); keyboard?.hide(); screen = "Playing" }
-    val secondary = screen in setOf("Playing","Queue","Audio controls","Equalizer","Playback widget")
+    val secondary = screen in setOf("Playing","Queue","Audio controls","Audio info","Equalizer","Playback widget")
     val nested = secondary || (screen == "Playlists" && playlistDetail != null) || (screen == "Library" && (group != null || selecting))
     fun back() {
         when {
             screen=="Equalizer"->screen="Audio controls"
+            screen=="Audio info"->screen="Audio controls"
             screen=="Audio controls"||screen=="Playback widget"->screen=toolsReturn
             screen == "Queue" && queueFromPlaying -> screen = "Playing"
             secondary -> screen = mainScreen
@@ -685,7 +686,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         }
                     }
                 }
-                "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"})}
+                "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"},{screen="Audio info"})}
+                "Audio info"->Box(Modifier.weight(1f)){AudioInfoPanel(controller,currentId)}
                 "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,send)}
                 "Playback widget"->Box(Modifier.weight(1f)){WidgetSettingsPanel(preferences.widgets,ready,current,current?.let{store?.artwork(it.id)},send)}
                 "Settings" -> Box(Modifier.weight(1f)) {
