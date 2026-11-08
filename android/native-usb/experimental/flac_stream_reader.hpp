@@ -17,9 +17,15 @@ public:
     FlacStreamReader(const FlacStreamReader&)=delete;
     FlacStreamReader& operator=(const FlacStreamReader&)=delete;
     Info info() const;
+    // End/Error/Cancelled persist until destruction (End can be restarted by seek).
+    // A detected read/decode error takes precedence over simultaneous cancellation.
+    // Cancellation is cooperative between file reads/decoded blocks, not an IO interrupt.
     Status next();
+    // Borrowed storage: valid only after Block, until the next next()/seek() call.
     Block block() const;
     bool seek(uint64_t frame);
+    // True only at clean End after a complete decode from zero with a stored MD5.
+    // False includes in-progress, missing MD5, post-seek partial, cancel and error.
     bool md5Verified() const;
     size_t stagingBytes() const;
 private:

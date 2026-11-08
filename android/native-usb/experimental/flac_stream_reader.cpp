@@ -101,13 +101,35 @@ struct FlacStreamReader::Impl {
         length=uint64_t(end);initialize();
     }
     ~Impl(){if(initialized)FLAC__stream_decoder_finish(decoder.get());}
+    bool boundedMetadata() {
+        // Native FLAC only. libFLAC always allocates SEEKTABLE internally, even
+        // when ignored by the callback filter. Inspect headers before it parses.
+        std::array<unsigned char,4> header{};
+        if(std::fread(header.data(),1,4,file)!=4 || header!=std::array<unsigned char,4>{'f','L','a','C'})return false;
+        uint64_t offset=4;
+        bool first=true;
+        for(;;) {
+            if(interrupted() || length-offset<4 || std::fread(header.data(),1,4,file)!=4)return false;
+            offset+=4;
+            const unsigned type=header[0]&127;
+            const uint64_t bytes=(uint64_t(header[1])<<16)|(uint64_t(header[2])<<8)|header[3];
+            if(bytes>length-offset || (first && (type!=0 || bytes!=34)) ||
+               (type==3 && (bytes>65520 || bytes%18!=0)))return false;
+            if(fileSeek(file,int64_t(bytes),SEEK_CUR)!=0)return false;
+            offset+=bytes;first=false;
+            if(header[0]&128)return fileSeek(file,0,SEEK_SET)==0;
+        }
+    }
     bool initialize() {
         if(interrupted() || bad)return false;
         if(initialized){FLAC__stream_decoder_finish(decoder.get());initialized=false;}
         used=0;position=0;pending=delivered=ended=verified=metadataSeen=digestPresent=false;fromStart=true;
         format={};
         std::clearerr(file);
-        if(fileSeek(file,0,SEEK_SET)!=0){bad=true;return false;}
+        if(fileSeek(file,0,SEEK_SET)!=0 || !boundedMetadata()) {
+            if(!interrupted())bad=true;
+            return false;
+        }
         FLAC__stream_decoder_set_md5_checking(decoder.get(),true);
         FLAC__stream_decoder_set_metadata_ignore_all(decoder.get());
         FLAC__stream_decoder_set_metadata_respond(decoder.get(),FLAC__METADATA_TYPE_STREAMINFO);
@@ -121,14 +143,18 @@ struct FlacStreamReader::Impl {
         return !interrupted();
     }
     Status next() {
-        if(interrupted()){used=0;return Status::Cancelled;}
+        // A late cancellation must not rewrite an already reported terminal result.
         if(bad){used=0;return Status::Error;}
         if(ended)return Status::End;
+        if(interrupted()){used=0;return Status::Cancelled;}
         if(delivered){used=0;pending=delivered=false;}
         while(!pending) {
             bool ok=FLAC__stream_decoder_process_single(decoder.get());
+            // A detected read/decode error wins over a simultaneous cancel,
+            // matching the terminal-state precedence at entry on later calls.
+            if(bad){used=0;return Status::Error;}
             if(interrupted()){used=0;return Status::Cancelled;}
-            if(!ok || bad){bad=true;used=0;return Status::Error;}
+            if(!ok){bad=true;used=0;return Status::Error;}
             if(FLAC__stream_decoder_get_state(decoder.get())==FLAC__STREAM_DECODER_END_OF_STREAM) {
                 const bool complete=!format.totalFrames || position==format.totalFrames;
                 bool digest=FLAC__stream_decoder_finish(decoder.get());initialized=false;
