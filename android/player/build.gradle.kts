@@ -11,8 +11,8 @@ android {
         minSdk = 30
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
-        versionCode = 38
-        versionName = "0.13.6"
+        versionCode = 39
+        versionName = "0.13.7"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }

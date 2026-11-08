@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.ThemeAccent
@@ -19,6 +19,8 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
     backupUi: BackupUiState, actions: FeatureActions, send: (String, Bundle) -> Unit,
     audio: () -> Unit, widgets: () -> Unit, scan: () -> Unit, notifications: () -> Unit,
     report: () -> Unit, licenses: () -> Unit, openEdit: (String) -> Unit) {
+    var removedSongs by remember{mutableStateOf(false)}
+    if(removedSongs)RemovedSongsDialog(library,ready,send){removedSongs=false}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SettingsCard("Sound & widgets") {
@@ -70,6 +72,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
                 Icon(PlayerGlyph.Scan, null); Spacer(Modifier.width(8.dp)); Text("Scan chosen folders")
             }
             OutlinedButton(onClick = actions.pickFolder, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Choose music folder / SD card") }
+            OutlinedButton(enabled=ready,onClick={removedSongs=true},modifier=Modifier.fillMaxWidth()){Text("Removed songs (${library.removedTracks.size})")}
             library.folders.forEach { folder ->
                 val path=Uri.parse(folder.treeUri).lastPathSegment.orEmpty()
                 val storage=if(path.startsWith("primary:"))"Phone" else "Storage"

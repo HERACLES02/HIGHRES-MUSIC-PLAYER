@@ -39,7 +39,8 @@ data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Ma
     val details: Map<TrackId, LibraryExtras> = emptyMap(), val folders: List<FolderGrant> = emptyList(), val revision: Long = 0,
     val edits: List<FileEditRow> = emptyList(), val editBusy: Boolean = false,
     val playlists: List<Pair<Playlist, Int>> = emptyList(),
-    val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap())
+    val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap(),
+    val removedTracks: List<Track> = emptyList())
 
 class MusicApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -196,7 +197,9 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
             extras[t.id]?.let { detail ->
             t.copy(tags = TagPatch(detail.tagFields).apply(detail.tagsOverride ?: t.tags))
         } ?: t }
-        val tracks = allTracks.filter { FolderScanPolicy.includes(it, selected) }
+        val removed = allTracks.filter { extras[it.id]?.hidden==true }
+        val tracks = allTracks.filter { FolderScanPolicy.includes(it, selected) && extras[it.id]?.hidden!=true }
+        val playbackTracks = allTracks.associate { it.id to if(extras[it.id]?.hidden==true)it.copy(availability=Availability.MISSING) else it }
         val resumes = repo.continuePositions(tracks)
         val existingArtwork = extras.values.mapNotNull { it.artworkOverride ?: it.artworkPath }
             .filter { it.isNotBlank() }.distinct().filter { java.io.File(it).exists() }.toHashSet()
@@ -205,7 +208,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         }.toMap()
         val edits = repo.edits()
         val playlists = repo.playlists()
-        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists, trackById = allTracks.associateBy { it.id }, artworkPaths = artworkPaths) }
+        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists, trackById = playbackTracks, artworkPaths = artworkPaths, removedTracks=removed) }
     }
     suspend fun favorite(id: TrackId) {
         val repo = repository(); val track = repo.track(id) ?: return

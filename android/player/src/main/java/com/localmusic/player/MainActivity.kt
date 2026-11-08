@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
     private val backupUi by viewModels<BackupUiState>()
     private val listeningUi by viewModels<ListeningToolsUi>()
     private val documentUi by viewModels<DocumentUiState>()
+    private val songRemovalUi by viewModels<SongRemovalUi>()
     private val backupSavePicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) backupCommand(PlaybackService.BACKUP_EXPORT, Bundle().apply { putString("uri", uri.toString()) })
         else backupUi.busy = false
@@ -321,7 +322,7 @@ class MainActivity : ComponentActivity() {
                             isAppearanceLightNavigationBars = !showLaunch && !dark
                         }
                     }
-                    if(showLaunch)PlayerLaunchScreen() else MusicScreen(listeningUi, backupUi, playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,playbackUi,
+                    if(showLaunch)PlayerLaunchScreen() else SongRemovalHost(songRemovalUi,controller) { MusicScreen(listeningUi, backupUi, playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,playbackUi,
                         listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"),
                         ::send, store, preferences, FeatureActions(
                             pickFolder = { folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) },
@@ -340,7 +341,7 @@ class MainActivity : ComponentActivity() {
                             if (Build.VERSION.SDK_INT >= 33) notificationAccess.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                                 .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
-                        })
+                        }) }
                     BackupRestoreDialog(backupUi, restore = {
                         backupCommand(PlaybackService.BACKUP_RESTORE, Bundle().apply { putString("token", backupUi.token) })
                     }, cancel = { backupUi.token = null; backupUi.summary = ""; send(PlaybackService.BACKUP_CANCEL) })
@@ -435,7 +436,12 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     val ready = playback.optBoolean("ready") && controller != null
     val tileMin = 144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)
     val currentId = playback.optString("currentId")
-    val current = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
+    val selected = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
+    val current = selected?.takeUnless { library.details[it.id]?.hidden==true }
+    LaunchedEffect(selected?.id,library.details[selected?.id]?.hidden) {
+        if(selected!=null && library.details[selected.id]?.hidden==true && screen=="Playing")screen=mainScreen
+    }
+    val removeSong=LocalSongRemoval.current
     // Keep Library's list cached across tabs, but do not prepare it for Home.
     val filtered by remember(library.tracks, search, newest) { lazy {
         val found = library.tracks.filter { (it.tags.title + " " + artist(it) + " " + it.tags.album.orEmpty()).contains(search, true) }
@@ -728,6 +734,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             TextButton(onClick = { editingIds = listOf(track.id.value.toString()); details = null }) { Text("Edit tags…") }
             TextButton(onClick = { openPlaylistPicker(listOf(track.id)); details = null }) { Text("Add to playlist…") }
             TextButton(onClick = { actions.pickCover(listOf(track)); details = null }) { Text("Choose artwork…") }
+            TextButton(enabled=ready&&!library.editBusy,onClick={details=null;removeSong(track,false)}){Text("Remove from library...")}
+            TextButton(enabled=ready&&!library.editBusy,onClick={details=null;removeSong(track,true)}){Text("Delete file from phone...")}
             TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putString("id", track.id.value.toString()); putBoolean("remove", true) }); details = null }) { Text("Remove cover in this app") }
             TextButton(enabled = !library.scanning, onClick = {
                 val batch = UUID.randomUUID().toString(); nativeBatch = batch; details = null

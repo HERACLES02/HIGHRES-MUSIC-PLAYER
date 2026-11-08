@@ -83,7 +83,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     val player = NormalSessionPlayer(this)
     val sleep = SleepTimer { android.os.SystemClock.elapsedRealtime() }
-    val current: Track? get() = queue.current?.trackId?.let { store?.state?.value?.trackById?.get(it) }
+    val current: Track? get() = queue.current?.trackId?.let { id ->
+        store?.state?.value?.let { state -> state.trackById[id]?.takeUnless { state.details[id]?.hidden==true } }
+    }
     val tracks: List<Track> get() = store?.state?.value?.tracks.orEmpty()
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause("Output disconnected. Reconnect and press Play.") }
@@ -306,7 +308,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         lookahead = null; lookaheadToken = null
         if (track == null || track.availability != Availability.AVAILABLE || track.sources.isEmpty()) {
             seekIndexes.setPlaybackWindow(null)
-            engine.stop(); engine.clearMediaItems(); queue.pause(); error = "Saved song is unavailable. Scan again or select another song."
+            engine.stop(); engine.clearMediaItems(); queue.pause()
+            error = if(store?.state?.value?.details?.get(selection.entry.trackId)?.hidden==true) ""
+                else "Saved song is unavailable. Scan again or select another song."
             persist(); update(); return
         }
         error = ""; engine.pause()

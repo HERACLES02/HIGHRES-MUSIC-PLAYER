@@ -307,6 +307,7 @@ fun main() = runBlocking {
     var primary: Throwable? = null
     try {
         libraryReadChecks(directory.resolve("library-read.db"))
+        removalChecks(directory.resolve("removal.db"))
         enrichmentChecks(); audioCodecChecks(); providerChecks(); codecChecks(); backupArchiveChecks(); backupRepositoryChecks(directory.resolve("backup.db")); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
         versions(directory.resolve("versions.db")); migration(directory.resolve("migration.db"))
         playlistOperations(directory.resolve("playlists.db"))

@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 
 @Composable
 fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit, menuState: MutableState<Boolean>? = null) {
+    val removeSong=LocalSongRemoval.current
     val state = menuState ?: remember(track.id) { mutableStateOf(false) }
     var open by state
     fun args() = Bundle().apply { putString("id", track.id.value.toString()) }
@@ -33,6 +34,8 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
             DropdownMenuItem(text = { Text("Add to Queue") }, onClick = { open = false; send(PlaybackService.ADD, args()) })
             DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { open = false; addToPlaylist() })
             DropdownMenuItem(text = { Text("Details") }, onClick = { open = false; details() })
+            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) })
+            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) })
         }
     }
 }

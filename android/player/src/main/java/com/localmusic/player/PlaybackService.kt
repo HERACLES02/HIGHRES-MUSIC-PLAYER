@@ -31,6 +31,7 @@ class PlaybackService : MediaLibraryService() {
     private var scan: Job? = null
     private val commands = Mutex()
     private var backupPreview: Pair<String, BackupBundle>? = null
+    private var deletionPreview: SongFileRemoval.Preview? = null
     private lateinit var widgets:WidgetUpdates
     private var notificationDismissed = false
     private fun publish() {
@@ -293,6 +294,35 @@ class PlaybackService : MediaLibraryService() {
                         SLEEP_END_TRACK -> authority.sleepTimerEndOfTrack()
                         SLEEP_CANCEL -> authority.sleepTimerCancel()
                         CLEAR_ERROR -> store.clearError()
+                        SONG_HIDE, SONG_RESTORE -> store.operationMutex.withLock {
+                            val id=PlaybackAuthority.id(requireNotNull(args.getString("id")))
+                            require(store.repository().track(id)!=null){"Song is no longer in the library."}
+                            require(!store.isEditing(id)){"Wait for this song's file operation to finish."}
+                            authority.closeForEdit(setOf(id))
+                            try {
+                                store.repository().updateExtra(id){it.copy(hidden=command.customAction==SONG_HIDE)}
+                                store.refresh()
+                            } finally {authority.reopenAfterEdit(setOf(id))}
+                        }
+                        SONG_DELETE_PREVIEW -> store.operationMutex.withLock {
+                            val id=PlaybackAuthority.id(requireNotNull(args.getString("id")))
+                            require(!store.isEditing(id)){"Wait for this song's file operation to finish."}
+                            deletionPreview=null
+                            val preview=SongFileRemoval(this@PlaybackService,store).prepare(id)
+                            deletionPreview=preview
+                            result.putString("preview",preview.json().toString())
+                        }
+                        SONG_DELETE_CANCEL -> if(deletionPreview?.token==args.getString("token"))deletionPreview=null
+                        SONG_DELETE -> store.operationMutex.withLock {
+                            val preview=requireNotNull(deletionPreview?.takeIf{it.token==args.getString("token")}){"Deletion preview expired. Review the file again."}
+                            deletionPreview=null
+                            require(!store.isEditing(preview.id)){"Wait for this song's file operation to finish."}
+                            authority.closeForEdit(setOf(preview.id));store.beginEdit()
+                            try { SongFileRemoval(this@PlaybackService,store).delete(preview) }
+                            finally {
+                                try {store.refresh()}finally{authority.reopenAfterEdit(setOf(preview.id));store.endEdit()}
+                            }
+                        }
                         EXPORT -> result.putString("report", JSONObject(authority.report()).put("library", JSONObject()
                             .put("trackCount", store.state.value.tracks.size).put("folderCount", store.state.value.folders.size)
                             .put("scanMessage", store.state.value.message)).put("fileEdits", org.json.JSONArray(store.state.value.edits.map {
@@ -383,6 +413,11 @@ class PlaybackService : MediaLibraryService() {
         const val SCAN = "com.localmusic.player.SCAN"
         const val CANCEL_SCAN = "com.localmusic.player.CANCEL_SCAN"
         const val CLEAR_ERROR = "com.localmusic.player.CLEAR_ERROR"
+        const val SONG_HIDE = "com.localmusic.player.SONG_HIDE"
+        const val SONG_RESTORE = "com.localmusic.player.SONG_RESTORE"
+        const val SONG_DELETE_PREVIEW = "com.localmusic.player.SONG_DELETE_PREVIEW"
+        const val SONG_DELETE = "com.localmusic.player.SONG_DELETE"
+        const val SONG_DELETE_CANCEL = "com.localmusic.player.SONG_DELETE_CANCEL"
         const val EXPORT = "com.localmusic.player.EXPORT_REPORT"
         const val ADD_FOLDER = "com.localmusic.player.ADD_FOLDER"
         const val PREFERENCES = "com.localmusic.player.PREFERENCES"
@@ -414,7 +449,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(QUEUE_PLAY,THEME_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
+        val ACTIONS = setOf(SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

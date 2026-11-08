@@ -1,6 +1,6 @@
 # Local Music Android player
 
-Current: **0.12.3-audio-info**, version code 30, minimum Android 11 / API 30.
+Current: **0.13.7-optimized-preview**, version code 39, minimum Android 11 / API 30.
 Package: `com.localmusic.player`. This standalone offline player is separate
 from the Flask player and Music USB Probe.
 
@@ -24,17 +24,46 @@ remains a known limitation; Normal mode was clean in the mixed-rate comparison.
 This is not a claim of bit-perfect transport or measured physical DAC precision.
 See [verification and limits](VERIFICATION_0_12.md).
 
-## Build and next work
+## Library and player controls
 
-Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build-player.ps1`
-from the repository root, after the existing Android tool setup. It builds the
-player, runs core/data checks, lint and schema/signature verification, and writes
-`android/releases/local-music-0.12.3.apk`. Install as an update without clearing data.
-Generated APKs, local signing keys, reports, audio fixtures and tool caches stay local.
+Song options offer **Remove from library...**, which keeps the file, and
+**Delete file from phone...**, which reviews the exact filename/location before
+permanent deletion. Restore hidden listings from **Settings > Removed songs**.
+Restoring a listing cannot recover a deleted file. Playlist and queue references
+are retained as unavailable; removing the current song stops playback.
 
-The next planned increments are **UI polish and queue improvements**. They are
-not included in this release. Current output modes are retained; native Direct
-USB remains a separate diagnostic with unresolved hardware acceptance gates.
+Deletion requires write access to the chosen music folder and provider support.
+The file is checked again at confirmation; changed files require a fresh review.
+Pending tag writes or recovery must finish before deletion.
+
+Now Playing supports pull-down dismissal over the retained browsing screen.
+Queue and playlist entries can be reordered with drag handles or menu actions;
+queue selection uses occurrence identities so repeated songs remain distinct.
+Settings include saved theme accents. Home defers Library filtering/sorting until
+that tab opens, and usable startup is reported separately from the launch logo.
+
+## Build
+
+From the repository root, after the existing Android tool setup:
+
+```powershell
+# Optimized personal preview
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build-player.ps1 -OptimizedPreview
+
+# Debug build and instrumentation APK
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build-player.ps1
+```
+
+Both run core/data checks, assembly, lint and schema/signature verification.
+Artifacts are `android/releases/local-music-0.13.7-optimized-preview.apk` and
+`android/releases/local-music-0.13.7-debug.apk`. Install as an update without
+clearing data. The optimized preview uses the existing local signing key and
+retains native tag, Room and worker entry points. Its R8 mapping is saved beside
+its APK. Internal debug instrumentation targets the debug build.
+
+Generated APKs, local signing keys, reports, audio fixtures and tool caches stay
+local. Native Direct USB remains a separate diagnostic with unresolved hardware
+acceptance gates.
 
 ## Archived player preview notes
 
