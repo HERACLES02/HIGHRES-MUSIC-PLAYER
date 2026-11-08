@@ -12,6 +12,7 @@
 class PcmFrameQueue {
     enum class Life { Open, Finished, Stopped, Failed };
     static constexpr size_t MAX_BYTES=1024*1024;
+    const unsigned sampleRate,sampleBits;
     const size_t frameBytes, capacity;
     std::vector<unsigned char> bytes;
     mutable std::mutex mutex;
@@ -30,9 +31,21 @@ class PcmFrameQueue {
 public:
     enum class Write { Accepted, Full, Stale, Closed, Invalid };
     enum class Read { Data, NeedData, End, Stopped, Failed, Stale, Invalid };
+    enum class State { Open, Finished, Stopped, Failed, Stale };
     struct Result { Read status; size_t frames; bool final; };
     PcmFrameQueue(int rate,int bits,size_t maxFrames)
-        :frameBytes(frameSize(rate,bits)),capacity(maxFrames),bytes(storageSize(frameBytes,maxFrames)) {}
+        :sampleRate(rate),sampleBits(bits),frameBytes(frameSize(rate,bits)),capacity(maxFrames),bytes(storageSize(frameBytes,maxFrames)) {}
+    bool matchesFormat(unsigned rate,unsigned bits) const { return rate==sampleRate && bits==sampleBits; }
+    State state(uint64_t token) const {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(token!=epoch)return State::Stale;
+        switch(life) {
+            case Life::Open:return State::Open;
+            case Life::Finished:return State::Finished;
+            case Life::Stopped:return State::Stopped;
+            default:return State::Failed;
+        }
+    }
     size_t capacityBytes() const { return bytes.size(); }
     size_t bufferedFrames() const { std::lock_guard<std::mutex> lock(mutex); return filled; }
     uint64_t generation() const { std::lock_guard<std::mutex> lock(mutex); return epoch; }

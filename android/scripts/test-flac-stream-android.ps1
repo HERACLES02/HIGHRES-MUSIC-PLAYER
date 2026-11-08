@@ -11,7 +11,7 @@ foreach ($abi in @('arm64-v8a', 'armeabi-v7a', 'x86_64')) {
     $build = Join-Path $tools "flac-stream-android-$abi"
     & $cmake -S (Join-Path $androidRoot 'native-usb/tests/decode-build') -B $build -G Ninja "-DCMAKE_MAKE_PROGRAM=$ninja" "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" -DANDROID_PLATFORM=android-30 -DANDROID_STL=c++_static -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-Werror
     if ($LASTEXITCODE -ne 0) { throw "FLAC Android configuration failed: $abi" }
-    & $cmake --build $build --target flac_stream_cli flac_stream_memory_cli flac_stream_worker_test -j 4
+    & $cmake --build $build --target flac_stream_cli flac_stream_memory_cli flac_stream_worker_test flac_queue_test flac_source_owner_test -j 4
     if ($LASTEXITCODE -ne 0) { throw "FLAC Android build failed: $abi" }
     Write-Host "PASS: Android API-30 compile/link $abi (not a runtime test)."
 }
@@ -33,6 +33,12 @@ if ($Serial) {
         $workerBinary = Join-Path $tools "flac-stream-android-$abi/flac_stream_worker_test"
         & python (Join-Path $PSScriptRoot 'test-flac-stream-worker.py') $workerBinary --android $Serial
         if ($LASTEXITCODE -ne 0) { throw 'Android FLAC worker runtime cases failed.' }
+        $queueBinary = Join-Path $tools "flac-stream-android-$abi/flac_queue_test"
+        & python (Join-Path $PSScriptRoot 'test-flac-queue.py') $queueBinary --android $Serial
+        if ($LASTEXITCODE -ne 0) { throw 'Android FLAC queue runtime cases failed.' }
+        $ownerBinary = Join-Path $tools "flac-stream-android-$abi/flac_source_owner_test"
+        & python (Join-Path $PSScriptRoot 'test-flac-source-owner.py') $ownerBinary --android $Serial
+        if ($LASTEXITCODE -ne 0) { throw 'Android FLAC source-owner runtime cases failed.' }
     } finally {
         # Exact, fixed directory containing only this experiment's generated files.
         & $adb -s $Serial shell rm -rf /data/local/tmp/localmusic-flac-stream
