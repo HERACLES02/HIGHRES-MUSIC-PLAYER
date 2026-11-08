@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp" android:height="288dp" android:viewportWidth="288" android:viewportHeight="288">
+    <path android:fillColor="@color/player_launch_background" android:pathData="M0,0h288v288h-288z" />
+    <!-- Padding keeps the existing app mark inside Android 12's icon mask. -->
+    <group android:translateX="90" android:translateY="90">
+        <path android:fillColor="#CBF5DC" android:pathData="M46,26v44c-3,-2 -6,-3 -10,-3 -8,0 -14,5 -14,11s6,11 14,11 14,-5 14,-11v-32l28,-7v24c-3,-2 -6,-3 -10,-3 -8,0 -14,5 -14,11s6,11 14,11 14,-5 14,-11v-54z" />
+    </group>
+</vector>

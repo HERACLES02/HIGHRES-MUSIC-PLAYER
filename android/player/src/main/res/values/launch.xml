@@ -1,0 +1,29 @@
+<resources>
+    <color name="player_launch_background">#183B43</color>
+    <!-- A branded starting window responds before the app process draws. -->
+    <style name="PlayerLaunch" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowBackground">@drawable/player_launch_background</item>
+        <item name="android:statusBarColor">@color/player_launch_background</item>
+        <item name="android:navigationBarColor">@color/player_launch_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    <style name="PlayerLaunchLight" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FAF9FD</item>
+        <item name="android:statusBarColor">#FAF9FD</item>
+        <item name="android:navigationBarColor">#FAF9FD</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+    <style name="PlayerLaunchDark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#111318</item>
+        <item name="android:statusBarColor">#111318</item>
+        <item name="android:navigationBarColor">#111318</item>
+    </style>
+    <style name="PlayerLaunchBlack" parent="PlayerLaunchDark">
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+    </style>
+</resources>

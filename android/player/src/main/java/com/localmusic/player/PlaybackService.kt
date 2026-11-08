@@ -18,6 +18,8 @@ import org.json.JSONObject
 import android.net.Uri
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.localmusic.data.BackupBundle
 import com.localmusic.data.AudioCodec
 
@@ -55,7 +57,7 @@ class PlaybackService : MediaLibraryService() {
                 storage = (application as MusicApplication).storage.await()
                 authority.initialize(storage!!)
                 scope.launch{storage!!.preferences.collect{prefs->authority.audioSettingsChanged(prefs.audio);widgets.invalidate();publish()}}
-                storage!!.state.collect { authority.libraryChanged() }
+                storage!!.state.map{it.revision}.distinctUntilChanged().collect { authority.libraryChanged() }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { storage?.error("Could not open the library: ${e.message}") }
         }
@@ -95,6 +97,7 @@ class PlaybackService : MediaLibraryService() {
                     val result = Bundle()
                     when (command.customAction) {
                         AUDIO_SETTINGS -> {val value=AudioCodec.settings(requireNotNull(args.getString("settings")));store.setAudio(value);authority.audioSettingsChanged(value)}
+                        THEME_ACCENT -> store.setAccent(ThemeAccent.valueOf(requireNotNull(args.getString("accent"))))
                         WIDGET_SETTINGS -> {store.setWidgets(WidgetSettings(args.getString("theme")?:"Match app",args.getBoolean("artwork",true)));widgets.invalidate();publish()}
                         WIDGET_CONTROL -> when(args.getString("control")){
                             "toggle"->if(authority.engine.playWhenReady)authority.pause()else{
@@ -280,6 +283,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         QUEUE_REMOVE -> authority.removeFromQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))))
                         QUEUE_MOVE -> authority.moveInQueue(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))), args.getInt("index"))
+                        QUEUE_PLAY -> authority.playQueueEntry(EntryId(UUID.fromString(requireNotNull(args.getString("entry")))))
                         QUEUE_CLEAR -> authority.clearQueue()
                         SLEEP_SET -> authority.sleepTimer(args.getInt("minutes", 0))
                         SLEEP_END_TRACK -> authority.sleepTimerEndOfTrack()
@@ -355,6 +359,8 @@ class PlaybackService : MediaLibraryService() {
         const val CLOSE_PLAYER = "com.localmusic.player.CLOSE_PLAYER"
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
         const val AUDIO_INFO="com.localmusic.player.AUDIO_INFO"
+        const val THEME_ACCENT="com.localmusic.player.THEME_ACCENT"
+        const val QUEUE_PLAY="com.localmusic.player.QUEUE_PLAY"
         const val WIDGET_SETTINGS="com.localmusic.player.WIDGET_SETTINGS"
         const val WIDGET_CONTROL="com.localmusic.player.WIDGET_CONTROL"
         const val ARTIST_SAVE="com.localmusic.player.ARTIST_SAVE"
@@ -404,7 +410,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
+        val ACTIONS = setOf(QUEUE_PLAY,THEME_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

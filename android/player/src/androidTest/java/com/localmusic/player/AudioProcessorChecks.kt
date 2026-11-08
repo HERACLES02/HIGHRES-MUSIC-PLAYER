@@ -21,6 +21,34 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "ui-dismiss-frame") {
+                val count=UiDismissFrameChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nDismissed frame checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-motion" || suite == "ui-launch") {
+                val count=UiMotionChecks.run(this,suite=="ui-launch")
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nMotion/launch checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-responsive") {
+                val count=UiResponsiveChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nResponsive UI checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-state") {
+                val count=UiStateChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nUI settings checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
             if (suite == "precision") {
                 val count = PrecisionAudioChecks.run(targetContext)
                 results.putInt("checksPassed", count)

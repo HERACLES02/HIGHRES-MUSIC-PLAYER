@@ -51,9 +51,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
         item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                label = { Text("Search your music") }, leadingIcon = { Icon(PlayerGlyph.Search, null) },
-                trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(PlayerGlyph.Close, "Clear search") } })
+            MusicSearchField(search,onSearch,"Search your music")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(countLabel(tracks.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 IconToggleButton(checked = grid, onCheckedChange = { changeGrid(true) }, enabled = ready) { Icon(PlayerGlyph.Grid, "Grid view") }

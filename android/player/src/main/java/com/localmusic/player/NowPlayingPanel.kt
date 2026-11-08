@@ -5,12 +5,19 @@ package com.localmusic.player
 import android.os.Bundle
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalConfiguration
@@ -18,6 +25,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.localmusic.core.*
@@ -28,11 +36,11 @@ private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, 
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
-    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit) {
+    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,clock:PlaybackUiState?=null) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
-    val position = playback.optLong("position").coerceAtLeast(0)
+    val position = (clock?.position?.longValue ?: playback.optLong("position")).coerceAtLeast(0)
     val duration = playback.optLong("duration").coerceAtLeast(0)
     val playing = playback.optBoolean("playWhenReady")
     val toggle = { if (playing) controller?.pause() else controller?.play(); Unit }
@@ -40,7 +48,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         val panelHeight = maxHeight
-        val portraitArtRoom = (maxHeight - 300.dp * fontScale).coerceAtLeast(96.dp)
+        val portraitArtRoom = (maxHeight - 400.dp * fontScale).coerceAtLeast(96.dp)
         val artworkSize = if (wide) {
             val columnWidth = ((maxWidth - 80.dp) * 0.45f).coerceAtLeast(96.dp)
             val preferred = when (artworkSizePreference) {
@@ -55,25 +63,27 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
             else -> 320.dp
         })
         val header: @Composable () -> Unit = {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CoverArt(art, track.tags.title, Modifier.size(artworkSize))
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                CoverArt(art, track.tags.title, Modifier.size(artworkSize)
+                    .shadow(12.dp,RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        MarqueeText(track.tags.title, style = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold))
+                        MarqueeText(track.tags.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold,textAlign=TextAlign.Center),autoScroll=true)
                         MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" },
                             modifier = Modifier.clickable(onClickLabel = "Open artist page", onClick = openArtist),
-                            style = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Center),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, style = MaterialTheme.typography.bodySmall.copy(textAlign = TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            style = MaterialTheme.typography.bodyLarge.copy(textAlign=TextAlign.Center),
+                            color = MaterialTheme.colorScheme.primary,autoScroll=true)
+                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true) }
                     }
 
                 }
             }
         }
         val controls: @Composable () -> Unit = {
+            Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = details) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
-            PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() })
+            PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() },prominent=true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 IconToggleButton(checked = controller?.shuffleModeEnabled == true,
                     onCheckedChange = { controller?.shuffleModeEnabled = it }, enabled = ready) {
@@ -86,16 +96,13 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
                         Icon(PlayerGlyph.Repeat, "Repeat ${when (repeat) { Player.REPEAT_MODE_ONE -> "one"; Player.REPEAT_MODE_ALL -> "all"; else -> "off" }}")
                     }
                 }
-                IconButton(onClick = { timerOpen = true }, enabled = ready) {
-                    Icon(PlayerGlyph.Timer, "Sleep timer", tint = if (playback.optString("sleepMode", "OFF") == "OFF")
-                        MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
-                }
                 IconButton(onClick = { lyricsOpen = true }) { Icon(PlayerGlyph.Lyrics, "Open lyrics") }
                 IconButton(onClick = openQueue) { Icon(PlayerGlyph.Queue, "Open queue") }
                 Box {
                     IconButton(onClick = { optionsOpen = true }) { Icon(PlayerGlyph.More, "Playback options") }
                     DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false }) {
                         DropdownMenuItem(text = { Text("Audio controls") }, onClick = { optionsOpen = false; openAudio() })
+                        DropdownMenuItem(text = { Text("Sleep timer") },enabled=ready,onClick={optionsOpen=false;timerOpen=true})
                         DropdownMenuItem(text = { Text("Artist page") }, onClick = { optionsOpen = false; openArtist() })
                         DropdownMenuItem(text = { Text("Song details") }, onClick = { optionsOpen = false; details() })
                         DropdownMenuItem(text = { Text("Stop playback") }, enabled = ready, onClick = { optionsOpen = false; controller?.stop() })
@@ -103,8 +110,9 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
                 }
             }
             when (playback.optString("sleepMode", "OFF")) {
-                "IMMEDIATE" -> Text("Sleep timer · ${clockText(playback.optLong("sleepRemaining"))} left", style = MaterialTheme.typography.labelMedium)
+                "IMMEDIATE" -> Text("Sleep timer · ${clockText(clock?.sleepRemaining?.longValue ?: playback.optLong("sleepRemaining"))} left", style = MaterialTheme.typography.labelMedium)
                 "END_OF_TRACK" -> Text("Sleep timer · after this track", style = MaterialTheme.typography.labelMedium)
+            }
             }
         }
         if (wide) Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
@@ -144,7 +152,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
     if (timerOpen) AlertDialog(onDismissRequest = { timerOpen = false }, title = { Text("Sleep timer") },
         text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
             Text(when (playback.optString("sleepMode", "OFF")) {
-                "IMMEDIATE" -> "Pausing in ${clockText(playback.optLong("sleepRemaining"))}."
+                "IMMEDIATE" -> "Pausing in ${clockText(clock?.sleepRemaining?.longValue ?: playback.optLong("sleepRemaining"))}."
                 "END_OF_TRACK" -> "Pausing after this track ends."
                 else -> "No timer set."
             })
@@ -160,10 +168,21 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
 @Composable
 private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boolean, modifier: Modifier = Modifier, seek: (Long) -> Unit) {
     var dragged by remember(id) { mutableStateOf<Float?>(null) }
+    val active=MaterialTheme.colorScheme.primary
+    val inactive=MaterialTheme.colorScheme.outlineVariant
+    val rtl=LocalLayoutDirection.current==LayoutDirection.Rtl
     Column(modifier.fillMaxWidth()) {
         Slider(value = dragged ?: if (duration > 0) position.coerceAtMost(duration).toFloat() / duration else 0f,
             onValueChange = { dragged = it }, enabled = ready && duration > 0,
             onValueChangeFinished = { dragged?.let { seek((it * duration).toLong()) }; dragged = null },
+            thumb={Box(Modifier.size(16.dp).background(active,CircleShape))},
+            track={state->Canvas(Modifier.fillMaxWidth().height(4.dp)){
+                val start=Offset(if(rtl)size.width else 0f,center.y)
+                val end=Offset(if(rtl)0f else size.width,center.y)
+                drawLine(inactive,start,end,strokeWidth=4.dp.toPx(),cap=StrokeCap.Round)
+                val fraction=state.value.coerceIn(0f,1f)
+                drawLine(active,start,Offset(start.x+(end.x-start.x)*fraction,center.y),strokeWidth=4.dp.toPx(),cap=StrokeCap.Round)
+            }},
             modifier = Modifier.semantics { contentDescription = "Playback position" })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = MaterialTheme.typography.labelSmall)

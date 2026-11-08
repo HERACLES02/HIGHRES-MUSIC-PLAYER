@@ -341,6 +341,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         require(ready) { "The library is still opening." }
         queue.moveOccurrence(entry, index); persist(); update()
     }
+    fun playQueueEntry(entry:EntryId) {
+        require(ready){"The library is still opening."}
+        val snapshot=queue.snapshot()
+        val target=(snapshot.manual+snapshot.order.drop(snapshot.cursor+1)).firstOrNull{it.id==entry}
+            ?: throw IllegalArgumentException("That queued entry no longer exists.")
+        require(store?.state?.value?.trackById?.get(target.trackId)?.availability==Availability.AVAILABLE){"Song unavailable. Check access or storage and scan again."}
+        observePosition();persist()
+        load(queue.selectOccurrence(entry),true)
+    }
     /** Clears pending next-up entries; safe while playing or paused. */
     fun clearQueue() {
         require(ready) { "The library is still opening." }
@@ -591,6 +600,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)
             .put("sequence", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.trackId.value.toString() }))
+            .put("sequenceIds", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.id.value.toString() }))
             .put("sequenceCount", (snapshot.order.size - snapshot.cursor - 1).coerceAtLeast(0))
             .put("sleepMode", sleep.state.mode.name)
             .put("sleepRemaining", sleep.state.remainingMs)

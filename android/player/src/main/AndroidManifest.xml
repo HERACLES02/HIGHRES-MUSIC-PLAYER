@@ -10,7 +10,7 @@
     <application android:name=".MusicApplication" android:label="Local Music"
         android:icon="@drawable/ic_local_music" android:appCategory="audio"
         android:allowBackup="false" android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false">
+        android:theme="@style/PlayerLaunch" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

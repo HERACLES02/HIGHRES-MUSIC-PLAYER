@@ -32,6 +32,7 @@ object PlayerGlyph {
     val Previous = vector("Previous", "M19,5 L8,12 L19,19 Z M4,5 L7,5 L7,19 L4,19 Z")
     val Back = vector("Back", "M20,11 L7,11 L12,6 L10.6,4.6 L3.2,12 L10.6,19.4 L12,18 L7,13 L20,13 Z")
     val Queue = vector("Queue", "M3,4 L21,4 L21,6 L3,6 Z M3,9 L21,9 L21,11 L3,11 Z M3,14 L13,14 L13,16 L3,16 Z M17,13 L23,17 L17,21 Z")
+    val Drag = vector("Drag", "M4,8 L20,8 L20,10 L4,10 Z M4,14 L20,14 L20,16 L4,16 Z")
     val Lyrics = vector("Lyrics", "M3,4 L14,4 L14,6 L3,6 Z M3,9 L14,9 L14,11 L3,11 Z M3,14 L10,14 L10,16 L3,16 Z M18,3 L22,3 L22,7 L20,7 L20,17 A4,4 0,1 1,18,13.54 Z")
     val More = vector("More", "M10,3 L14,3 L14,7 L10,7 Z M10,10 L14,10 L14,14 L10,14 Z M10,17 L14,17 L14,21 L10,21 Z")
     val Search = vector("Search", "M10,2 A8,8 0,1 0,15.6,15.6 L21,21 L22.4,19.6 L17,14.2 A8,8 0,0 0,10,2 Z M10,4 A6,6 0,1 1,10,16 A6,6 0,1 1,10,4 Z")
@@ -81,7 +82,7 @@ fun PlayerNavigation(selected: String, navigate: (String) -> Unit) {
 }
 
 @Composable
-fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, progress: Float,
+fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, progress: ()->Float,
     open: () -> Unit, toggle: () -> Unit, next: () -> Unit) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -92,9 +93,9 @@ fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, 
                     CoverArt(art, track.tags.title, Modifier.size(44.dp))
                     Column(Modifier.weight(1f)) {
                         MarqueeText(track.tags.title,
-                            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,autoScroll=true)
                         MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true)
                     }
                 }
                 IconButton(onClick = toggle, enabled = ready, modifier = Modifier.size(48.dp)) {
@@ -102,17 +103,17 @@ fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, 
                 }
                 IconButton(onClick = next, enabled = ready, modifier = Modifier.size(48.dp)) { Icon(PlayerGlyph.Next, "Next track") }
             }
-            LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(2.dp))
+            LinearProgressIndicator(progress = { progress().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().height(2.dp))
         }
     }
 }
 
 @Composable
-fun PlaybackButtons(playing: Boolean, ready: Boolean, previous: () -> Unit, toggle: () -> Unit, next: () -> Unit) {
+fun PlaybackButtons(playing: Boolean, ready: Boolean, previous: () -> Unit, toggle: () -> Unit, next: () -> Unit,prominent:Boolean=false) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = previous, enabled = ready, modifier = Modifier.size(56.dp)) { Icon(PlayerGlyph.Previous, "Previous track", Modifier.size(32.dp)) }
-        FilledIconButton(onClick = toggle, enabled = ready, modifier = Modifier.size(72.dp)) {
+        FilledIconButton(onClick = toggle, enabled = ready, modifier = Modifier.size(if(prominent)80.dp else 72.dp)) {
             Icon(if (playing) PlayerGlyph.Pause else PlayerGlyph.Play, if (playing) "Pause" else "Play", Modifier.size(36.dp))
         }
         IconButton(onClick = next, enabled = ready, modifier = Modifier.size(56.dp)) { Icon(PlayerGlyph.Next, "Next track", Modifier.size(32.dp)) }

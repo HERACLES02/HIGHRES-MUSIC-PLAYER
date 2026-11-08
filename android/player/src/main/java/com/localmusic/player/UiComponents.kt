@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.text.style.TextOverflow
@@ -15,17 +16,34 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.delay
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 
 fun countLabel(count: Int, singular: String, plural: String = "${singular}s") =
     "$count ${if (count == 1) singular else plural}"
 
+/** Display only: stored folder keys and permission identities stay untouched. */
+fun folderDisplayPath(value:String):String=value.replaceFirst(Regex("^(primary|[0-9a-fA-F]{4}-[0-9a-fA-F]{4}):"),"")
+    .trim('/').ifBlank{"Selected folder"}
+
+fun collectionDisplayLabel(value:String):String {
+    val prefix=listOf("Folder · ","Folder: ").firstOrNull(value::startsWith)
+    return if(prefix==null)value.replace("Listening collection","Library")else "Folder · ${folderDisplayPath(value.removePrefix(prefix))}"
+}
+
 @Composable
 fun MarqueeText(text: String, modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.bodyLarge, color: Color = Color.Unspecified,
-    fontWeight: FontWeight? = null) {
-    Text(text, modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE,
-        initialDelayMillis = 1600, repeatDelayMillis = 1800, velocity = 30.dp),
-        maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+    fontWeight: FontWeight? = null, autoScroll:Boolean=false) {
+    Text(text, modifier.fillMaxWidth().then(if(autoScroll)Modifier.basicMarquee(iterations = Int.MAX_VALUE,
+        initialDelayMillis = 1600, repeatDelayMillis = 1800, velocity = 30.dp)else Modifier),
+        maxLines = 1, softWrap = false, overflow = if(autoScroll)TextOverflow.Clip else TextOverflow.Ellipsis,
         style = style, color = color, fontWeight = fontWeight)
 }
 
@@ -80,7 +98,10 @@ fun EmptyMusicState(title: String, description: String, action: (@Composable () 
 
 @Composable
 fun PlayerMessage(message: String, dismiss: (() -> Unit)? = null) {
+    var visible by rememberSaveable(message) { mutableStateOf(true) }
+    LaunchedEffect(message) { delay(8000); visible=false }
     var expanded by remember(message) { mutableStateOf(false) }
+    AnimatedVisibility(visible,enter=fadeIn(),exit=fadeOut()+shrinkVertically()) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer) {
@@ -91,8 +112,18 @@ fun PlayerMessage(message: String, dismiss: (() -> Unit)? = null) {
             PlayerActions {
                 if (message.length > 140 || message.count { it == '\n' } > 2)
                     TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Show less" else "Show details") }
-                if (dismiss != null) TextButton(onClick = dismiss) { Text("Dismiss") }
+                TextButton(onClick = { visible=false;dismiss?.invoke() }) { Text("Dismiss") }
             }
         }
     }
+    }
+}
+
+@Composable
+fun MusicSearchField(value:String,change:(String)->Unit,hint:String,modifier:Modifier=Modifier) {
+    OutlinedTextField(value,change,singleLine=true,shape=RoundedCornerShape(28.dp),
+        textStyle=MaterialTheme.typography.bodyMedium,
+        placeholder={Text(hint,maxLines=1,overflow=TextOverflow.Ellipsis)},
+        trailingIcon={if(value.isNotEmpty())IconButton(onClick={change("")}){Icon(PlayerGlyph.Close,"Clear search")}},
+        modifier=modifier.fillMaxWidth().semantics{contentDescription=hint})
 }
