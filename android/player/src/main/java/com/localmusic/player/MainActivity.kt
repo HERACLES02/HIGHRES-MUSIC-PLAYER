@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -263,10 +264,12 @@ class MainActivity : ComponentActivity() {
         connected.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), args)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTiming.mark("activity_create")
         val launch=StartupAppearance.read(this)
         setTheme(if(launch.appearance=="AMOLED")R.style.PlayerLaunchBlack
             else if(StartupAppearance.dark(this,launch.appearance))R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
         super.onCreate(savedInstanceState)
+        fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
         savedInstanceState?.getString("writeAction")?.let { action ->
             savedInstanceState.getBundle("writeArguments")?.let { pendingWriteAction = action to it }
         }
@@ -301,6 +304,8 @@ class MainActivity : ComponentActivity() {
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.optString("error")).any{it.isNotBlank()}
             val showLaunch=!entered && !startupError && (store==null || !sessionState.optBoolean("ready"))
+            // The logo is only the first frame. Report usable content separately.
+            ReportDrawnWhen { store!=null && sessionState.optBoolean("ready") && !startupError }
             SideEffect { if(!showLaunch)entered=true }
             MaterialTheme(colorScheme = colors) {
                 Surface(Modifier.fillMaxSize()) {
@@ -431,10 +436,11 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     val tileMin = 144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)
     val currentId = playback.optString("currentId")
     val current = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
-    val filtered = remember(library.tracks, search, newest) {
+    // Keep Library's list cached across tabs, but do not prepare it for Home.
+    val filtered by remember(library.tracks, search, newest) { lazy {
         val found = library.tracks.filter { (it.tags.title + " " + artist(it) + " " + it.tags.album.orEmpty()).contains(search, true) }
         if (newest) found.sortedByDescending { it.addedAtMs } else found.sortedWith(compareBy<Track> { it.tags.title.lowercase() }.thenBy { it.id.value.toString() })
-    }
+    } }
     fun start(tracks: List<Track>, index: Int, resume: Boolean = false, origin: String = "Library · All songs") {
         send(PlaybackService.START, collectionBundle(tracks, index, resume).apply { putString("origin", origin.take(200)) })
         keyboard?.hide(); screen = "Playing"

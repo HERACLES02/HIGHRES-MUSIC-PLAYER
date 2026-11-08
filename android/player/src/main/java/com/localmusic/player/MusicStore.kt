@@ -46,6 +46,7 @@ class MusicApplication : Application() {
     val storage by lazy { scope.async { MusicStore(this@MusicApplication, scope).also { it.initialize() } } }
     override fun onCreate() {
         super.onCreate()
+        StartupTiming.mark("application_create")
         // Begin the same recovery-safe IO work while the activity classes load.
         storage
     }
@@ -175,11 +176,15 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     fun error(text: String) { mutable.update { it.copy(error = text) } }
     fun clearError() { mutable.update { it.copy(error = "") } }
     suspend fun initialize() {
+        StartupTiming.mark("store_initialize")
         AppBackups(context, this).recoverPreferences()
         val initial=backupPreferences().forPlayer()
         preferences.first{it==initial}
+        StartupTiming.mark("preferences_ready")
         FileEdits(context, this).inspectRecovery()
+        StartupTiming.mark("edit_recovery_ready")
         refresh()
+        StartupTiming.mark("library_ready")
     }
     suspend fun refresh() = withContext(Dispatchers.IO) {
         val repo = repository()

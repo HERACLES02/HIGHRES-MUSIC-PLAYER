@@ -41,8 +41,10 @@ class PlaybackService : MediaLibraryService() {
     }
     override fun onCreate() {
         super.onCreate()
+        StartupTiming.mark("service_create")
         widgets=WidgetUpdates(this,scope)
         authority = PlaybackAuthority(this, ::publish)
+        StartupTiming.mark("engine_created")
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val closeButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
             .setCustomIconResId(R.drawable.ic_notification_close)
@@ -52,10 +54,12 @@ class PlaybackService : MediaLibraryService() {
         session = MediaLibrarySession.Builder(this, authority.player, callbacks).setId("local-music")
             .setSessionActivity(activity).setMediaButtonPreferences(ImmutableList.of(closeButton)).build()
         addSession(session!!)
+        StartupTiming.mark("session_created")
         scope.launch {
             try {
                 storage = (application as MusicApplication).storage.await()
                 authority.initialize(storage!!)
+                StartupTiming.mark("playback_ready")
                 scope.launch{storage!!.preferences.collect{prefs->authority.audioSettingsChanged(prefs.audio);widgets.invalidate();publish()}}
                 storage!!.state.map{it.revision}.distinctUntilChanged().collect { authority.libraryChanged() }
             } catch (e: CancellationException) { throw e }

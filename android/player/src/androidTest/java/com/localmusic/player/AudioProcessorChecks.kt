@@ -21,6 +21,13 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "ui-startup") {
+                val count=UiStartupChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nStartup display checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
             if (suite == "ui-dismiss-frame") {
                 val count=UiDismissFrameChecks.run(this)
                 results.putInt("checksPassed",count)
