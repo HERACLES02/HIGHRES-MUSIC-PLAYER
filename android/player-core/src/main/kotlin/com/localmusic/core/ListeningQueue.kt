@@ -79,12 +79,43 @@ class ListeningQueue(private val random: Random = Random.Default) {
     /** Moves one pending occurrence to its new next-up position (0 = play next, size - 1 = last);
      *  others keep their relative order and every occurrence keeps its identity. */
     fun moveOccurrence(occurrence: EntryId, index: Int) {
+        if (manual.none { it.id == occurrence }) {
+            val upcoming = order.drop(cursor + 1)
+            require(index in upcoming.indices) { "That queued entry changed. Reload the queue and try again." }
+            val from = upcoming.indexOfFirst { it.id == occurrence }
+            require(from >= 0) { "That queued entry no longer exists." }
+            val moved = upcoming.toMutableList().apply { add(index, removeAt(from)) }
+            order = order.take(cursor + 1) + moved
+            return
+        }
         require(index in manual.indices) { "That queued entry changed. Reload the queue and try again." }
         val from = manual.indexOfFirst { it.id == occurrence }
         require(from >= 0) { "That queued entry no longer exists." }
         val target = manual[from]
         val others = manual.filterNot { it.id == occurrence }
         manual = others.take(index) + target + others.drop(index)
+    }
+
+    /** Selects one pending occurrence without rebuilding the collection or losing manual entries. */
+    fun selectOccurrence(occurrence: EntryId): Selection {
+        val pending=manual.firstOrNull { it.id==occurrence }
+        val targetIndex=order.indexOfFirst { it.id==occurrence }
+        require(pending!=null || targetIndex>cursor) { "That queued entry no longer exists." }
+        val target=if(pending!=null) {
+            manual=manual.filterNot { it.id==occurrence }
+            if(shuffle) {
+                val duplicate=order.drop(cursor+1).firstOrNull{it.trackId==pending.trackId}
+                if(duplicate!=null){order=order.filterNot{it.id==duplicate.id};heard=heard+duplicate.id}
+            }
+            pending
+        } else {
+            heard=heard+order.subList(cursor+1,targetIndex+1).map{it.id}
+            cursor=targetIndex
+            order[targetIndex]
+        }
+        history=(history.take(historyCursor+1)+target).takeLast(1000)
+        historyCursor=history.lastIndex;positionMs=0;completed=false;isPlaying=true
+        return selection!!
     }
 
     /** Explicit clear of pending next-up entries. Safe while playing or paused: the active song,
