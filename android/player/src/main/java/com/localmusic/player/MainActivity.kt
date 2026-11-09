@@ -91,7 +91,11 @@ class MainActivity : ComponentActivity() {
                 if (result.resultCode != androidx.media3.session.SessionResult.RESULT_SUCCESS) {
                     backupUi.message = result.extras.getString("message") ?: "Backup operation failed. Check Settings before trying again."
                 } else when (action) {
-                    PlaybackService.BACKUP_EXPORT -> backupUi.message = "Backup saved and read back successfully. Playback remains paused."
+                    PlaybackService.BACKUP_EXPORT -> {
+                        val missing=result.extras.getInt("missingArtwork",0)
+                        backupUi.message = if(missing==0) "Backup saved and read back successfully. Playback remains paused."
+                            else "Backup saved and verified. $missing missing artwork file(s) could not be included. Other app data was saved. Playback remains paused."
+                    }
                     PlaybackService.BACKUP_PREVIEW -> {
                         backupUi.token = result.extras.getString("token"); backupUi.summary = result.extras.getString("summary").orEmpty()
                         backupUi.message = "Backup validated. Review the restore preview."

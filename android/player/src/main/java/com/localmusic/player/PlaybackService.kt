@@ -121,7 +121,7 @@ class PlaybackService : MediaLibraryService() {
                         ARTIST_PHOTO -> store.artistLookup.savePhoto(requireNotNull(args.getString("name")),Uri.parse(requireNotNull(args.getString("uri"))))
                         COVER_SAVE -> store.operationMutex.withLock{store.artistLookup.saveCover(requireNotNull(args.getStringArrayList("ids")).map(PlaybackAuthority::id),requireNotNull(args.getString("receipt")))}
                         BACKUP_EXPORT -> backupOperation(store) {
-                            AppBackups(this@PlaybackService, store).export(Uri.parse(requireNotNull(args.getString("uri"))))
+                            result.putInt("missingArtwork",AppBackups(this@PlaybackService, store).export(Uri.parse(requireNotNull(args.getString("uri")))))
                         }
                         BACKUP_PREVIEW -> {
                             backupPreview = null

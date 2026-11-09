@@ -80,5 +80,30 @@ fun backupArchiveChecks() {
         audio=prefs.audio.copy(preset=converted,presets=listOf(converted))),
         lyrics=modern.lyrics.map{it.copy(providerId="lyrics.ovh:fixture",sourceUrl="https://api.lyrics.ovh/v1/Fixture/Title")})
     verify(BackupArchive.read(encode(BackupBundle(independent,mapOf(name to art))).inputStream()).state==independent,"v2 archive preserves converted EQ, independent Wikipedia identity and alternate lyric provenance")
+    val storage=java.nio.file.Files.createTempDirectory("backup-artwork-").toFile()
+    try {
+        val missing=java.io.File(storage,"missing.jpg")
+        val state=modern.copy(preferences=prefs.copy(artists=mapOf("mira" to artist.copy(imagePath=missing.path))))
+        val captured=BackupArtwork.capture(state,storage)
+        val restored=BackupArchive.read(encode(captured.bundle).inputStream())
+        verify(captured.missingFiles==1,"missing artist image is explicitly reported")
+        verify(restored.state==state.copy(preferences=state.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=null)))),"missing image does not lose artist text, playlist, queue, settings or other data")
+        verify(state.preferences.artists.getValue("mira").imagePath==missing.path,"export does not repair live artist references")
+        val both=state.copy(extras=state.extras+(id to state.extras.getValue(id).copy(artworkOverride=missing.path)))
+        val absent=BackupArtwork.capture(both,storage)
+        verify(absent.missingFiles==1&&absent.bundle.state.extras.getValue(id).artworkOverride==null,"missing album image is omitted and shared missing path counted once")
+        BackupArchive.read(encode(absent.bundle).inputStream())
+        val present=java.io.File(storage,"present.jpg").apply{writeBytes(art)}
+        val available=both.copy(extras=both.extras+(id to both.extras.getValue(id).copy(artworkOverride=present.path)),
+            preferences=both.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=present.path))))
+        val included=BackupArtwork.capture(available,storage)
+        verify(included.missingFiles==0&&included.bundle.assets.size==1&&included.bundle.assets.getValue(name).contentEquals(art),"existing shared artwork is included exactly once")
+        verify(BackupArchive.read(encode(included.bundle).inputStream()).state==included.bundle.state,"included artwork still passes strict archive validation")
+        fun withPath(path:String)=state.copy(preferences=state.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=path))))
+        rejects("outside-storage path remains an error even when missing"){BackupArtwork.capture(withPath(java.io.File(storage.parentFile,"outside-art.jpg").path),storage)}
+        rejects("unreadable directory is not treated as a missing image"){BackupArtwork.capture(withPath(storage.path),storage)}
+        val large=java.io.File(storage,"large.jpg").apply{java.io.RandomAccessFile(this,"rw").use{it.setLength(BackupArchive.MAX_ASSET+1L)}}
+        rejects("oversized artwork still fails"){BackupArtwork.capture(withPath(large.path),storage)}
+    } finally { storage.deleteRecursively() }
     println("Backup archive checks passed: $count assertions.")
 }
