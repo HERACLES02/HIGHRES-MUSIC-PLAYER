@@ -4,6 +4,11 @@
 #include <stdexcept>
 #include <vector>
 
+// Shared nominal full-speed 1-ms schedule; not clock feedback.
+inline unsigned nominalPacketFrames(unsigned rate,uint64_t& phase) noexcept {
+    phase+=rate;const unsigned frames=unsigned(phase/1000);phase%=1000;return frames;
+}
+
 // Full-speed bInterval=1 only: nominal sample frames per 1ms USB service interval.
 // This is NOT feedback compensation or evidence of device clock synchronization.
 struct PacketPcm {
@@ -15,7 +20,7 @@ struct PacketPcm {
            pcm.size()!=size_t(hz)*6*frameBytes) throw std::runtime_error("Invalid diagnostic PCM");
     }
     int next(unsigned char* output,int capacity) {
-        phase+=rate; const int frames=phase/1000; phase%=1000;
+        const int frames=nominalPacketFrames(rate,phase);
         const int length=frames*frameBytes;
         if(length>capacity) throw std::runtime_error("Endpoint packet capacity exceeded");
         for(int f=0;f<frames;++f) {

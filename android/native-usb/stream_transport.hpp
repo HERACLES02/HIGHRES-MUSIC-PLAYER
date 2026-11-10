@@ -9,24 +9,24 @@
 #include <thread>
 
 struct StreamState {
-    std::atomic<bool> reserved{false}, executing{false}, stop{false}, pause{false}, cleanupDelayed{false};
+    std::atomic<bool> reserved{false}, executing{false}, stop{false}, pause{false}, cleanupDelayed{false}, finiteSource{false};
     std::atomic<int64_t> seek{-1};
     std::atomic<int> phase{0}, error{0}, pending{0}, pauseCount{0}, seekCount{0}, volumeDb{-40}, volumeCommand{0}, levelRaw1{0}, levelRaw2{0};
     std::atomic<uint64_t> healthChecks{0}, submittedBytes{0}, completedBytes{0}, submittedFrames{0}, positionFrames{0},
         completedIntervals{0}, comparedBytes{0}, mismatches{0}, callbacks{0}, packetErrors{0},
-        transferErrors{0}, cancelled{0}, queueEmpty{0}, maxCallbackGapUs{0}, hash{14695981039346656037ULL};
+        transferErrors{0}, cancelled{0}, queueEmpty{0}, maxCallbackGapUs{0}, maxEventServiceGapUs{0}, hash{14695981039346656037ULL};
     void reset() {
-        stop=false; pause=false; cleanupDelayed=false; seek=-1; phase=1; error=0; pending=0;
+        stop=false; pause=false; cleanupDelayed=false; finiteSource=false; seek=-1; phase=1; error=0; pending=0;
         pauseCount=0; seekCount=0; submittedBytes=0; completedBytes=0; submittedFrames=0;
         volumeDb=-40; volumeCommand=0; levelRaw1=0; levelRaw2=0;
         positionFrames=0; completedIntervals=0; comparedBytes=0; mismatches=0; callbacks=0;
-        packetErrors=0; transferErrors=0; cancelled=0; queueEmpty=0; maxCallbackGapUs=0;
+        packetErrors=0; transferErrors=0; cancelled=0; queueEmpty=0; maxCallbackGapUs=0; maxEventServiceGapUs=0;
         hash=14695981039346656037ULL;
         healthChecks=0;
     }
     std::string json() const {
         std::ostringstream out;
-        out<<"{\"phase\":"<<phase<<",\"error\":"<<error<<",\"pendingTransfers\":"<<pending
+        out<<"{\"finiteSource\":"<<(finiteSource?"true":"false")<<",\"phase\":"<<phase<<",\"error\":"<<error<<",\"pendingTransfers\":"<<pending
            <<",\"submittedBytes\":"<<submittedBytes<<",\"completedBytes\":"<<completedBytes
            <<",\"submittedFrames\":"<<submittedFrames<<",\"positionFrames\":"<<positionFrames
            <<",\"completedIntervals\":"<<completedIntervals<<",\"comparedBytes\":"<<comparedBytes
