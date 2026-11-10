@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Bundle
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.util.AtomicFile
 import androidx.media3.common.MediaItem
@@ -35,6 +36,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,7 +49,7 @@ import java.security.MessageDigest
 import java.time.Instant
 
 data class StreamUi(val busy: Boolean=false,val message: String="Ready for experimental direct test audio.",
-    val fixture: String="",val stats: String="{}",val report: String?=null)
+    val fixture: String="",val stats: String="{}",val report: String?=null,val finite: Boolean=false)
 
 /** Diagnostic-only foreground owner. It never creates an Android audio player. */
 class UsbStreamService: MediaLibraryService() {
@@ -102,6 +104,7 @@ class UsbStreamService: MediaLibraryService() {
     }
     override fun onCreate() {
         super.onCreate()
+        if(BuildConfig.USB_SELF_TEST) selfTestInstance=java.lang.ref.WeakReference(this)
         NotificationEvidence.ensureChannel(this)
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this)
             .setNotificationId(NotificationEvidence.STREAM_ID).setChannelId(NotificationEvidence.CHANNEL).build())
@@ -137,26 +140,32 @@ class UsbStreamService: MediaLibraryService() {
         }
         val fixture=intent.getStringExtra("fixture").orEmpty()
         val seconds=intent.getIntExtra("seconds",12)
-        if(!DiagnosticFixture.supported(fixture) || seconds !in listOf(12,60,3660)) {
+        val finite=intent.getBooleanExtra("finiteStreaming",false)
+        if(if(finite) !StreamingFixturePolicy.supported(fixture,seconds) else !DiagnosticFixture.supported(fixture) || seconds !in listOf(12,60,3660)) {
             state=state.copy(message="Invalid diagnostic fixture or duration."); stopSelf(); return START_NOT_STICKY
         }
-        val device=usb.deviceList[intent.getStringExtra("device")]
-        if(device==null || device.vendorId!=0x31b2 || device.productId!=0x0311 || !usb.hasPermission(device)) {
+        val testFd=if(StreamingFixturePolicy.selfTestAllowed(BuildConfig.USB_SELF_TEST,finite,selfTestFd)) selfTestFd else null
+        if(BuildConfig.USB_SELF_TEST && testFd==null) {
+            state=state.copy(message="Selftest requires an instrumented fake descriptor."); stopSelf(); return START_NOT_STICKY
+        }
+        val device=if(testFd==null) usb.deviceList[intent.getStringExtra("device")] else null
+        if(testFd==null && (device==null || device.vendorId!=0x31b2 || device.productId!=0x0311 || !usb.hasPermission(device))) {
             state=state.copy(message="M2 USB permission is needed. Return to Inspect cable first."); stopSelf(); return START_NOT_STICKY
         }
         ownsGate=true; UsbDiagnosticGate.held=true; BaselineService.releaseForNative()
         runId=java.util.UUID.randomUUID().toString(); startedAt=Instant.now().toString(); requestedSeconds=seconds
-        running=true; state=StreamUi(true,"Checking fixture and preparing low hardware volume…",fixture)
+        running=true; state=StreamUi(true,"Checking fixture and preparing low hardware volume…",fixture,finite=finite)
         val filter=IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
         if(Build.VERSION.SDK_INT>=33) registerReceiver(receiver,filter,RECEIVER_NOT_EXPORTED)
         else @Suppress("DEPRECATION") registerReceiver(receiver,filter)
         receiverRegistered=true
         scope.launch {
+            try {
             var native: JSONObject?=null
             var preparationError: String?=null
             var source: JSONObject?=null
             try {
-                createLibrarySession(fixture)
+                createLibrarySession(fixture,finite)
                 focus=AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
                     .setOnAudioFocusChangeListener({ change -> if(change!=AudioManager.AUDIOFOCUS_GAIN) requestStop("audio_focus_loss") },handler).build()
@@ -168,59 +177,96 @@ class UsbStreamService: MediaLibraryService() {
                 val result=withContext(Dispatchers.IO) {
                     val manifest=JSONObject(assets.open(DiagnosticFixture.manifest(fixture)).bufferedReader().use { it.readText() }).getJSONArray("fixtures")
                     val entry=(0 until manifest.length()).map { manifest.getJSONObject(it) }.first { it.getString("file")==fixture }
-                    val input=assets.open(fixture).use { it.readBytes() }
-                    check(hash(input)==entry.getString("fileSha256")) { "Encoded fixture checksum failed." }
                     val rate=entry.getInt("sampleRateHz"); val bits=entry.getInt("meaningfulBits")
-                    val pcm=NativeUsb.decodePcm(input,rate,bits)
-                    val pcmHash=hash(pcm)
-                    check(pcmHash==entry.getString("pcmSha256")) { "Native decoded PCM does not match reference; audio blocked." }
-                    val connection=usb.openDevice(device) ?: error("Cannot open M2.")
-                    try {
-                        val raw=connection.rawDescriptors ?: error("Missing descriptors")
-                        check(hash(raw)=="0a6173002455ffed2bc84b2146b3968719ddaa26d62db0cd7723f70f597a1436") { "M2 descriptor layout changed; audio blocked." }
-                        Pair(entry,JSONObject(NativeUsb.runStream(connection.fileDescriptor,pcm,rate,bits,seconds)))
-                    } finally { connection.close() }
+                    if(finite) {
+                        // Stream the encoded asset into a private bounded file.
+                        // After unlink, only this read-only descriptor remains.
+                        val temporary=java.io.File.createTempFile("finite-fixture-",".flac",cacheDir)
+                        try {
+                            ParcelFileDescriptor.open(temporary,ParcelFileDescriptor.MODE_READ_ONLY).use { sourceFile ->
+                                temporary.outputStream().use { output ->
+                                    // Unlink before copying: interruption cannot leave
+                                    // a complete encoded cache file behind. Close the
+                                    // sole writer before preflight/playback can read it.
+                                    check(temporary.delete()) { "Could not unlink private streaming fixture." }
+                                    assets.open(fixture).use { input ->
+                                        StreamingFixtureFile.copyVerified(input,output,entry.getString("fileSha256"))
+                                    }
+                                }
+                                Pair(entry,withVerifiedUsb(device,testFd) { usbFd ->
+                                    NativeUsb.runStreamingFixture(usbFd,sourceFile.fd,rate,bits)
+                                })
+                            }
+                        } finally { temporary.delete() }
+                    } else {
+                        val input=assets.open(fixture).use { it.readBytes() }
+                        check(hash(input)==entry.getString("fileSha256")) { "Encoded fixture checksum failed." }
+                        val pcm=NativeUsb.decodePcm(input,rate,bits)
+                        check(hash(pcm)==entry.getString("pcmSha256")) { "Native decoded PCM does not match reference; audio blocked." }
+                        Pair(entry,withVerifiedUsb(device,null) { NativeUsb.runStream(it,pcm,rate,bits,seconds) })
+                    }
                 }
                 source=result.first; native=result.second
-            } catch(error: Exception) { preparationError=error.message ?: error.javaClass.simpleName }
+            } catch(error: CancellationException) { throw error }
+            catch(error: Exception) { preparationError=error.message ?: error.javaClass.simpleName }
             catch(error: LinkageError) { preparationError=error.message ?: "Native library could not load" }
             finally {
                 closing=true
                 handler.removeCallbacks(ticker)
                 closeLibrarySession()
                 if(reserved) runCatching { NativeUsb.streamCommand(4,0) }
-                if(receiverRegistered) { unregisterReceiver(receiver); receiverRegistered=false }
+                unregisterDetachReceiver()
                 focus?.let { audio.abandonAudioFocusRequest(it) }
                 wake?.let { if(it.isHeld) it.release() }
                 if(ownsGate) { UsbDiagnosticGate.held=false; ownsGate=false }
             }
-            try {
             val report=JSONObject().put("schemaVersion",1).put("appVersion",StreamEvidence.VERSION)
                 .put("runId",runId).put("startedAt",startedAt).put("processId",android.os.Process.myPid())
                 .put("exportedAt",Instant.now().toString()).put("phone",JSONObject().put("model",Build.MODEL).put("sdk",Build.VERSION.SDK_INT).put("buildDisplay",Build.DISPLAY))
                 .put("scope","Experimental nominal-rate direct USB fixture transport; missing-feedback clocking remains unvalidated. No end-to-end bit-perfect claim.")
                 .put("physicalPreset","Standard (user confirmed)").put("fixture",fixture).put("durationSecondsRequested",seconds)
-                .put("signalPattern",DiagnosticFixture.pattern(fixture))
+                .put("signalPattern",DiagnosticFixture.pattern(fixture,finite))
                 .put("source",source ?: JSONObject.NULL).put("native",native ?: JSONObject.NULL)
                 .put("nativeLiveFinalStats",runCatching { JSONObject(NativeUsb.streamStats()) }.getOrDefault(JSONObject()))
-                .put("decodedPcmSha256Verified",source!=null).put("decoders","native PCM WAV / libFLAC 1.4.3")
+                .put("simulatedTransport",testFd!=null).put("finiteStreaming",finite).put("decodedPcmSha256Verified",source!=null && !finite).put("decoders","native PCM WAV / libFLAC 1.4.3")
                 .put("unavailableMeasurements",JSONArray(listOf("Device internal buffer underruns / overflows","Independent physical bus PCM capture","DAC render clock and internal DSP")))
                 .put("preparationError",preparationError ?: JSONObject.NULL).put("interruptionReason",reason.ifBlank { "none" })
                 .put("progress",samples).put("evictedSamples",evictedSamples).toString(2)
             val finalReport=JSONObject(report).put("mediaCard",sessionEvidence())
                 .put("mediaControlRequests",mediaCommands).put("controllerEvents",controllerEvents).toString(2)
             val restored=native?.optBoolean("settingsRestored")==true
+            val finiteTerminal=native?.optJSONObject("streamExperiment")?.optString("terminal")
+                ?.takeIf { it.isNotBlank() } ?: if(native?.optBoolean("cancelledBeforeUsb")==true ||
+                    native?.optJSONObject("sourcePreflight")?.optString("status")=="cancelled") "cancelled" else "not_completed"
             state=state.copy(busy=false,stats=runCatching { NativeUsb.streamStats() }.getOrDefault("{}"),report=finalReport,
                 message=if(preparationError!=null) "Test failed: $preparationError. Save the report; reconnect before listening if USB was claimed."
+                else if(finite && native?.optBoolean("usbOwnershipAttempted",true)==false)
+                    "Streaming preflight ended before USB ownership. Save the report for the source result."
                 else if(!restored) "Test ended. Restoration not verified: reconnect M2 before listening. Save the report."
+                else if(finite && finiteTerminal=="eof") "One FLAC pass completed; integrity and settings restoration checked. Save the report."
+                else if(finite && finiteTerminal=="cancelled") "Streaming stopped and transfers drained; settings restoration checked."
+                else if(finite) "Streaming did not reach clean EOF ($finiteTerminal). Settings restoration checked; save the report."
                 else "Test ended; settings restoration checked. Save the report and record what you heard.")
             withContext(reportIo) { saveAtomic("native-stream-last.json",finalReport) }
             } finally {
-                running=false
+                running=false; state=state.copy(busy=false)
                 stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); scope.cancel()
             }
         }
         return START_NOT_STICKY
+    }
+    private fun withVerifiedUsb(device: android.hardware.usb.UsbDevice?,testFd: Int?,run: (Int) -> String): JSONObject {
+        if(testFd!=null) {
+            check(BuildConfig.USB_SELF_TEST)
+            return JSONObject(run(testFd))
+        }
+        val connection=usb.openDevice(requireNotNull(device)) ?: error("Cannot open M2.")
+        try {
+            val raw=connection.rawDescriptors ?: error("Missing descriptors")
+            check(hash(raw)=="0a6173002455ffed2bc84b2146b3968719ddaa26d62db0cd7723f70f597a1436") { "M2 descriptor layout changed; audio blocked." }
+            // Blocking JNI returns only after every old transfer has retired.
+            return JSONObject(run(connection.fileDescriptor))
+        } finally { connection.close() }
     }
     private fun requestStop(why: String) {
         if(!running || closing) return
@@ -229,8 +275,8 @@ class UsbStreamService: MediaLibraryService() {
         runCatching { NativeUsb.streamCommand(0,0) }
         state=state.copy(message="Stopping and draining USB transfers…")
     }
-    private fun createLibrarySession(fixture: String) {
-        val player=DirectSessionPlayer(this,fixture,{ setPaused(it,"media3_player") },{ requestStop("media3_player_stop") })
+    private fun createLibrarySession(fixture: String,finite: Boolean) {
+        val player=DirectSessionPlayer(this,fixture,{ setPaused(it,"media3_player") },{ requestStop("media3_player_stop") },finite)
         sessionPlayer=player
         val stopCommand=SessionCommand("com.localmusic.diagnostics.MEDIA_STOP",Bundle.EMPTY)
         val stopButton=CommandButton.Builder(CommandButton.ICON_STOP).setSessionCommand(stopCommand)
@@ -243,9 +289,9 @@ class UsbStreamService: MediaLibraryService() {
                 if(controllerEvents.length()<50) controllerEvents.put(JSONObject().put("at",Instant.now().toString())
                     .put("trusted",controller.isTrusted).put("sameUid",controller.uid==applicationInfo.uid).put("accepted",allowed))
                 if(!allowed) return MediaSession.ConnectionResult.reject()
-                val commands=Player.Commands.Builder().addAll(Player.COMMAND_PLAY_PAUSE,Player.COMMAND_STOP,
+                val commands=Player.Commands.Builder().addAll(Player.COMMAND_STOP,
                     Player.COMMAND_GET_CURRENT_MEDIA_ITEM,Player.COMMAND_GET_TIMELINE,Player.COMMAND_GET_METADATA,
-                    Player.COMMAND_GET_AUDIO_ATTRIBUTES).build()
+                    Player.COMMAND_GET_AUDIO_ATTRIBUTES).apply { if(!finite) add(Player.COMMAND_PLAY_PAUSE) }.build()
                 return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                     .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon().add(stopCommand).build())
                     .setAvailablePlayerCommands(commands).build()
@@ -291,7 +337,7 @@ class UsbStreamService: MediaLibraryService() {
         publishSessionEvidence()
     }
     private fun setPaused(paused: Boolean,source: String) {
-        if(!running || closing || reason.isNotBlank()) return
+        if(!running || closing || reason.isNotBlank() || state.finite) return
         val phase=runCatching { JSONObject(NativeUsb.streamStats()).optInt("phase") }.getOrDefault(0)
         if(!DirectPlaybackView.from(phase,running,closing,reason.isNotBlank(),0,96000).canToggle()) return
         if(mediaCommands.length()<100) mediaCommands.put(JSONObject().put("at",Instant.now().toString())
@@ -304,12 +350,23 @@ class UsbStreamService: MediaLibraryService() {
         try { output=file.startWrite(); output.write(text.toByteArray(Charsets.UTF_8)); file.finishWrite(output) }
         catch(_: Exception) { output?.let { file.failWrite(it) } }
     }
+    private fun unregisterDetachReceiver() {
+        if(receiverRegistered) { unregisterReceiver(receiver); receiverRegistered=false }
+    }
     override fun onDestroy() {
         requestStop("service_destroyed")
+        // Android removes service-owned receivers after onDestroy returns.
+        // Native draining may finish later; that continuation must not try again.
+        unregisterDetachReceiver()
         closeLibrarySession()
+        if(selfTestInstance?.get()===this) selfTestInstance=null
         super.onDestroy()
     }
     companion object {
+        // Used only by the separate .selftest build's in-process instrumentation.
+        // The normal APK has USB_SELF_TEST=false and cannot enter this branch.
+        internal var selfTestFd=-1
+        internal var selfTestInstance: java.lang.ref.WeakReference<UsbStreamService>?=null
         const val START="com.localmusic.diagnostics.STREAM_START"
         const val STOP="com.localmusic.diagnostics.STREAM_STOP"
         const val PAUSE="com.localmusic.diagnostics.STREAM_PAUSE"
@@ -322,7 +379,7 @@ class UsbStreamService: MediaLibraryService() {
             private set
         var state by mutableStateOf(StreamUi())
             private set
-        fun command(command: Int,value: Int=0) { if(state.busy) NativeUsb.streamCommand(command,value) }
+        fun command(command: Int,value: Int=0) { if(state.busy && StreamingFixturePolicy.acceptsCommand(state.finite,command)) NativeUsb.streamCommand(command,value) }
         private fun hash(bytes: ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it.toInt() and 255) }
     }
 }

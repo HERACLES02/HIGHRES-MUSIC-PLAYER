@@ -12,11 +12,13 @@ import java.time.Instant
 object UsbDiagnosticGate { var held = false }
 
 object NativeUsb {
-    init { System.loadLibrary("usb_experiment") }
+    init { System.loadLibrary(if(BuildConfig.USB_SELF_TEST) "usb_experiment_fake" else "usb_experiment") }
     @JvmStatic external fun inspect(fd: Int, allowDetach: Boolean, testControls: Boolean): String
     @JvmStatic external fun decodePcm(input: ByteArray, rate: Int, bits: Int): ByteArray
     @JvmStatic external fun beginStream(): Boolean
     @JvmStatic external fun runStream(fd: Int, pcm: ByteArray, rate: Int, bits: Int, seconds: Int): String
+    @JvmStatic external fun runStreamingFixture(usbFd: Int, sourceFd: Int, rate: Int, bits: Int): String
+    @JvmStatic external fun runOrdinarySource(usbFd: Int, sourceFd: Int, rate: Int, bits: Int): String
     @JvmStatic external fun streamStats(): String
     @JvmStatic external fun streamCommand(command: Int, value: Int)
 }

@@ -19,9 +19,9 @@ import org.json.JSONObject
 
 /** Media3 view of the service-owned native experiment. Creates no audio output or decoder. */
 class DirectSessionPlayer(context: Context, val fixture: String,
-    private val toggle: (Boolean) -> Unit, private val stopOwner: () -> Unit) : SimpleBasePlayer(Looper.getMainLooper()) {
+    private val toggle: (Boolean) -> Unit, private val stopOwner: () -> Unit, private val finite: Boolean=false) : SimpleBasePlayer(Looper.getMainLooper()) {
     private val rate = fixture.substringAfterLast('-').substringBefore('.').toInt()
-    private var view = DirectPlaybackView.from(1, true, false, false, 0, rate)
+    private var view = DirectPlaybackView.from(1, true, false, false, 0, rate, finite)
     private var releasedView = false
     val item: MediaItem
     init {
@@ -44,14 +44,14 @@ class DirectSessionPlayer(context: Context, val fixture: String,
             .setPlaylist(listOf(MediaItemData.Builder(fixture).setMediaItem(item).setDurationUs(6_000_000).setIsSeekable(false).build()))
             .setCurrentMediaItemIndex(0).setContentPositionMs(view.positionMs())
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build())
-            .setRepeatMode(Player.REPEAT_MODE_ONE)
+            .setRepeatMode(if (finite) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ONE)
             .setPlayWhenReady(view.playWhenReady(), Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
             .setPlaybackState(when { view.ready() -> Player.STATE_READY; view.buffering() -> Player.STATE_BUFFERING; else -> Player.STATE_IDLE })
             .build()
     }
     fun observe(stats: JSONObject, running: Boolean, closing: Boolean, stopRequested: Boolean) {
         if (releasedView) return
-        view = DirectPlaybackView.from(stats.optInt("phase", 1), running, closing, stopRequested, stats.optLong("positionFrames"), rate)
+        view = DirectPlaybackView.from(stats.optInt("phase", 1), running, closing, stopRequested, stats.optLong("positionFrames"), rate, finite)
         invalidateState()
     }
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
@@ -66,5 +66,5 @@ class DirectSessionPlayer(context: Context, val fixture: String,
     fun evidence() = JSONObject().put("implementation", "Media3 SimpleBasePlayer / service-owned native engine")
         .put("released", releasedView).put("lastNativePhase", view.phase()).put("acceptingControls", view.accepting())
         .put("mediaId", item.mediaId).put("hasArtwork", item.mediaMetadata.artworkData != null)
-        .put("positionMeaning", "Approximate repeating source position; not DAC render time")
+        .put("positionMeaning", if (finite) "Fully completed frame count; not DAC render time" else "Approximate repeating source position; not DAC render time")
 }
