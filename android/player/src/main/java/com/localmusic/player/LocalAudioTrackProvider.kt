@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import org.json.JSONObject
 import com.localmusic.core.AndroidUsbBufferRules
+import com.localmusic.core.OutputRetirement
 import java.lang.ref.WeakReference
 
 /** Standard buffering stays unchanged unless the user selects the Android USB route. */
@@ -20,6 +21,7 @@ class LocalAudioTrackProvider(private val appContext:Context?=null) : DefaultAud
     @Volatile var preferAndroidUsb=false
     private var plannedUsb:AudioDeviceInfo?=null
     private var lastTrack=WeakReference<AudioTrack>(null)
+    val retirement=OutputRetirement()
     val bufferSizeProvider=DefaultAudioSink.AudioTrackBufferSizeProvider { minimum,encoding,mode,frameBytes,rate,bitrate,maxSpeed ->
         val normal=DefaultAudioSink.AudioTrackBufferSizeProvider.DEFAULT.getBufferSizeInBytes(minimum,encoding,mode,frameBytes,rate,bitrate,maxSpeed)
         val usb=if(preferAndroidUsb&&AndroidUsbBufferRules.eligibleRate(rate)&&encoding==C.ENCODING_PCM_FLOAT&&frameBytes==8&&mode==DefaultAudioSink.OUTPUT_MODE_PCM&&maxSpeed<=1.0) {
@@ -72,6 +74,7 @@ class LocalAudioTrackProvider(private val appContext:Context?=null) : DefaultAud
             created
         }
         lastTrack=WeakReference(track)
+        if(BuildConfig.DIRECT_USB_ENABLED)retirement.remember { track.state==AudioTrack.STATE_UNINITIALIZED }
         pcmOutput=PcmOutput(config.sampleRate,config.encoding,track.channelCount,track.sampleRate,track.audioFormat,
             if(usb==null)"Normal buffering" else "Preferred Android USB; minimum buffer request",usb?.productName?.toString(),config.bufferSize)
         val pcm = config.encoding in setOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_24BIT,

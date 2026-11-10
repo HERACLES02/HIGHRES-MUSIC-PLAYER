@@ -313,6 +313,23 @@ private fun identityChecks() {
 }
 
 fun main() {
+    for(bits in listOf(16,24))for(rate in listOf(44100,48000,88200,96000))
+        expect(DirectUsbFormat.supported(AudioProperties(6000,"audio/flac",rate,2,bits)),"Direct preserves supported stereo source rate/depth")
+    for(audio in listOf(AudioProperties(6000,"audio/flac",192000,2,24),AudioProperties(6000,"audio/flac",96000,1,24),
+        AudioProperties(6000,"audio/mpeg",48000,2,16),AudioProperties(6000,"audio/flac",null,2,24)))
+        expect(!DirectUsbFormat.supported(audio),"Unsupported/unknown format never silently converts to Direct")
+    val retirement=OutputRetirement()
+    expect(retirement.isRetired(),"Never-opened normal output is retired")
+    var released=false;retirement.remember{released}
+    expect(!retirement.isRetired(),"Live normal AudioTrack prevents USB takeover")
+    released=true;expect(retirement.isRetired(),"Actual release evidence permits takeover")
+    val delayed=OutputRetirement()
+    var priorReleased=false
+    repeat(8){delayed.remember{priorReleased}}
+    delayed.remember{false};priorReleased=true
+    expect(!delayed.isRetired(),"Overflowed retirement evidence fails closed")
+    val unknown=OutputRetirement();unknown.remember{error("unavailable")}
+    expect(!unknown.isRetired(),"Unknown retirement does not permit takeover")
     queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

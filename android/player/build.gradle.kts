@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+val experimentalDirectUsb=providers.gradleProperty("experimentalDirectUsb").orNull=="true"
 android {
     namespace = "com.localmusic.player"
     compileSdk = 36
@@ -11,10 +12,15 @@ android {
         minSdk = 30
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
-        versionCode = 40
-        versionName = "0.13.8"
+        versionCode = if(experimentalDirectUsb)44 else 41
+        versionName = if(experimentalDirectUsb)"0.13.12-direct-coverage" else "0.13.9-beta"
+        buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
-        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
+        externalNativeBuild { cmake {
+            arguments += "-DANDROID_STL=c++_static"
+            arguments += "-DLOCALMUSIC_EXPERIMENTAL_DIRECT=${if(experimentalDirectUsb) "ON" else "OFF"}"
+            targets += listOf("localmusic_tags","usb_experiment","usb-1.0")
+        } }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -37,6 +43,8 @@ android {
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-tags/notices"))
+    sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
+    sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
     signingConfigs.getByName("debug") { storeFile = rootProject.file(".tools/debug.keystore") }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

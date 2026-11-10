@@ -1,4 +1,4 @@
-param([switch]$UpdateDependencyVerification, [switch]$OptimizedPreview)
+param([switch]$UpdateDependencyVerification, [switch]$OptimizedPreview, [switch]$ExperimentalDirectUsb)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $tools = Join-Path $projectRoot '.tools'
@@ -17,6 +17,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Tag-preservation evidence is missing or stale.' }
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
+    if ($ExperimentalDirectUsb) { $verificationArgs += '-PexperimentalDirectUsb=true' }
     $variantTask = if ($OptimizedPreview) { 'Preview' } else { 'Debug' }
     $variantName = $variantTask.ToLowerInvariant()
     $buildTasks = @(':player-core:selfTest', ':player-data:selfTest', ":player:assemble$variantTask", ":player:lint$variantTask")
@@ -25,7 +26,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Player build or checks failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-player-data.py')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen Room schemas changed.' }
-    $apkName = if ($OptimizedPreview) { 'local-music-0.13.8-optimized-preview.apk' } else { 'local-music-0.13.8-debug.apk' }
+    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.13.12-direct-coverage' } else { 'local-music-0.13.9-beta' }
+    $apkName = if ($OptimizedPreview) { "$releaseName-optimized-preview.apk" } else { "$releaseName-debug.apk" }
     $apk = Join-Path $projectRoot "releases/$apkName"
     Copy-Item -LiteralPath (Join-Path $projectRoot "player/build/outputs/apk/$variantName/player-$variantName.apk") -Destination $apk -Force
     if ($OptimizedPreview) {

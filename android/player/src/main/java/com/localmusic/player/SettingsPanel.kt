@@ -28,6 +28,12 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
                 Icon(PlayerGlyph.Settings, null); Spacer(Modifier.width(8.dp)); Text("Audio controls & equalizer")
             }
             OutlinedButton(onClick = widgets, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Home-screen widgets") }
+            OutlinedButton(onClick={send(PlaybackService.OUTPUT_MODE,Bundle().apply{putBoolean("direct",true)})},
+                enabled=ready && BuildConfig.DIRECT_USB_ENABLED,modifier=Modifier.fillMaxWidth()){Text("Native Direct USB")}
+            Text(if(BuildConfig.DIRECT_USB_ENABLED)
+                "Personal Direct USB experiment. Clock synchronization and channel balance are unverified. M2 stereo FLAC only: 16/24-bit, 44.1/48/88.2/96 kHz. Turn EQ, ReplayGain and crossfade off. Direct uses a fixed low hardware level; phone volume does not control it. Starts paused."
+                else "Native Direct USB is disabled in this beta. Android audio output remains available.",style=MaterialTheme.typography.bodySmall)
+            if(BuildConfig.DIRECT_USB_ENABLED)OutlinedButton(onClick={send(PlaybackService.OUTPUT_MODE,Bundle().apply{putBoolean("direct",false)})},enabled=ready){Text("Return to Normal output")}
             Text("Find artist pages and album covers in your library.", style = MaterialTheme.typography.bodySmall)
         }
         SettingsCard("Appearance") {

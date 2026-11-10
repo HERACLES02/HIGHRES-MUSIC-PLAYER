@@ -55,6 +55,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     private var store: MusicStore? = null
     private var persistenceBlocked = false
     private var destroyed = false
+    private var retiringOutput = false
+    private val direct = DirectPlayback(context,this)
+    internal val outputDestroyed get()=destroyed
+    internal val directOutput get()=direct.selected
+    internal val directState get()=direct.view
+    internal val directMatches get()=direct.matches
+    val playWhenReady get()=if(direct.selected)queue.isPlaying && direct.view.phase !in setOf("end","closed","failed","paused","stopping") else engine.playWhenReady
+    val isPlaying get()=if(direct.selected)queue.isPlaying && direct.view.phase=="running" && direct.view.pending>0 else engine.isPlaying
+    internal val positionMs get()=if(direct.selected)direct.positionMs else engine.currentPosition
     private var generation = 0
     private var lookahead: GaplessPlan? = null
     private var lookaheadToken: String? = null
@@ -116,7 +125,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             // Expiry is discovered by the service-owned tick (also while paused) and only pauses.
             if (sleep.checkExpired(now)) { event("sleep_timer_expired"); pause("Sleep timer finished.") }
             if (now - lastPersistAt >= 10000 && queue.current != null) { persist(); event("progress"); lastPersistAt = now }
-            handler.postDelayed(this, if (engine.isPlaying) 250 else 1000)
+            handler.postDelayed(this, if (isPlaying) 250 else 1000)
         }
     }
     init {
@@ -148,7 +157,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         })
         target.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                if (target===engine&&(reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT))
+                if (!retiringOutput && !direct.selected && target===engine&&(reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT))
                     adoptLookahead(mediaItem)
             }
             override fun onEvents(player:Player,events:Player.Events){
@@ -161,7 +170,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 }
                 if (state == Player.STATE_ENDED&&target===engine) {
                     val endedGeneration = generation
-                    handler.post { if (!destroyed&&target===engine&&endedGeneration==generation&&engine.playbackState==Player.STATE_ENDED) advance(true) }
+                    handler.post { if (!destroyed && !retiringOutput && !direct.selected && target===engine&&endedGeneration==generation&&engine.playbackState==Player.STATE_ENDED) advance(true) }
                 }
             }
             override fun onPlayerError(cause: PlaybackException) {
@@ -213,6 +222,14 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     fun play() {
         if (!ready || current == null) return
+        if(direct.selected) {
+            if(current?.availability!=Availability.AVAILABLE || store?.isEditing(queue.current?.trackId)==true){direct.normal("Song unavailable for Direct output.");return}
+            error=""
+            if(direct.view.phase=="end" || queue.completed){queue.play();load(queue.selection,true);return}
+            if(takeFocus() && direct.play(true))queue.play()
+            persist();update();return
+        }
+        if(retiringOutput)return
         if (store?.isEditing(queue.current?.trackId) == true) { pause("File editing is in progress. Press Play after it finishes."); return }
         if (current?.sources?.all { it.kind == SourceKind.MEDIA_STORE } == true && context.checkSelfPermission(MusicStore.audioPermission()) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             pause("Music access was revoked. Allow access and scan again."); return
@@ -232,6 +249,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         update()
     }
     fun pause(message: String = "") {
+        if(direct.selected) {
+            pauseDirectQueue(message)
+            if(message.isNotBlank())direct.normal(message)else direct.play(false)
+            return
+        }
         seekDetails=null
         observePosition(); engine.pause(); queue.pause()
         finishFade()
@@ -240,9 +262,10 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         event(if (message.isBlank()) "pause" else "interruption_pause")
         persist(); update()
     }
-    fun stop() { pause(); engine.stop(); event("stop"); update() }
+    fun stop() { if(direct.selected){direct.normal();return};pause(); engine.stop(); event("stop"); update() }
     private var fileClosedForEdit: TrackId? = null
     fun closeForEdit(ids: Set<TrackId>) {
+        require(!direct.selected && !retiringOutput){"Switch to Normal output before editing files."}
         store?.claimEdits(ids)
         finishFade();discardStandby()
         refreshLookahead()
@@ -260,6 +283,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     fun seek(position: Long) {
         if (!ready || current == null) return
+        if(direct.selected) {
+            val target=position.coerceIn(0,current!!.audio.durationMs)
+            if(direct.seek(target)){queue.updatePosition(target);persist();update()}
+            return
+        }
         finishFade()
         val bound = current!!.audio.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE
         val target = position.coerceIn(0, bound)
@@ -295,6 +323,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         else load(next, playing)
     }
     private fun load(selection: Selection?, play: Boolean) {
+        if(direct.selected){queue.pause();val start=play && takeFocus();if(direct.load(selection,start) && start)queue.play();persist();update();return}
+        if(retiringOutput)return
         seekDetails=null
         finishFade();discardStandby();rejectedFade=null
         if (selection == null) { seekIndexes.setPlaybackWindow(null); return }
@@ -376,11 +406,12 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun shuffle(value: Boolean) { if (!ready) return; queue.setShuffle(value); persist(); update() }
     fun repeat(value: Int) { if (!ready) return; queue.repeat = when (value) { Player.REPEAT_MODE_ALL -> RepeatMode.ALL; Player.REPEAT_MODE_ONE -> RepeatMode.ONE; else -> RepeatMode.OFF }; persist(); update() }
     private fun observePosition() {
+        if(direct.selected){if(direct.matches)queue.updatePosition(direct.positionMs);return}
         if (engine.currentMediaItem?.mediaId == queue.current?.id?.value?.toString() &&
             (lookaheadToken == null || engine.currentMediaItem?.localConfiguration?.tag != lookaheadToken)) queue.updatePosition(engine.currentPosition.coerceAtLeast(0))
     }
     private fun persist() { if (ready && !persistenceBlocked && queue.current != null) store?.persist(queue.snapshot()) }
-    private fun update() { configureDeck(engine,queue.current?.trackId);refreshLookahead(); player.refresh(); changed() }
+    private fun update() { if(!direct.selected && !retiringOutput){configureDeck(engine,queue.current?.trackId);refreshLookahead()};player.refresh();changed() }
     fun libraryChanged() {
         if (!ready) return
         if (current?.availability == Availability.AVAILABLE && error in setOf(
@@ -391,6 +422,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
 
     /** Only the engine's next occurrence is prepared; the live queue is consumed at transition. */
     private fun refreshLookahead() {
+        if(direct.selected || retiringOutput)return
         if (reconciling || destroyed || !ready || fadingOut!=null) return
         val snapshot = queue.snapshot()
         val plan = if (sleep.atTrackEnd() || fileClosedForEdit != null || engine.currentMediaItem?.mediaId != queue.current?.id?.value?.toString()) null
@@ -460,6 +492,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     fun audioSettingsChanged(value:AudioSettings){
         if(value==audioSettings)return
+        if(direct.selected || retiringOutput) {
+            audioSettings=value
+            if(!directProcessingAllowed())direct.normal("Normal output restored paused for sound processing.")
+            update();return
+        }
         val routeChanged=value.preferAndroidUsb!=audioSettings.preferAndroidUsb
         val transportChanged=value.crossfadeSeconds!=audioSettings.crossfadeSeconds||routeChanged
         audioSettings=value
@@ -492,6 +529,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         }
     }
     private fun checkCrossfade(){
+        if(direct.selected || retiringOutput)return
         val incoming=standby?:return;val plan=standbyPlan?:return
         if(!engine.isPlaying||incoming.playbackState!=Player.STATE_READY||fadingOut!=null||!plan.matches(queue.snapshot()))return
         val duration=engine.duration.takeIf{it>0}?:return
@@ -512,6 +550,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
 
     fun suspendForRestore() {
+        require(!direct.selected && !retiringOutput){"Switch to Normal output before restoring a backup."}
         pause(); ready = false; generation++; sleep.cancel()
         discardStandby()
         lookahead = null; lookaheadToken = null; engine.stop(); engine.clearMediaItems()
@@ -532,6 +571,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     /** Bounded read-only snapshot; no playback, queue or persistence operations. */
     fun audioInfo():JSONObject {
+        if(direct.selected)return JSONObject().put("status","Native Direct USB · ${direct.view.phase}").put("outputMode","Native Direct USB")
+            .put("source",current?.let{JSONObject().put("title",it.tags.title).put("quality",PlaybackPresentation.quality(it.audio)).put("channels",it.audio.channels?:JSONObject.NULL)})
+            .put("nativeOutput",JSONObject().put("sampleRateHz",current?.audio?.sampleRateHz).put("bits",current?.audio?.meaningfulBits)
+                .put("completedFrames",direct.view.completedFrames).put("pending",direct.view.pending).put("integrity",direct.view.integrity)
+                .put("limits","USB completion counters are not measured DAC rendering. Clock synchronization and analog balance are unverified."))
         val track=current
         val pcm=processors[engine]?.lastPcm
         val status=when {
@@ -559,7 +603,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         return JSONObject().put("schemaVersion", 1).put("appVersion", BuildConfig.VERSION_NAME)
             .put("exportedAt", java.time.Instant.now().toString()).put("phone", JSONObject().put("model", Build.MODEL)
                 .put("sdk", Build.VERSION.SDK_INT).put("buildDisplay", Build.DISPLAY))
-            .put("mode", "Normal").put("state", JSONObject(extras().getString("state")!!))
+            .put("mode", if(direct.selected)"Direct USB" else "Normal").put("state", JSONObject(extras().getString("state")!!))
+            .put("directUsb",direct.report())
             .put("gapless", JSONObject().put("transport", "Media3 next-item preparation").put("nextPrepared", lookahead != null)
                 .put("limits", "Audible continuity depends on decoder and output compatibility; transport events do not prove physical gaplessness or bit-perfect output."))
             .put("sessionRestore", restoreEvidence)
@@ -594,8 +639,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         val snapshot = queue.snapshot()
         val presentation = PlaybackPresentation.position(snapshot)
         val json = JSONObject().put("ready", ready).put("position", queue.positionMs)
-            .put("duration", engine.duration.takeIf { it > 0 } ?: current?.audio?.durationMs ?: 0)
-            .put("playing", engine.isPlaying).put("playWhenReady", engine.playWhenReady)
+            .put("duration", if(direct.selected)current?.audio?.durationMs?:0 else engine.duration.takeIf { it > 0 } ?: current?.audio?.durationMs ?: 0)
+            .put("playing", isPlaying).put("playWhenReady", playWhenReady)
+            .put("outputMode",if(direct.selected)"Direct USB" else "Normal").put("directUsbHardwareValidated",false)
             .put("error", listOf(persistenceWarning, error).filter { it.isNotBlank() }.joinToString("\n"))
             .put("currentId", queue.current?.trackId?.value?.toString().orEmpty())
             .put("collectionLabel", presentation.label)
@@ -616,7 +662,34 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         discardStandby();finishFade()
         seekIndexes.close()
         context.unregisterReceiver(noisy); audio.unregisterAudioDeviceCallback(removed)
-        releaseDeck(engine);player.release()
+        direct.destroy()
+        if(!retiringOutput)releaseDeck(engine)
+        player.release()
+    }
+    fun requestOutput(directUsb: Boolean): Boolean=if(directUsb)direct.request()else direct.normal()
+    internal fun directProcessingAllowed()=!audioSettings.eqEnabled && audioSettings.replayGain==ReplayGainMode.OFF && audioSettings.crossfadeSeconds==0
+    internal fun outputChanged(message: String?=null){if(!message.isNullOrBlank())error=message;update()}
+    internal fun directPositionChanged(){if(direct.matches)queue.updatePosition(direct.positionMs);player.refresh();changed()}
+    internal fun pauseDirectQueue(message: String="") {
+        if(direct.matches)queue.updatePosition(direct.positionMs)
+        queue.pause()
+        if(focusHeld){focusHeld=false;audio.abandonAudioFocusRequest(focus)}
+        if(message.isNotBlank())error=message
+        persist();update()
+    }
+    internal fun retireNormalForDirect(): List<OutputRetirement> {
+        val tickets=outputProviders.values.map{it.retirement}
+        retiringOutput=true;pause();discardStandby();finishFade()
+        processors.keys.toList().forEach(::releaseDeck)
+        generation++;lookahead=null;lookaheadToken=null;seekIndexes.setPlaybackWindow(null)
+        return tickets
+    }
+    internal fun restoreNormalAfterDirect(message: String?=null) {
+        if(destroyed)return
+        engine=newEngine();retiringOutput=false;generation++
+        load(queue.selection,false)
+        if(!message.isNullOrBlank())error=message
+        update()
     }
     companion object {
         private const val START_BUFFER_MS=100
