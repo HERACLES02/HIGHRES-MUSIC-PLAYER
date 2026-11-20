@@ -10,7 +10,7 @@ internal fun checkDatabaseVersion(path: String) {
         connection.prepare("PRAGMA user_version").use { statement ->
             check(statement.step()) { "Cannot read database version" }
             val version = statement.getLong(0)
-            check(version in 0..3) { "Database version $version is newer than supported version 3; file retained" }
+            check(version in 0..5) { "Database version $version is newer than supported version 5; file retained" }
         }
     }
 }

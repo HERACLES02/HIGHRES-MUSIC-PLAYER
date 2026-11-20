@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream
 
 data class ArtistCandidate(val id:String,val name:String,val description:String)
 data class ReleaseCandidate(val id:String,val title:String,val artist:String,val date:String,val country:String,val edition:String)
+data class RecordingCandidate(val id:String,val source:String,val title:String,val artist:String,val album:String?,val trackNumber:String?,val date:String?,val country:String?,val disambiguation:String?,val imageUrl:String?=null)
 data class ArtistPreview(val profile:ArtistProfile,val image:ByteArray?=null)
 data class CoverPreview(val release:ReleaseCandidate,val image:ByteArray,val sourceUrl:String,val credit:String)
 data class EnrichmentResponse(val status:Int,val contentType:String,val bytes:ByteArray,val retryAfter:String?=null,val location:String?=null)
@@ -27,7 +28,7 @@ class EnrichmentClient(private val cooldown:LyricsCooldown,private val transport
     private fun safe(url:String):String {
         val parsed=url.toHttpUrl();val host=parsed.host
         require(parsed.scheme=="https"&&parsed.username.isEmpty()&&parsed.password.isEmpty()&&parsed.port==443&&
-            (host in setOf("musicbrainz.org","www.wikidata.org","en.wikipedia.org","commons.wikimedia.org","upload.wikimedia.org","thumb.wikimedia.org","coverartarchive.org","archive.org")||host.endsWith(".archive.org"))){"Provider returned an unsupported address."}
+            (host in setOf("musicbrainz.org","www.wikidata.org","en.wikipedia.org","commons.wikimedia.org","upload.wikimedia.org","thumb.wikimedia.org","coverartarchive.org","archive.org","itunes.apple.com","api.deezer.com")||host.endsWith(".archive.org")||host.endsWith(".mzstatic.com")||host.endsWith(".dzcdn.net"))){"Provider returned an unsupported address."}
         return parsed.toString()
     }
     private fun fetch(url:String,image:Boolean=false):EnrichmentResponse {
@@ -52,7 +53,7 @@ class EnrichmentClient(private val cooldown:LyricsCooldown,private val transport
             }
             check(response.status==200){if(response.status==404)"No information or cover is available for this selection." else "Provider returned HTTP ${response.status}. Saved data is unchanged."}
             if(image)require(response.contentType.substringBefore(';').lowercase() in setOf("image/jpeg","image/png","image/webp")){"Unsupported image response."}
-            else require(response.contentType.startsWith("application/json",true)){"Provider returned an unexpected response."}
+            else require(response.contentType.startsWith("application/json",true)||response.contentType.startsWith("text/javascript",true)||response.contentType.startsWith("application/javascript",true)){"Provider returned an unexpected response."}
             return response
         }
         error("Too many provider redirects.")
@@ -87,6 +88,87 @@ class EnrichmentClient(private val cooldown:LyricsCooldown,private val transport
             ReleaseCandidate(id(o.text("id")),o.text("title").take(300),o["artist-credit"]?.jsonArray.orEmpty().joinToString(""){v->v.jsonObject.text("name")+v.jsonObject.text("joinphrase")}.take(300),
                 o.text("date").take(50),o.text("country").take(50),listOf(o.text("disambiguation"),o["media"]?.jsonArray?.joinToString(", "){it.jsonObject.text("format")}.orEmpty()).filter{it.isNotBlank()}.joinToString(" · ").take(1000))
         }.getOrNull()}
+    }
+    @Synchronized fun searchItunesRecordings(query:String):List<RecordingCandidate> {
+        val q=query(query)
+        val response=json("https://itunes.apple.com/search?term="+encode(q)+"&entity=song&limit=12")
+        return response["results"]?.jsonArray.orEmpty().take(12).mapNotNull{value->runCatching{
+            val o=value.jsonObject
+            val trackId=o["trackId"]?.jsonPrimitive?.longOrNull?:return@runCatching null
+            val rawArt=o.text("artworkUrl100").takeIf{it.isNotBlank()}
+            val image=rawArt?.replace(Regex("""\d+x\d+bb"""),"600x600bb")?:rawArt
+            RecordingCandidate("itunes:$trackId","iTunes",
+                o.text("trackName").take(300).also{require(it.isNotBlank())},
+                o.text("artistName").take(300),
+                o.text("collectionName").take(300).takeIf{it.isNotBlank()},
+                o["trackNumber"]?.jsonPrimitive?.intOrNull?.toString(),
+                o.text("releaseDate").take(10).takeIf{it.isNotBlank()},
+                o.text("country").take(50).takeIf{it.isNotBlank()},
+                o.text("primaryGenreName").take(100).takeIf{it.isNotBlank()},
+                image)
+        }.getOrNull()}
+    }
+    @Synchronized fun searchDeezerRecordings(query:String):List<RecordingCandidate> {
+        val q=query(query)
+        val response=json("https://api.deezer.com/search?q="+encode(q)+"&limit=12")
+        return response["data"]?.jsonArray.orEmpty().take(12).mapNotNull{value->runCatching{
+            val o=value.jsonObject
+            val id=o["id"]?.jsonPrimitive?.longOrNull?:return@runCatching null
+            val albumObj=o["album"]?.jsonObject
+            val image=albumObj?.text("cover_xl")?.takeIf{it.isNotBlank()}
+                ?:albumObj?.text("cover_big")?.takeIf{it.isNotBlank()}
+                ?:albumObj?.text("cover_medium")?.takeIf{it.isNotBlank()}
+            val trackNum=o["track_position"]?.jsonPrimitive?.intOrNull?.toString()
+            val dateStr=o.text("release_date").take(10).takeIf{it.isNotBlank()}
+                ?:albumObj?.text("release_date")?.take(10)?.takeIf{it.isNotBlank()}
+            RecordingCandidate("deezer:$id","Deezer",
+                o.text("title").take(300).also{require(it.isNotBlank())},
+                o["artist"]?.jsonObject?.text("name").orEmpty().take(300),
+                albumObj?.text("title")?.take(300)?.takeIf{it.isNotBlank()},
+                trackNum,dateStr,null,null,image)
+        }.getOrNull()}
+    }
+    @Synchronized fun searchMusicBrainzRecordings(title:String,artist:String):List<RecordingCandidate> {
+        val t=title.trim();val a=artist.trim()
+        require(t.isNotBlank()||a.isNotBlank()){"Enter title or artist."}
+        val q=when{
+            t.isNotBlank()&&a.isNotBlank()->"recording:"+quoted(query(t))+" AND artist:"+quoted(query(a))
+            t.isNotBlank()->"recording:"+quoted(query(t))
+            else->"artist:"+quoted(query(a))
+        }
+        val response=json("https://musicbrainz.org/ws/2/recording?query="+encode(q)+"&fmt=json&limit=12")
+        return response["recordings"]?.jsonArray.orEmpty().take(12).mapNotNull{value->runCatching{val o=value.jsonObject
+            val firstRelease=o["releases"]?.jsonArray?.firstOrNull()?.jsonObject
+            val firstMedia=firstRelease?.get("media")?.jsonArray?.firstOrNull()?.jsonObject
+            val firstTrack=firstMedia?.get("track")?.jsonArray?.firstOrNull()?.jsonObject
+            val trackNum=firstTrack?.text("number")?.take(20)?.takeIf{it.isNotBlank()}
+            val dateStr=(firstRelease?.text("date")?.ifBlank{o.text("first-release-date")}?:o.text("first-release-date")).take(50).takeIf{it.isNotBlank()}
+            val releaseId=firstRelease?.text("id")?.takeIf{it.isNotBlank()}
+            val image=releaseId?.let{"https://coverartarchive.org/release/$it/front-500"}
+            RecordingCandidate(id(o.text("id")),"MusicBrainz",o.text("title").take(300).also{require(it.isNotBlank())},
+                o["artist-credit"]?.jsonArray.orEmpty().joinToString(""){v->v.jsonObject.text("name")+v.jsonObject.text("joinphrase")}.take(300),
+                firstRelease?.text("title")?.take(300)?.takeIf{it.isNotBlank()},
+                trackNum,dateStr,firstRelease?.text("country")?.take(50)?.takeIf{it.isNotBlank()},
+                o.text("disambiguation").take(300).takeIf{it.isNotBlank()},image)
+        }.getOrNull()}
+    }
+    @Synchronized fun searchRecordings(title:String,artist:String,provider:String="All"):List<RecordingCandidate> {
+        val term=listOf(title.trim(),artist.trim()).filter{it.isNotBlank()}.joinToString(" ")
+        require(term.isNotBlank()){"Enter title or artist."}
+        return when(provider){
+            "iTunes"->searchItunesRecordings(term)
+            "Deezer"->searchDeezerRecordings(term)
+            "MusicBrainz"->searchMusicBrainzRecordings(title,artist)
+            else->{
+                val itunes=runCatching{searchItunesRecordings(term)}.getOrDefault(emptyList())
+                val deezer=runCatching{searchDeezerRecordings(term)}.getOrDefault(emptyList())
+                val mb=runCatching{searchMusicBrainzRecordings(title,artist)}.getOrDefault(emptyList())
+                (itunes+deezer+mb).distinctBy{it.id}
+            }
+        }
+    }
+    @Synchronized fun downloadCover(url:String):ByteArray {
+        return fetch(url,image=true).bytes
     }
     private fun plain(value:String)=value.replace(Regex("<[^>]*>"),"").replace("&amp;","&").replace("&quot;","\"").replace("&#39;","'").replace("&nbsp;"," ").replace("&lt;","<").replace("&gt;",">").take(1800)
     @Synchronized fun artist(candidate:ArtistCandidate):ArtistPreview {
