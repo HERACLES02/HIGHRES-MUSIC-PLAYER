@@ -133,7 +133,10 @@
       let currentView = "library";
       let currentPlaylistId = "default";
       let currentFolder = "";
-      let activePlayable = libraryPlayable;
+      let browsePlayable = libraryPlayable;
+      let activePlayable = [];
+      const listeningQueue = new ListeningQueue();
+      let pendingResumePosition = 0;
       let currentIndex = -1;
       let currentTrackId = null;
       let isSeeking = false;
@@ -152,9 +155,15 @@
       // track can start (and fade in) on the idle one while the current
       // track fades out on its own, rather than a hard cut at track end.
       const CROSSFADE_SECONDS = 4;
-      let crossfadeEnabled = localStorage.getItem("crossfadeEnabled") !== "0";
+      let crossfadeEnabled = getCrossfadePreference();
       let crossfading = false;
       let fadeAnimationFrame = null;
+      let pendingCrossfade = null;
+      let failedCrossfadeTrackId = null;
+      let playbackRequestId = 0;
+      let clearResumeSeek = null;
+      let playbackErrorShown = false;
+      let playRecorded = false;
       let selectedTrackIds = new Set();
       let metadataBatchIds = [];
       let filteredTracks = [];
@@ -162,6 +171,15 @@
       let artistMatchArtist = "";
       let selectedMusicBrainzId = "";
       let selectedWikipediaTitle = "";
+      let metadataPreview = null;
+      let metadataBusy = false;
+      let browseHistory = [];
+      let restoringBrowse = false;
+      let scanPollTimer = null;
+      let lastLibraryScan = 0;
+      const browseSort = document.getElementById("browseSort");
+      const browseFormat = document.getElementById("browseFormat");
+      const browseStatus = document.getElementById("browseStatus");
 
       // Track-grid virtualization state: only the rows currently scrolled
       // into view (plus an overscan buffer) are ever mounted as real DOM
@@ -187,6 +205,8 @@
           album: track.album || "Unknown Album",
           folder: track.folder || "",
           relpath: track.relpath,
+          addedAt: Number(track.added_at || 0),
+          hasCover: Boolean(track.cover_url || track.cover_mime),
           url: track.url || `/music/${encodePath(track.relpath)}`,
           coverUrl: track.cover_url || `/cover/${track.id}`,
         };
@@ -354,17 +374,16 @@
 
       function trackTile(track, resume = false) {
         const history = historyData.tracks?.[track.id] || {};
-        const subtitle = resume && history.last_position
-          ? `Resume at ${fmtTime(Number(history.last_position || 0))}`
-          : `${track.artist} - ${track.album}`;
-        const action = resume ? `resumeTrack('${jsString(track.id)}')` : `playTrackFromHome('${jsString(track.id)}')`;
-        return `<button type="button" data-action="${resume ? "resume-track" : "play-home-track"}" data-track-id="${escapeHtml(track.id)}" class="flex min-w-0 items-center gap-4 overflow-hidden rounded-lg bg-zinc-800/80 text-left font-semibold hover:bg-zinc-700">
+        return `<div class="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-zinc-800/80">
+          <button type="button" data-action="play-home-track" data-track-id="${escapeHtml(track.id)}" title="Play from beginning" class="flex min-w-0 flex-1 items-center gap-4 text-left font-semibold hover:bg-zinc-700">
           ${tileCover(track.coverUrl)}
           <span class="min-w-0">
             <span class="block truncate">${escapeHtml(track.title)}</span>
-            <span class="block truncate text-sm font-normal text-zinc-400">${escapeHtml(subtitle)}</span>
+            <span class="block truncate text-sm font-normal text-zinc-400">${escapeHtml(track.artist)} - ${escapeHtml(track.album)}</span>
           </span>
-        </button>`;
+          </button>
+          ${resume ? `<button type="button" data-action="resume-track" data-track-id="${escapeHtml(track.id)}" class="mr-2 shrink-0 rounded-lg border border-zinc-600 px-2 py-2 text-xs" aria-label="Resume ${escapeHtml(track.title)} at ${fmtTime(Number(history.last_position || 0))}">Resume<br>${fmtTime(Number(history.last_position || 0))}</button>` : ""}
+        </div>`;
       }
 
       function smartTile(title, subtitle, action) {
@@ -450,6 +469,7 @@
         if (!playlistList) return;
         playlistList.innerHTML = "";
         if (playlistTarget) playlistTarget.innerHTML = "";
+        const knownIds = new Set(libraryPlayable.map((track) => track.id));
 
         for (const playlist of playlistMap.values()) {
           if (playlistTarget) {
@@ -465,7 +485,8 @@
           row.className = "playlist-button flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-900";
           row.dataset.playlistId = playlist.id;
           row.onclick = () => showPlaylist(playlist.id);
-          row.innerHTML = `${smallCover(playlist.cover_url)}<span class="min-w-0"><span class="block truncate">${escapeHtml(playlist.name)}</span><span class="text-xs text-zinc-500">${playlist.count} tracks</span></span>`;
+          const missingCount = (playlist.tracks || []).filter((id) => !knownIds.has(String(id))).length;
+          row.innerHTML = `${smallCover(playlist.cover_url)}<span class="min-w-0"><span class="block truncate">${escapeHtml(playlist.name)}</span><span class="text-xs text-zinc-500">${playlist.count} tracks${missingCount ? ` · ${missingCount} missing` : ""}</span></span>`;
           playlistList.appendChild(row);
         }
 
@@ -733,6 +754,20 @@
       }
 
       const actionHandlers = {
+        "browse-back": () => restoreBrowse(),
+        "reset-browse": () => {
+          search.value = "";
+          browseSort.value = "default";
+          browseFormat.value = "";
+          browseStatus.value = "";
+          if (gridScroller.classList.contains("hidden")) showLibrary();
+          else applyFilter();
+        },
+        "show-maintenance": () => showMaintenance(),
+        "relink-track": (el) => relinkMissingTrack(el.dataset.oldId, el.dataset.newId),
+        "relink-selected": () => relinkMissingTrack(document.getElementById("relinkOld").value, document.getElementById("relinkNew").value),
+        "undo-metadata": (el) => undoMetadata(el.dataset.jobId),
+        "confirm-metadata": () => confirmMetadata(),
         "refresh-library": () => refreshLibrary(),
         "choose-background": () => chooseBackground(),
         "export-backup": () => exportBackup(),
@@ -777,8 +812,8 @@
         "close-artist-match": () => closeArtistMatchPicker(),
         "play-home-track": (el) => playTrackFromHome(el.dataset.trackId),
         "resume-track": (el) => resumeTrack(el.dataset.trackId),
-        "play-any-track": (el) => playTrackFromAnyQueue(el.dataset.trackId),
-        "shuffle-active": (el) => showSmartTracks(el.dataset.title || "Shuffle", el.dataset.subtitle || "", [...activePlayable].sort(() => Math.random() - 0.5)),
+        "play-any-track": () => playCurrentView(false),
+        "shuffle-active": () => playCurrentView(true),
         "queue-active": () => queueAlbum(),
         "play-track": (el) => playTrackId(el.dataset.trackId),
         "toggle-card-menu": (el, event) => {
@@ -835,6 +870,8 @@
         "close-queue": () => closeQueuePanel(),
         "play-queued-index": (el) => playQueuedIndex(Number(el.dataset.index)),
         "remove-queued-index": (el) => removeQueuedIndex(Number(el.dataset.index)),
+        "move-queued-up": (el) => moveQueuedTrack(Number(el.dataset.index), -1),
+        "move-queued-down": (el) => moveQueuedTrack(Number(el.dataset.index), 1),
         "close-metadata": () => closeMetadataEditor(),
         "fill-derived-metadata": () => fillDerivedMetadata(),
         "apply-derived-metadata": () => applyDerivedMetadata(metadataTargetIds()),
@@ -905,6 +942,7 @@
                     <button type="button" class="add-button block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="add-playlist" data-track-id="${escapeHtml(track.id)}">Add</button>
                     <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="play-next" data-track-id="${escapeHtml(track.id)}">Play next</button>
                     <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="add-queue" data-track-id="${escapeHtml(track.id)}">Queue</button>
+                    ${Number(historyData.tracks?.[track.id]?.last_position || 0) > 0 && !historyData.tracks[track.id].completed ? `<button type="button" class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="resume-track" data-track-id="${escapeHtml(track.id)}">Resume at ${fmtTime(Number(historyData.tracks[track.id].last_position))}</button>` : ""}
                     <button type="button" class="remove-button hidden w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="remove-playlist" data-track-id="${escapeHtml(track.id)}">Remove</button>
                     <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="edit-metadata" data-track-id="${escapeHtml(track.id)}">Edit metadata</button>
                     <button type="button" class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-zinc-900" data-action="derive-metadata" data-track-id="${escapeHtml(track.id)}">Auto-fill tags</button>
@@ -963,7 +1001,7 @@
       function updateBatchBar() {
         if (!batchBar || !batchCount) return;
         batchBar.classList.toggle("hidden", selectedTrackIds.size === 0);
-        batchCount.textContent = `${selectedTrackIds.size} selected`;
+        batchCount.textContent = `${selectedTrackIds.size} songs selected across all views`;
       }
 
       function selectedTracks() {
@@ -975,7 +1013,7 @@
       function selectVisibleTracks() {
         filteredTracks.forEach((track) => selectedTrackIds.add(track.id));
         updateTrackButtons();
-        showToast(`${selectedTrackIds.size} tracks selected`);
+        showToast(`Selected all ${filteredTracks.length} matching results. ${selectedTrackIds.size} songs selected in total, including other views.`);
       }
 
       function clearSelection() {
@@ -1004,6 +1042,8 @@
       }
 
       function batchPlayNext() {
+        if (pendingCrossfade) cancelCrossfadeIfActive();
+        listeningQueue.prioritizeManual();
         const tracks = selectedTracks();
         manualQueue = [...tracks, ...manualQueue.filter((track) => !selectedTrackIds.has(track.id))];
         renderQueue();
@@ -1011,6 +1051,7 @@
       }
 
       function batchQueue() {
+        if (pendingCrossfade) cancelCrossfadeIfActive();
         manualQueue.push(...selectedTracks());
         renderQueue();
         showToast("Selected tracks queued");
@@ -1021,6 +1062,8 @@
       }
 
       function openBatchMetadataEditor() {
+        if (metadataBusy) return;
+        invalidateMetadataPreview();
         const ids = Array.from(selectedTrackIds);
         if (!ids.length) {
           showToast("Select tracks first", "error");
@@ -1041,16 +1084,14 @@
         metadataModal.classList.add("flex");
       }
 
-      function setActivePlayable(ids) {
-        const allowed = new Set(ids.map(String));
-        activePlayable = libraryPlayable.filter((track) => allowed.has(track.id));
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+      function setBrowsePlayable(ids) {
+        const byId = new Map(libraryPlayable.map((track) => [track.id, track]));
+        browsePlayable = ids.map((id) => byId.get(String(id))).filter(Boolean);
       }
 
       function showHome() {
         currentView = "home";
-        activePlayable = libraryPlayable;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = libraryPlayable;
         viewTitle.textContent = "Home";
         viewSubtitle.textContent = `${folders.length} folders, ${playlistMap.size} playlists, ${libraryPlayable.length} tracks`;
         deletePlaylistButton.classList.add("hidden");
@@ -1066,8 +1107,7 @@
 
       async function showSettings() {
         currentView = "settings";
-        activePlayable = libraryPlayable;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = libraryPlayable;
         viewTitle.textContent = "Settings";
         viewSubtitle.textContent = "Storage, backup, cache, and local security";
         deletePlaylistButton.classList.add("hidden");
@@ -1179,7 +1219,7 @@
         document.getElementById("createUserForm")?.addEventListener("submit", handleCreateUserSubmit);
         document.getElementById("crossfadeToggle")?.addEventListener("change", (event) => {
           crossfadeEnabled = event.target.checked;
-          localStorage.setItem("crossfadeEnabled", crossfadeEnabled ? "1" : "0");
+          try { localStorage.setItem("crossfadeEnabled", crossfadeEnabled ? "1" : "0"); } catch { /* Playback works without browser storage. */ }
           if (!crossfadeEnabled) cancelCrossfadeIfActive();
         });
       }
@@ -1309,8 +1349,7 @@
 
       function showLibrary() {
         currentView = "library";
-        activePlayable = libraryPlayable;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = libraryPlayable;
         const selected = playlistMap.get(currentPlaylistId);
         viewTitle.textContent = "All tracks";
         viewSubtitle.textContent = `${libraryPlayable.length} tracks from your local folder. Add target: ${selected?.name || "My Playlist"}`;
@@ -1329,10 +1368,9 @@
         currentView = "folder";
         currentFolder = String(folderName);
         const realFolder = currentFolder === "(root)" ? "" : currentFolder;
-        activePlayable = libraryPlayable.filter((track) => track.folder === realFolder);
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = libraryPlayable.filter((track) => track.folder === realFolder);
         viewTitle.textContent = currentFolder;
-        viewSubtitle.textContent = `${activePlayable.length} tracks in this folder`;
+        viewSubtitle.textContent = `${browsePlayable.length} tracks in this folder`;
         deletePlaylistButton.classList.add("hidden");
         coverUploadButton.classList.remove("hidden");
         exportPlaylistButton.classList.add("hidden");
@@ -1346,7 +1384,7 @@
 
       function showLiked() {
         currentView = "liked";
-        setActivePlayable(Array.from(likedIdSet));
+        setBrowsePlayable(Array.from(likedIdSet));
         viewTitle.textContent = "Liked songs";
         viewSubtitle.textContent = `${likedIdSet.size} liked tracks`;
         deletePlaylistButton.classList.add("hidden");
@@ -1365,9 +1403,10 @@
         if (!selected) return;
         currentView = "playlist";
         currentPlaylistId = String(selected.id);
-        setActivePlayable(selected.tracks || []);
+        setBrowsePlayable(selected.tracks || []);
         viewTitle.textContent = selected.name;
-        viewSubtitle.textContent = `${selected.count} tracks`;
+        const missingCount = (selected.tracks || []).length - browsePlayable.length;
+        viewSubtitle.textContent = `${selected.count} tracks${missingCount ? ` · ${missingCount} missing — open Library health to reconnect them` : ""}`;
         deletePlaylistButton.classList.toggle("hidden", currentPlaylistId === "default");
         coverUploadButton.classList.remove("hidden");
         exportPlaylistButton.classList.remove("hidden");
@@ -1381,8 +1420,7 @@
 
       function showSmartTracks(title, subtitle, items) {
         currentView = "smart";
-        activePlayable = items;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = items;
         viewTitle.textContent = title;
         viewSubtitle.textContent = subtitle;
         deletePlaylistButton.classList.add("hidden");
@@ -1418,8 +1456,8 @@
       }
 
       function showSmartMissingCovers() {
-        const items = libraryPlayable.filter((track) => track.coverUrl.includes("/cover/"));
-        showSmartTracks("Missing Covers", `${items.length} tracks using embedded/default art`, items);
+        const items = libraryPlayable.filter((track) => !track.hasCover);
+        showSmartTracks("Missing Covers", `${items.length} tracks without embedded or custom art`, items);
       }
 
       function hasWeakMetadata(track) {
@@ -1450,11 +1488,11 @@
       }
 
       function showArtist(artist) {
+        rememberBrowse();
         const items = libraryPlayable.filter((track) => track.artist === artist);
         const albums = Array.from(new Set(items.map((track) => track.album))).sort();
         currentView = "artist";
-        activePlayable = items;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = items;
         viewTitle.textContent = artist;
         viewSubtitle.textContent = `${items.length} tracks, ${albums.length} albums`;
         deletePlaylistButton.classList.add("hidden");
@@ -1490,7 +1528,7 @@
 
       function showAllArtists() {
         currentView = "artists";
-        activePlayable = libraryPlayable;
+        browsePlayable = libraryPlayable;
         viewTitle.textContent = "Artists";
         const artists = artistSummaries();
         viewSubtitle.textContent = `${artists.length} artists`;
@@ -1516,12 +1554,12 @@
       }
 
       function showAlbum(album) {
+        rememberBrowse();
         const items = libraryPlayable.filter((track) => track.album === album);
         const artists = Array.from(new Set(items.map((track) => track.artist))).sort();
         const cover = items[0]?.coverUrl || "";
         currentView = "album";
-        activePlayable = items;
-        currentIndex = activePlayable.findIndex((track) => track.id === currentTrackId);
+        browsePlayable = items;
         viewTitle.textContent = album;
         viewSubtitle.textContent = `${items.length} tracks`;
         deletePlaylistButton.classList.add("hidden");
@@ -1552,7 +1590,7 @@
 
       function showAllAlbums() {
         currentView = "albums";
-        activePlayable = libraryPlayable;
+        browsePlayable = libraryPlayable;
         viewTitle.textContent = "Albums";
         const albums = albumSummaries();
         viewSubtitle.textContent = `${albums.length} albums`;
@@ -1578,7 +1616,8 @@
       }
 
       function queueAlbum() {
-        manualQueue.push(...activePlayable);
+        if (pendingCrossfade) cancelCrossfadeIfActive();
+        manualQueue.push(...filteredTracks);
         renderQueue();
         showToast("Album queued");
       }
@@ -1604,7 +1643,7 @@
           const realFolder = currentFolder === "(root)" ? "" : currentFolder;
           return new Set(libraryPlayable.filter((track) => track.folder === realFolder).map((track) => track.id));
         }
-        if (["smart", "smart_continue", "artist", "album"].includes(currentView)) return new Set(activePlayable.map((track) => track.id));
+        if (["smart", "smart_continue", "artist", "album"].includes(currentView)) return new Set(browsePlayable.map((track) => track.id));
         const selected = playlistMap.get(currentPlaylistId);
         return new Set((selected?.tracks || []).map(String));
       }
@@ -1621,9 +1660,6 @@
           updateGridControls();
           return;
         }
-        const query = (search?.value || "").trim().toLowerCase();
-        const matchesQuery = (track) => !query || `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(query);
-
         if (currentView === "playlist") {
           // Playlists have a meaningful custom order (drag-to-reorder) - show
           // them in that order, not library order like every other view.
@@ -1631,12 +1667,15 @@
           const byId = new Map(libraryPlayable.map((track) => [track.id, track]));
           filteredTracks = (selected?.tracks || [])
             .map((id) => byId.get(String(id)))
-            .filter(Boolean)
-            .filter(matchesQuery);
+            .filter(Boolean);
         } else {
           const visibleIds = visibleIdsForCurrentView();
-          filteredTracks = libraryPlayable.filter((track) => visibleIds.has(track.id) && matchesQuery(track));
+          filteredTracks = browsePlayable.filter((track) => visibleIds.has(track.id));
         }
+        filteredTracks = LibraryTools.filterAndSort(filteredTracks, {
+          query: search?.value, sort: browseSort.value, format: browseFormat.value,
+          status: browseStatus.value, likedIds: likedIdSet,
+        });
         gridStartIndex = -1;
         gridEndIndex = -1;
         renderVirtualizedGrid();
@@ -1757,6 +1796,10 @@
       }
 
       async function reorderPlaylistTracks(sourceTrackId, targetTrackId) {
+        if (browseSort.value !== "default" || browseFormat.value || browseStatus.value || search.value.trim()) {
+          showToast("Clear search and filters and use Original order before rearranging a playlist.", "error");
+          return;
+        }
         const selected = playlistMap.get(currentPlaylistId);
         if (!selected) return;
         const order = (selected.tracks || []).map(String);
@@ -1807,7 +1850,10 @@
 
       function scheduleFilter() {
         window.clearTimeout(filterTimer);
-        filterTimer = window.setTimeout(applyFilter, 120);
+        filterTimer = window.setTimeout(() => {
+          if (gridScroller.classList.contains("hidden")) showLibrary();
+          else applyFilter();
+        }, 120);
       }
 
       async function toggleLike(trackId) {
@@ -1867,49 +1913,120 @@
       }
 
       async function refreshLibrary() {
-        await fetchJson("/api/refresh", { method: "POST" });
-        window.location.reload();
+        try {
+          await fetchJson("/api/refresh", { method: "POST" });
+          await showMaintenance();
+        } catch (error) {
+          showToast("Could not start the scan. Try again.", "error");
+        }
       }
 
       function playTrackId(trackId) {
         const id = String(trackId);
-        if (currentView === "smart_continue") return resumeTrack(id);
-        const idx = activePlayable.findIndex((track) => track.id === id);
-        if (idx === -1) {
-          activePlayable = libraryPlayable;
-          currentView = "library";
-          showLibrary();
-          return playTrackId(id);
-        }
-        playIndex(idx);
+        const items = filteredTracks.some((track) => track.id === id) ? filteredTracks : browsePlayable;
+        startListening(items, id);
       }
 
       function playTrackFromHome(trackId) {
-        activePlayable = libraryPlayable;
-        const idx = activePlayable.findIndex((track) => track.id === String(trackId));
-        if (idx !== -1) playIndex(idx);
+        startListening(libraryPlayable, String(trackId));
+      }
+
+      function startListening(items, trackId, resumeAt = 0) {
+        const index = items.findIndex((track) => track.id === String(trackId));
+        if (index === -1) {
+          showToast("This song is no longer in the library. Refresh the library and try again.", "error");
+          return;
+        }
+        activePlayable = [...items];
+        playIndex(index, resumeAt);
+      }
+
+      function playCurrentView(shuffle) {
+        const items = [...filteredTracks];
+        if (!items.length) {
+          showToast("No songs match your current search and filters.", "error");
+          return;
+        }
+        shuffleEnabled = shuffle;
+        updatePlaybackButtons();
+        const first = shuffle ? listeningQueue.shuffled(items)[0] : items[0];
+        startListening(items, first.id);
       }
 
       function playIndex(index, resumeAt = 0) {
         if (index < 0 || index >= activePlayable.length) return;
-        cancelCrossfadeIfActive();
+        listeningQueue.start(activePlayable.map((track) => track.id), activePlayable[index].id, shuffleEnabled);
         currentIndex = index;
-        const track = activePlayable[index];
+        playSelectedTrack(activePlayable[index], resumeAt);
+      }
+
+      function playSelectedTrack(track, resumeAt = 0, autoplay = true) {
+        syncTrackPosition(true);
+        cancelCrossfadeIfActive();
+        if (clearResumeSeek) clearResumeSeek();
+        playbackRequestId += 1;
+        playbackErrorShown = false;
+        playRecorded = false;
         currentTrack = track;
         currentTrackId = track.id;
 
         audio.src = track.url;
+        pendingResumePosition = resumeAt;
         if (resumeAt > 0) {
+          // Capture this element and request, rather than whichever song
+          // happens to be active when metadata eventually arrives.
+          const player = audio;
+          const requestId = playbackRequestId;
           const seekWhenReady = () => {
-            audio.currentTime = Math.min(resumeAt, audio.duration || resumeAt);
-            audio.removeEventListener("loadedmetadata", seekWhenReady);
+            player.removeEventListener("loadedmetadata", seekWhenReady);
+            clearResumeSeek = null;
+            if (requestId !== playbackRequestId || player !== audio) return;
+            if (Number.isFinite(player.duration)) {
+              player.currentTime = resumeAt < player.duration - 5 ? resumeAt : 0;
+            }
+            pendingResumePosition = 0;
+            syncProgress();
+            persistPlayerState();
           };
-          audio.addEventListener("loadedmetadata", seekWhenReady);
+          clearResumeSeek = () => {
+            player.removeEventListener("loadedmetadata", seekWhenReady);
+            clearResumeSeek = null;
+          };
+          player.addEventListener("loadedmetadata", seekWhenReady);
         }
-        audio.play();
-        setPlayPauseIcon(true);
+        // Explicitly reset the media element even when the same song is clicked.
+        audio.load();
+        failedCrossfadeTrackId = null;
+        lastPositionSync = 0;
+        setPlayPauseIcon(false);
         setNowPlaying(track);
-        recordTrackPlay(track.id);
+        if (autoplay) requestPlayback();
+      }
+
+      function showPlaybackError(error) {
+        if (error?.name === "AbortError" || playbackErrorShown) return;
+        playbackErrorShown = true;
+        setPlayPauseIcon(false);
+        const message = error?.name === "NotAllowedError"
+          ? "Your browser blocked playback. Press Play to try again."
+          : `Couldn't play "${currentTrack?.title || "this song"}". Try another song, or refresh the library if the file moved. Your browser may not support its audio format.`;
+        showToast(message, "error");
+      }
+
+      async function requestPlayback() {
+        const player = audio;
+        const requestId = playbackRequestId;
+        try {
+          await player.play();
+          if (player !== audio || requestId !== playbackRequestId || player.paused) return;
+          setPlayPauseIcon(true);
+          if (!playRecorded && currentTrackId) {
+            playRecorded = true;
+            recordTrackPlay(currentTrackId);
+          }
+        } catch (error) {
+          if (player === audio && requestId === playbackRequestId) showPlaybackError(error);
+        }
       }
 
       function setNowPlaying(track) {
@@ -1918,7 +2035,7 @@
         setCover(track.coverUrl);
         setDetailPanel(track);
         if (!customBackgroundUrl) bg.style.setProperty("--cover-url", `url("${track.coverUrl}")`);
-        loadLyrics(track.id);
+        loadLyrics(track.id).catch((error) => console.warn("Could not load lyrics", error));
         updateMediaSession(track);
         renderQueue();
 
@@ -1992,49 +2109,47 @@
       }
 
       function nextTrack() {
-        if (!activePlayable.length) return;
-        if (manualQueue.length) {
-          const nextQueued = manualQueue.shift();
-          renderQueue();
-          return playTrackFromAnyQueue(nextQueued.id);
+        cancelCrossfadeIfActive();
+        const upcoming = resolveUpcomingTrack();
+        if (upcoming) {
+          listeningQueue.commit(upcoming);
+          if (upcoming.fromQueue) manualQueue.shift();
+          currentIndex = activePlayable.findIndex((track) => track.id === upcoming.track.id);
+          playSelectedTrack(upcoming.track);
+          return;
         }
-        if (shuffleEnabled) return playRandomTrack();
-        if (currentIndex === -1) return playIndex(0);
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < activePlayable.length) return playIndex(nextIndex);
-        if (repeatMode === "all") return playIndex(0);
+        syncTrackPosition(true);
         audio.pause();
-        audio.currentTime = 0;
         setPlayPauseIcon(false);
+        renderQueue();
       }
 
       function prevTrack() {
-        if (!activePlayable.length) return;
-        if (shuffleEnabled) return playRandomTrack();
-        if (currentIndex === -1) return playIndex(0);
-        const prevIndex = currentIndex - 1;
-        if (prevIndex >= 0) return playIndex(prevIndex);
-        if (repeatMode === "all") return playIndex(activePlayable.length - 1);
-        playIndex(0);
+        if (!currentTrack) return;
+        cancelCrossfadeIfActive();
+        if (audio.currentTime > 3) {
+          audio.currentTime = 0;
+          syncProgress();
+          syncTrackPosition(true);
+          return;
+        }
+        const id = listeningQueue.previous(repeatMode);
+        const track = libraryPlayable.find((item) => item.id === id) || currentTrack;
+        currentIndex = activePlayable.findIndex((item) => item.id === track.id);
+        playSelectedTrack(track);
       }
 
       function playRandomTrack() {
-        if (!activePlayable.length) return;
-        if (activePlayable.length === 1) return playIndex(0);
-        let nextIndex = currentIndex;
-        while (nextIndex === currentIndex) {
-          nextIndex = Math.floor(Math.random() * activePlayable.length);
-        }
-        playIndex(nextIndex);
+        if (!shuffleEnabled) toggleShuffle();
+        nextTrack();
       }
 
       function playTrackFromAnyQueue(trackId) {
-        const existingIndex = activePlayable.findIndex((track) => track.id === trackId);
-        if (existingIndex !== -1) return playIndex(existingIndex);
         const track = libraryPlayable.find((item) => item.id === trackId);
         if (!track) return;
-        activePlayable = [track, ...activePlayable.filter((item) => item.id !== track.id)];
-        playIndex(0);
+        listeningQueue.commit({ id: track.id });
+        currentIndex = activePlayable.findIndex((item) => item.id === track.id);
+        playSelectedTrack(track);
       }
 
       // --- Crossfade -----------------------------------------------------
@@ -2043,19 +2158,10 @@
       // call speculatively a few seconds before the current track actually
       // ends without disturbing anything if it turns out not to be used.
       function resolveUpcomingTrack() {
-        if (manualQueue.length) return { track: manualQueue[0], fromQueue: true };
-        if (shuffleEnabled) {
-          if (!activePlayable.length) return null;
-          if (activePlayable.length === 1) return { track: activePlayable[0], index: 0 };
-          let idx = currentIndex;
-          while (idx === currentIndex) idx = Math.floor(Math.random() * activePlayable.length);
-          return { track: activePlayable[idx], index: idx };
-        }
-        if (currentIndex === -1) return activePlayable[0] ? { track: activePlayable[0], index: 0 } : null;
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < activePlayable.length) return { track: activePlayable[nextIndex], index: nextIndex };
-        if (repeatMode === "all") return activePlayable[0] ? { track: activePlayable[0], index: 0 } : null;
-        return null;
+        const candidate = listeningQueue.peek(manualQueue.map((track) => track.id), repeatMode);
+        if (!candidate) return null;
+        const track = libraryPlayable.find((item) => item.id === candidate.id);
+        return track ? { ...candidate, track } : null;
       }
 
       function clampVolume(value) {
@@ -2063,7 +2169,7 @@
       }
 
       function maybeStartCrossfade() {
-        if (!crossfadeEnabled || crossfading || repeatMode === "one") return;
+        if (!crossfadeEnabled || crossfading || pendingCrossfade || audio.paused || isSeeking || repeatMode === "one" || failedCrossfadeTrackId === currentTrackId) return;
         const duration = audio.duration;
         if (!Number.isFinite(duration) || duration <= 0) return;
         if (duration - audio.currentTime > CROSSFADE_SECONDS) return;
@@ -2072,20 +2178,29 @@
         beginCrossfadeTo(upcoming);
       }
 
-      function beginCrossfadeTo(upcoming) {
-        crossfading = true;
+      async function beginCrossfadeTo(upcoming) {
         const outgoing = audio;
         const incoming = outgoing === audioA ? audioB : audioA;
-
-        // Record the outgoing track's final position/history entry with its
-        // own id/element before any state points at the new track.
-        syncTrackPosition(true);
-
+        const attempt = { incoming };
+        pendingCrossfade = attempt;
         incoming.pause();
-        incoming.currentTime = 0;
         incoming.src = upcoming.track.url;
         incoming.volume = 0;
-        incoming.play().catch(() => {});
+        try {
+          await incoming.play();
+        } catch (error) {
+          if (pendingCrossfade !== attempt) return;
+          pendingCrossfade = null;
+          failedCrossfadeTrackId = currentTrackId;
+          incoming.pause();
+          incoming.volume = clampVolume(vol ? Number(vol.value) : 1);
+          return;
+        }
+        // A pause, seek, or song change can cancel while play() is pending.
+        if (pendingCrossfade !== attempt) return;
+        pendingCrossfade = null;
+        crossfading = true;
+        syncTrackPosition(true);
 
         const outgoingStartVolume = outgoing.volume;
         const startTime = performance.now();
@@ -2108,20 +2223,30 @@
         fadeAnimationFrame = requestAnimationFrame(tick);
 
         audio = incoming;
+        listeningQueue.commit(upcoming);
+        playbackRequestId += 1;
+        playbackErrorShown = false;
+        playRecorded = true;
+        failedCrossfadeTrackId = null;
+        lastPositionSync = 0;
         if (upcoming.fromQueue) {
           manualQueue.shift();
-          renderQueue();
-          currentIndex = activePlayable.findIndex((track) => track.id === upcoming.track.id);
-        } else {
-          currentIndex = upcoming.index;
         }
+        currentIndex = activePlayable.findIndex((track) => track.id === upcoming.track.id);
         currentTrack = upcoming.track;
         currentTrackId = upcoming.track.id;
+        setPlayPauseIcon(true);
         setNowPlaying(upcoming.track);
         recordTrackPlay(upcoming.track.id);
       }
 
       function cancelCrossfadeIfActive() {
+        if (pendingCrossfade) {
+          const incoming = pendingCrossfade.incoming;
+          pendingCrossfade = null;
+          incoming.pause();
+          incoming.volume = clampVolume(vol ? Number(vol.value) : 1);
+        }
         if (!crossfading) return;
         if (fadeAnimationFrame) cancelAnimationFrame(fadeAnimationFrame);
         fadeAnimationFrame = null;
@@ -2135,14 +2260,20 @@
       }
 
       function resumeTrack(trackId) {
+        trackId = String(trackId);
+        if (trackId === currentTrackId && audio.src && playRecorded && !audio.ended) {
+          requestPlayback();
+          return;
+        }
         const history = historyData.tracks?.[trackId] || {};
-        const resumeAt = Number(history.last_position || 0);
-        const existingIndex = activePlayable.findIndex((track) => track.id === trackId);
-        if (existingIndex !== -1) return playIndex(existingIndex, resumeAt);
+        const savedPosition = Number(history.last_position || 0);
+        const duration = Number(history.duration || 0);
+        const resumeAt = !history.completed && Number.isFinite(savedPosition) && savedPosition > 0
+          && (!duration || savedPosition < duration - 5) ? savedPosition : 0;
         const track = libraryPlayable.find((item) => item.id === trackId);
         if (!track) return;
-        activePlayable = [track, ...activePlayable.filter((item) => item.id !== track.id)];
-        playIndex(0, resumeAt);
+        const items = filteredTracks.some((item) => item.id === trackId) ? filteredTracks : libraryPlayable;
+        startListening(items, trackId, resumeAt);
       }
 
       async function recordTrackPlay(trackId) {
@@ -2151,7 +2282,9 @@
           if (res.ok) {
             const data = await res.json();
             historyData.tracks = historyData.tracks || {};
-            historyData.tracks[trackId] = { ...(historyData.tracks[trackId] || {}), ...(data.history || {}) };
+            // A position may have changed locally while this request was in flight.
+            const { play_count, last_played } = data.history || {};
+            historyData.tracks[trackId] = { ...(historyData.tracks[trackId] || {}), play_count, last_played };
           }
         } catch (error) {
           console.warn("Could not record play", error);
@@ -2159,14 +2292,21 @@
       }
 
       function syncTrackPosition(force = false) {
-        if (!currentTrackId || !audio.src || !Number.isFinite(audio.currentTime)) return;
+        if (!playRecorded || clearResumeSeek || !currentTrackId || !audio.src || !Number.isFinite(audio.currentTime)) return;
         const now = Date.now();
         if (!force && now - lastPositionSync < 10000) return;
         lastPositionSync = now;
-        const payload = JSON.stringify({
+        persistPlayerState();
+        const position = {
           position: audio.currentTime || 0,
-          duration: audio.duration || 0,
-        });
+          duration: Number.isFinite(audio.duration) ? audio.duration : 0,
+        };
+        historyData.tracks = historyData.tracks || {};
+        const previous = historyData.tracks[currentTrackId] || {};
+        historyData.tracks[currentTrackId] = { ...previous, last_position: position.position,
+          ...(position.duration > 0 ? { duration: position.duration, completed: position.position >= Math.max(0, position.duration - 5) } : {}),
+          position_updated_at: new Date(now).toISOString() };
+        const payload = JSON.stringify(position);
         apiFetch(`/api/history/position/${currentTrackId}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2178,6 +2318,7 @@
       function addToQueue(trackId) {
         const track = libraryPlayable.find((item) => item.id === String(trackId));
         if (!track) return;
+        if (pendingCrossfade) cancelCrossfadeIfActive();
         manualQueue.push(track);
         renderQueue();
         showToast("Added to queue");
@@ -2186,45 +2327,88 @@
       function playNext(trackId) {
         const track = libraryPlayable.find((item) => item.id === String(trackId));
         if (!track) return;
+        if (pendingCrossfade) cancelCrossfadeIfActive();
+        listeningQueue.prioritizeManual();
         manualQueue = [track, ...manualQueue.filter((item) => item.id !== track.id)];
         renderQueue();
         showToast("Will play next");
       }
 
       function renderQueue() {
+        renderUpcomingQueue();
+        persistPlayerState();
         if (!queueItems || !queueCount) return;
-        queueCount.textContent = `${manualQueue.length} queued track${manualQueue.length === 1 ? "" : "s"}`;
+        const queueNowPlaying = document.getElementById("queueNowPlaying");
+        if (queueNowPlaying) queueNowPlaying.textContent = currentTrack
+          ? `Now selected: ${currentTrack.title} — ${currentTrack.artist}`
+          : "Choose a song to start listening.";
+        queueCount.textContent = `${manualQueue.length} manually queued song${manualQueue.length === 1 ? "" : "s"}`;
         if (!manualQueue.length) {
-          queueItems.innerHTML = `<div class="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-500">No queued tracks. Use Play Next or Queue on a track.</div>`;
+          queueItems.innerHTML = `<div class="rounded-lg border border-zinc-800 p-4 text-sm text-zinc-500">No manually queued songs. Your listening list can still continue below.</div>`;
           return;
         }
         queueItems.innerHTML = manualQueue.map((track, index) => `
           <div class="mb-2 flex items-center gap-3 rounded-lg bg-zinc-950 p-2">
+            <span class="w-5 shrink-0 text-center text-xs text-zinc-500">${index + 1}</span>
             <img src="${escapeHtml(track.coverUrl)}" class="h-12 w-12 rounded-md object-cover" alt="" onerror="this.style.display='none'" />
             <button type="button" data-action="play-queued-index" data-index="${index}" class="min-w-0 flex-1 text-left">
               <span class="block truncate text-sm font-semibold">${escapeHtml(track.title)}</span>
               <span class="block truncate text-xs text-zinc-500">${escapeHtml(track.artist)}</span>
             </button>
-            <button type="button" data-action="remove-queued-index" data-index="${index}" class="rounded-md border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-900">Remove</button>
+            <div class="flex shrink-0 flex-col gap-1">
+              <button type="button" data-action="move-queued-up" data-index="${index}" aria-label="Move ${escapeHtml(track.title)} up" ${index === 0 ? "disabled" : ""} class="rounded-md border border-zinc-700 px-2 py-1 text-xs disabled:opacity-30">↑</button>
+              <button type="button" data-action="move-queued-down" data-index="${index}" aria-label="Move ${escapeHtml(track.title)} down" ${index === manualQueue.length - 1 ? "disabled" : ""} class="rounded-md border border-zinc-700 px-2 py-1 text-xs disabled:opacity-30">↓</button>
+            </div>
+            <button type="button" data-action="remove-queued-index" data-index="${index}" aria-label="Remove ${escapeHtml(track.title)} from queue" class="rounded-md border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-900">Remove</button>
           </div>
         `).join("");
       }
 
+      function renderUpcomingQueue() {
+        const container = document.getElementById("queueUpcoming");
+        if (!container) return;
+        if (repeatMode === "one" && currentTrack) {
+          container.innerHTML = `<h3 class="font-semibold">Next up</h3><p class="mt-2 text-sm">Repeating ${escapeHtml(currentTrack.title)}. Turn Repeat one off to continue to queued songs.</p>`;
+          return;
+        }
+        const entries = listeningQueue.upcoming(manualQueue.map((track) => track.id), repeatMode, 20);
+        const byId = new Map(libraryPlayable.map((track) => [track.id, track]));
+        const labels = { history: "Previously played", manual: "Your queue", list: "Listening list", repeat: "Repeat all" };
+        container.innerHTML = `<h3 class="font-semibold">Next up <span class="text-xs font-normal text-zinc-500">(up to 20 songs)</span></h3>`
+          + (entries.length ? `<ol class="mt-2 space-y-2">${entries.map((entry, index) => {
+            const track = byId.get(entry.id);
+            return track ? `<li class="flex items-center gap-3 text-sm"><span class="text-zinc-500">${index + 1}</span><span class="min-w-0 flex-1 truncate">${escapeHtml(track.title)} — ${escapeHtml(track.artist)}</span><span class="text-xs text-zinc-500">${labels[entry.source]}</span></li>` : "";
+          }).join("")}</ol>` : '<p class="mt-2 text-sm text-zinc-500">End of the listening list. Choose a song or add songs to your queue.</p>');
+      }
+
       function playQueuedIndex(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= manualQueue.length) return;
+        cancelCrossfadeIfActive();
         const track = manualQueue.splice(index, 1)[0];
         renderQueue();
         if (track) playTrackFromAnyQueue(track.id);
       }
 
       function removeQueuedIndex(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= manualQueue.length) return;
+        if (pendingCrossfade) cancelCrossfadeIfActive();
         manualQueue.splice(index, 1);
         renderQueue();
       }
 
       function clearQueue() {
+        if (pendingCrossfade) cancelCrossfadeIfActive();
         manualQueue = [];
         renderQueue();
         showToast("Queue cleared");
+      }
+
+      function moveQueuedTrack(index, direction) {
+        const target = index + direction;
+        if (!Number.isInteger(index) || ![-1, 1].includes(direction) || index < 0 || index >= manualQueue.length || target < 0 || target >= manualQueue.length) return;
+        if (pendingCrossfade) cancelCrossfadeIfActive();
+        [manualQueue[index], manualQueue[target]] = [manualQueue[target], manualQueue[index]];
+        renderQueue();
       }
 
       function openQueuePanel() {
@@ -2254,32 +2438,47 @@
           artwork: [{ src: track.coverUrl, sizes: "512x512", type: "image/jpeg" }],
         });
         navigator.mediaSession.setActionHandler("play", () => {
-          if (audio.src) audio.play();
+          if (audio.src) requestPlayback();
         });
-        navigator.mediaSession.setActionHandler("pause", () => audio.pause());
+        navigator.mediaSession.setActionHandler("pause", () => {
+          cancelCrossfadeIfActive();
+          audio.pause();
+        });
         navigator.mediaSession.setActionHandler("previoustrack", prevTrack);
         navigator.mediaSession.setActionHandler("nexttrack", nextTrack);
       }
 
       function toggleShuffle() {
+        cancelCrossfadeIfActive();
         shuffleEnabled = !shuffleEnabled;
-        shuffleBtn.classList.toggle("bg-zinc-100", shuffleEnabled);
-        shuffleBtn.classList.toggle("text-black", shuffleEnabled);
+        listeningQueue.setShuffle(shuffleEnabled);
+        updatePlaybackButtons();
+        renderQueue();
       }
 
-      function cycleRepeat() {
-        repeatMode = repeatMode === "off" ? "all" : repeatMode === "all" ? "one" : "off";
+      function updatePlaybackButtons() {
+        shuffleBtn.classList.toggle("bg-zinc-100", shuffleEnabled);
+        shuffleBtn.classList.toggle("text-black", shuffleEnabled);
+        shuffleBtn.setAttribute("aria-pressed", String(shuffleEnabled));
+        shuffleBtn.title = shuffleEnabled ? "Shuffle on" : "Shuffle off";
         repeatBtn.innerHTML = repeatMode === "one" ? ICON_REPEAT_ONE : ICON_REPEAT;
         repeatBtn.title = repeatMode === "off" ? "Repeat off" : repeatMode === "all" ? "Repeat all" : "Repeat one";
         repeatBtn.classList.toggle("bg-zinc-100", repeatMode !== "off");
         repeatBtn.classList.toggle("text-black", repeatMode !== "off");
       }
 
+      function cycleRepeat() {
+        cancelCrossfadeIfActive();
+        repeatMode = repeatMode === "off" ? "all" : repeatMode === "all" ? "one" : "off";
+        updatePlaybackButtons();
+        renderQueue();
+      }
+
       function togglePlayPause() {
         if (!audio.src) return;
         if (audio.paused) {
-          audio.play();
-          setPlayPauseIcon(true);
+          playbackErrorShown = false;
+          requestPlayback();
         } else {
           cancelCrossfadeIfActive();
           audio.pause();
@@ -2313,6 +2512,7 @@
         if (lyricsViewLines) lyricsViewLines.innerHTML = "";
 
         const data = await fetchJson(`/api/tracks/${trackId}/lyrics`);
+        if (trackId !== currentTrackId) return;
         if (!data.lyrics) return;
 
         lyricsPanel?.classList.remove("hidden");
@@ -2493,6 +2693,8 @@
       });
 
       async function openMetadataEditor(trackId) {
+        if (metadataBusy) return;
+        invalidateMetadataPreview();
         const data = await fetchJson(`/api/tracks/${trackId}/metadata`);
         metadataMode.value = "single";
         metadataBatchIds = [];
@@ -2510,51 +2712,25 @@
       }
 
       function closeMetadataEditor() {
+        if (metadataBusy) return;
+        invalidateMetadataPreview();
         metadataModal.classList.add("hidden");
         metadataModal.classList.remove("flex");
       }
 
       async function saveMetadata(event) {
         event.preventDefault();
-        metadataError.classList.add("hidden");
-        const ids = metadataTargetIds();
-        const payload = {
-          track_ids: ids,
+        await previewMetadata({ track_ids: metadataTargetIds(), single: metadataMode.value === "single",
           title: metadataTitle.disabled ? "" : metadataTitle.value,
-          artist: metadataArtist.value,
-          album: metadataAlbum.value,
-        };
-        const res = metadataMode.value === "batch"
-          ? await apiFetch("/api/tracks/metadata/batch", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            })
-          : await apiFetch(`/api/tracks/${metadataTrackId.value}/metadata`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                title: metadataTitle.value,
-                artist: metadataArtist.value,
-                album: metadataAlbum.value,
-              }),
-            });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({ error: "Could not save metadata" }));
-          metadataError.textContent = body.error || "Could not save metadata";
-          metadataError.classList.remove("hidden");
-          return;
-        }
-        window.location.reload();
+          artist: metadataArtist.value, album: metadataAlbum.value });
       }
 
       async function fillDerivedMetadata() {
+        invalidateMetadataPreview();
         const ids = metadataTargetIds();
         if (!ids.length) return;
         if (ids.length > 1) {
-          metadataError.textContent = "Preview is only available for one track. Use Apply auto-fill for batches.";
-          metadataError.classList.remove("hidden");
-          return;
+          return applyDerivedMetadata(ids);
         }
         const data = await fetchJson(`/api/tracks/${ids[0]}/metadata/derive`);
         metadataTitle.disabled = false;
@@ -2570,19 +2746,13 @@
           showToast("Select tracks first", "error");
           return;
         }
-        if (!window.confirm(`Auto-fill metadata for ${ids.length} track${ids.length === 1 ? "" : "s"} from filename and folders?`)) return;
-        const res = await apiFetch("/api/tracks/metadata/batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ track_ids: ids, mode: "derive" }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({ error: "Could not auto-fill metadata" }));
-          showToast(body.error || "Could not auto-fill metadata", "error");
-          return;
-        }
-        showToast("Metadata auto-filled");
-        window.location.reload();
+        if (metadataBusy) return;
+        metadataBatchIds = ids;
+        metadataMode.value = "batch";
+        metadataScope.textContent = `Auto-fill ${ids.length} selected songs. Review every proposed change below.`;
+        metadataModal.classList.remove("hidden");
+        metadataModal.classList.add("flex");
+        await previewMetadata({ track_ids: ids, mode: "derive" });
       }
 
       async function openLyricsEditor(trackId) {
@@ -2640,6 +2810,11 @@
       });
 
       search?.addEventListener("input", scheduleFilter);
+      [browseSort, browseFormat, browseStatus].forEach((control) => control.addEventListener("change", () => {
+        if (gridScroller.classList.contains("hidden")) showLibrary();
+        else applyFilter();
+      }));
+      [metadataTitle, metadataArtist, metadataAlbum].forEach((control) => control.addEventListener("input", invalidateMetadataPreview));
 
       // Both audio elements get the same listeners since either can be the
       // active player at any time (crossfade alternates which is which);
@@ -2658,15 +2833,21 @@
         el.addEventListener("ended", () => {
           if (el !== audio) return;
           syncTrackPosition(true);
-          if (repeatMode === "one") return playIndex(currentIndex);
+          if (repeatMode === "one" && currentTrack) return playSelectedTrack(currentTrack);
           nextTrack();
         });
         el.addEventListener("pause", () => {
-          if (el !== audio) return;
+          if (el !== audio || !el.paused) return;
+          cancelCrossfadeIfActive();
           syncTrackPosition(true);
           if (el.currentTime !== el.duration) setPlayPauseIcon(false);
         });
-        el.addEventListener("play", () => {
+        el.addEventListener("error", () => {
+          if (el !== audio) return;
+          cancelCrossfadeIfActive();
+          showPlaybackError(el.error);
+        });
+        el.addEventListener("playing", () => {
           if (el === audio) setPlayPauseIcon(true);
         });
       }
@@ -2674,6 +2855,7 @@
       bindPlaybackListeners(audioB);
 
       seek.addEventListener("input", () => {
+        cancelCrossfadeIfActive();
         isSeeking = true;
       });
       seek.addEventListener("change", () => {
@@ -2683,6 +2865,7 @@
       });
       vol?.addEventListener("input", () => {
         audio.volume = clampVolume(Number(vol.value));
+        persistPlayerState();
       });
       document.addEventListener("click", (event) => {
         const actionEl = event.target.closest("[data-action]");
@@ -2712,7 +2895,10 @@
         if (!target) return;
         if (target.dataset.action === "playlist-target") setPlaylistTarget(target.value);
       });
-      window.addEventListener("beforeunload", () => syncTrackPosition(true));
+      window.addEventListener("pagehide", () => { syncTrackPosition(true); persistPlayerState(); });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") { syncTrackPosition(true); persistPlayerState(); }
+      });
 
       // --- Keyboard shortcuts ---------------------------------------------
       let volumeBeforeMute = null;
@@ -2729,6 +2915,7 @@
 
       function seekBy(deltaSeconds) {
         if (!Number.isFinite(audio.duration)) return;
+        cancelCrossfadeIfActive();
         audio.currentTime = Math.min(Math.max(0, audio.currentTime + deltaSeconds), audio.duration);
       }
 
@@ -2736,6 +2923,7 @@
         const next = clampVolume((vol ? Number(vol.value) : audio.volume) + delta);
         audio.volume = next;
         if (vol) vol.value = String(next);
+        persistPlayerState();
       }
 
       function toggleMute() {
@@ -2749,6 +2937,7 @@
           if (vol) vol.value = String(clampVolume(restore));
           volumeBeforeMute = null;
         }
+        persistPlayerState();
       }
 
       document.addEventListener("keydown", (event) => {
@@ -2804,4 +2993,7 @@
         });
       }
 
-      refreshState().then(showHome);
+      refreshState().then(() => {
+        restorePlayerState();
+        showHome();
+      }).catch(() => showToast("Could not load your library. Refresh the page to try again.", "error"));

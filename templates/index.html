@@ -200,7 +200,7 @@
                 data-action="select-visible"
                 class="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm hover:bg-zinc-900"
               >
-                Select visible
+                Select all results
               </button>
               <button
                 type="button"
@@ -210,6 +210,27 @@
                 Clear selection
               </button>
               <input id="coverUploadInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" />
+            </div>
+
+            <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-800 p-3">
+              <button id="browseBack" type="button" data-action="browse-back" disabled class="rounded-lg border border-zinc-700 px-3 py-2 text-sm disabled:opacity-30">← Back</button>
+              <label class="text-xs">Sort
+                <select id="browseSort" class="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm">
+                  <option value="default">Original order</option><option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="added">Recently added</option>
+                </select>
+              </label>
+              <label class="text-xs">Format
+                <select id="browseFormat" class="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm">
+                  <option value="">All formats</option><option>mp3</option><option>flac</option><option>m4a</option><option>aac</option><option>ogg</option><option>wav</option>
+                </select>
+              </label>
+              <label class="text-xs">Filter
+                <select id="browseStatus" class="mt-1 block rounded-lg border border-zinc-700 bg-zinc-950 p-2 text-sm">
+                  <option value="">All songs</option><option value="liked">Liked</option><option value="missing-cover">Missing cover</option><option value="weak-tags">Missing artist/album</option>
+                </select>
+              </label>
+              <button type="button" data-action="reset-browse" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm">Clear search and filters</button>
+              <button type="button" data-action="show-maintenance" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm">Library health</button>
             </div>
 
             <section id="homeContent" class="space-y-8">
@@ -482,18 +503,26 @@
             <p id="queueCount" class="text-sm text-zinc-500">0 tracks</p>
           </div>
           <div class="flex gap-2">
-            <button type="button" data-action="clear-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Clear</button>
+            <button type="button" data-action="clear-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Clear manual queue</button>
             <button type="button" data-action="close-queue" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Close</button>
           </div>
         </div>
-        <div id="queueItems" class="min-h-0 flex-1 overflow-y-auto p-3"></div>
+        <div class="border-b border-zinc-800 px-4 py-3 text-sm text-zinc-400">
+          <p id="queueNowPlaying" aria-live="polite"></p>
+          <p class="mt-1 text-xs">Manually queued songs play before the rest of your listening list. Browsing other pages leaves this list unchanged.</p>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <h3 class="px-3 pt-3 text-sm font-semibold">Manually queued</h3>
+          <div id="queueItems" class="p-3"></div>
+          <div id="queueUpcoming" class="border-t border-zinc-800 p-3"></div>
+        </div>
       </section>
     </div>
 
     <div id="toastHost" class="fixed right-4 top-4 z-[70] space-y-2"></div>
 
     <div id="metadataModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/80 px-4">
-      <form data-action="save-metadata" class="w-full max-w-md rounded-xl border border-zinc-800 bg-black p-5">
+      <form data-action="save-metadata" class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-zinc-800 bg-black p-5">
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="text-lg font-semibold">Edit metadata</h2>
           <button type="button" data-action="close-metadata" class="rounded-lg border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-900">Close</button>
@@ -511,10 +540,12 @@
         <p id="metadataPath" class="mt-3 break-all text-xs text-zinc-500"></p>
         <div class="mt-4 flex flex-wrap gap-2">
           <button type="button" data-action="fill-derived-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Preview from filename/folder</button>
-          <button type="button" data-action="apply-derived-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Apply auto-fill</button>
+          <button type="button" data-action="apply-derived-metadata" class="rounded-lg border border-zinc-700 px-3 py-2 text-sm hover:bg-zinc-900">Preview auto-fill for selected songs</button>
         </div>
         <p id="metadataError" class="mt-3 hidden rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-100"></p>
-        <button type="submit" class="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2 font-semibold text-black hover:bg-white">Save changes</button>
+        <div id="metadataReview" class="mt-4 space-y-3 text-sm" aria-live="polite"></div>
+        <button type="submit" class="mt-5 w-full rounded-lg bg-zinc-100 px-4 py-2 font-semibold text-black hover:bg-white">Preview changes</button>
+        <button id="metadataApply" type="button" data-action="confirm-metadata" disabled class="mt-2 w-full rounded-lg border border-zinc-700 px-4 py-2 disabled:opacity-30">Apply reviewed changes</button>
       </form>
     </div>
 
@@ -573,6 +604,10 @@
 
     <script id="tracks-data" type="application/json">{{ tracks|tojson }}</script>
     <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='library-tools.js') }}"></script>
+    <script src="{{ url_for('static', filename='management.js') }}"></script>
+    <script src="{{ url_for('static', filename='listening-queue.js') }}"></script>
+    <script src="{{ url_for('static', filename='player-session.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>
 </html>
