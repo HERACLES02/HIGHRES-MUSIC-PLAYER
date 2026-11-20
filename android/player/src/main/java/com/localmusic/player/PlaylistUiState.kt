@@ -21,6 +21,7 @@ class PlaylistUiState : ViewModel() {
     val naming = mutableStateOf<Playlist?>(null)
     val creating = mutableStateOf(false)
     val namingText = mutableStateOf("")
+    val namingDescription = mutableStateOf("")
     val deleting = mutableStateOf<Playlist?>(null)
     val importPreview = mutableStateOf<PlaylistImportPreview?>(null)
     val importName = mutableStateOf("")

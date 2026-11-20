@@ -22,7 +22,8 @@ import com.localmusic.core.*
 import kotlinx.coroutines.*
 
 @Composable
-fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit, menuState: MutableState<Boolean>? = null) {
+fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit, menuState: MutableState<Boolean>? = null, editTags: (() -> Unit)? = null) {
+    val removeSong=LocalSongRemoval.current
     val state = menuState ?: remember(track.id) { mutableStateOf(false) }
     var open by state
     fun args() = Bundle().apply { putString("id", track.id.value.toString()) }
@@ -32,7 +33,12 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
             DropdownMenuItem(text = { Text("Play Next") }, onClick = { open = false; send(PlaybackService.NEXT, args()) })
             DropdownMenuItem(text = { Text("Add to Queue") }, onClick = { open = false; send(PlaybackService.ADD, args()) })
             DropdownMenuItem(text = { Text("Add to playlist…") }, onClick = { open = false; addToPlaylist() })
+            if (editTags != null) {
+                DropdownMenuItem(text = { Text("Edit tags") }, onClick = { open = false; editTags() })
+            }
             DropdownMenuItem(text = { Text("Details") }, onClick = { open = false; details() })
+            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) })
+            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) })
         }
     }
 }
@@ -41,7 +47,8 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
 fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
     onSearch: (String) -> Unit, changeGrid: (Boolean) -> Unit, scan: () -> Unit,
     play: (List<Track>, Int, Boolean, String) -> Unit, send: (String, Bundle) -> Unit,
-    addToPlaylist: (Track) -> Unit, details: (Track) -> Unit, playlistCard: @Composable (Playlist, Int) -> Unit, allPlaylists: () -> Unit, allSongs: () -> Unit) {
+    addToPlaylist: (Track) -> Unit, details: (Track) -> Unit, playlistCard: @Composable (Playlist, Int) -> Unit, allPlaylists: () -> Unit, allSongs: () -> Unit,
+    editTags: ((Track) -> Unit)? = null) {
     val tracks = remember(library.tracks, search) { library.tracks.filter {
         (it.tags.title + " " + it.tags.artists.joinToString(" ") + " " + it.tags.album.orEmpty()).contains(search, true)
     }.sortedByDescending { it.addedAtMs } }
@@ -51,9 +58,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
         item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(search, onSearch, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                label = { Text("Search your music") }, leadingIcon = { Icon(PlayerGlyph.Search, null) },
-                trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { onSearch("") }) { Icon(PlayerGlyph.Close, "Clear search") } })
+            MusicSearchField(search,onSearch,"Search your music")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(countLabel(tracks.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 IconToggleButton(checked = grid, onCheckedChange = { changeGrid(true) }, enabled = ready) { Icon(PlayerGlyph.Grid, "Grid view") }
@@ -77,7 +82,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
                             Column(Modifier.padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.weight(1f)) { MarqueeText(track.tags.title, style = MaterialTheme.typography.titleSmall) }
-                                    TrackMenu(track, ready, send, { addToPlaylist(track) }, { details(track) }, menu)
+                                    TrackMenu(track, ready, send, { addToPlaylist(track) }, { details(track) }, menu, editTags?.let { { it(track) } })
                                 }
                                 val saved = library.continues[track.id] ?: 0
                                 Text("Continue at ${saved / 60000}:${"%02d".format(saved / 1000 % 60)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -115,7 +120,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
         }
         items(if (search.isBlank()) tracks.take(if (grid) 8 else 5) else tracks, key = { "recent-${it.id}" }) { track ->
             HomeTrack(track, store?.artwork(track.id), grid, ready, { play(tracks, tracks.indexOf(track), false, "Home · Recently added") },
-                send, { addToPlaylist(track) }, { details(track) })
+                send, { addToPlaylist(track) }, { details(track) }, editTags?.let { { it(track) } })
         }
 
     }
@@ -123,7 +128,8 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
 
 @Composable
 private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean, play: () -> Unit,
-    send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit) {
+    send: (String, Bundle) -> Unit, addToPlaylist: () -> Unit, details: () -> Unit,
+    editTags: (() -> Unit)? = null) {
     val menu = remember(track.id) { mutableStateOf(false) }
     val enabled = ready && track.availability == Availability.AVAILABLE
     if (grid) Column(Modifier.fillMaxWidth().combinedClickable(enabled = ready, onClick = { if (enabled) play() }, onLongClickLabel = "Song options", onLongClick = { menu.value = true })) {
@@ -134,18 +140,18 @@ private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean,
                 MarqueeText(track.tags.artists.joinToString(", ").ifBlank { "Unknown artist" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (track.availability != Availability.AVAILABLE) Text("Unavailable", style = MaterialTheme.typography.labelSmall)
             }
-            TrackMenu(track, ready, send, addToPlaylist, details, menu)
+            TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags)
         }
     } else ListItem(modifier = Modifier.combinedClickable(enabled = ready, onClick = { if (enabled) play() }, onLongClickLabel = "Song options", onLongClick = { menu.value = true }),
         leadingContent = { CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
         headlineContent = { MarqueeText(track.tags.title) },
         supportingContent = { MarqueeText(track.tags.artists.joinToString(", ") + if (enabled) "" else " · Unavailable") },
-        trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu) })
+        trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags) })
 }
 
 @Composable
 fun PlaylistCard(playlist: Playlist, count: Int, store: MusicStore?, revision: Long, open: () -> Unit,
-    play: () -> Unit, shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit, modifier: Modifier = Modifier) {
+    play: () -> Unit, shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit, chooseArtwork: () -> Unit, modifier: Modifier = Modifier) {
     var menu by remember(playlist.id) { mutableStateOf(false) }
     Column(modifier.fillMaxWidth().combinedClickable(onClick = open, onLongClickLabel = "Playlist options", onLongClick = { menu = true })) {
         PlaylistCover(playlist, store, revision, Modifier.fillMaxWidth().aspectRatio(1f))
@@ -159,6 +165,7 @@ fun PlaylistCard(playlist: Playlist, count: Int, store: MusicStore?, revision: L
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(text = { Text("Play") }, enabled = count > 0, onClick = { menu = false; play() })
                     DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
+                    DropdownMenuItem(text = { Text("Choose artwork") }, onClick = { menu = false; chooseArtwork() })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; rename() })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() })
                 }
@@ -169,8 +176,12 @@ fun PlaylistCard(playlist: Playlist, count: Int, store: MusicStore?, revision: L
 
 @Composable
 fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifier: Modifier = Modifier) {
-    var covers by remember(playlist.id) { mutableStateOf(emptyList<String>()) }
-    LaunchedEffect(playlist.id, revision, store) {
+    var covers by remember(playlist.id, playlist.artwork) { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(playlist.id, playlist.artwork, revision, store) {
+        if (playlist.artwork != null) {
+            covers = listOfNotNull(playlist.artwork)
+            return@LaunchedEffect
+        }
         try {
             val currentStore = store ?: return@LaunchedEffect
             covers = withContext(Dispatchers.IO) { currentStore.repository().playlist(playlist.id)?.second.orEmpty().take(128).mapNotNull { currentStore.artwork(it.trackId) }.distinct().take(4) }
@@ -184,7 +195,7 @@ fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifi
                     Text(String(Character.toChars(playlist.name.codePointAt(0))).uppercase(), style = MaterialTheme.typography.headlineMedium)
                 }
             }
-            else if (covers.size == 1) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize())
+            else if (covers.size == 1 || playlist.artwork != null) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize())
             else Column {
                 repeat(2) { row -> Row(Modifier.weight(1f)) { repeat(2) { column ->
                     CoverArt(covers.getOrNull((row * 2 + column) % covers.size), playlist.name, Modifier.weight(1f).fillMaxHeight())
@@ -215,4 +226,32 @@ fun CollectionRow(title: String, art: String?, count: Int, kind: String, ready: 
                 }
             }
         } })
+}
+
+@Composable
+fun CollectionCard(title: String, art: String?, count: Int, kind: String, ready: Boolean,
+    open: () -> Unit, play: () -> Unit, shuffle: () -> Unit, addToPlaylist: () -> Unit,
+    extraActions: List<Pair<String, () -> Unit>> = emptyList(), modifier: Modifier = Modifier) {
+    var menu by remember(title, kind) { mutableStateOf(false) }
+    Column(modifier.fillMaxWidth().combinedClickable(onClick = open, onLongClickLabel = "$kind options", onLongClick = { menu = true })) {
+        CoverArt(art, title, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(top = 6.dp)) {
+                MarqueeText(title, style = MaterialTheme.typography.titleSmall)
+                Text(countLabel(count, "song"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for $title") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Open ${kind.lowercase()}") }, onClick = { menu = false; open() })
+                    DropdownMenuItem(text = { Text("Play") }, enabled = ready && count > 0, onClick = { menu = false; play() })
+                    DropdownMenuItem(text = { Text("Play shuffled") }, enabled = ready && count > 0, onClick = { menu = false; shuffle() })
+                    DropdownMenuItem(text = { Text("Add to playlist") }, enabled = ready && count > 0, onClick = { menu = false; addToPlaylist() })
+                    extraActions.forEach { (label, action) ->
+                        DropdownMenuItem(text = { Text(label) }, enabled = ready, onClick = { menu = false; action() })
+                    }
+                }
+            }
+        }
+    }
 }

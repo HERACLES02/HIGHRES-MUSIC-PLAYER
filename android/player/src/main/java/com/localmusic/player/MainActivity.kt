@@ -13,11 +13,14 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.IntentSenderRequest
 import androidx.compose.foundation.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
@@ -62,6 +65,7 @@ class MainActivity : ComponentActivity() {
     private val backupUi by viewModels<BackupUiState>()
     private val listeningUi by viewModels<ListeningToolsUi>()
     private val documentUi by viewModels<DocumentUiState>()
+    private val songRemovalUi by viewModels<SongRemovalUi>()
     private val backupSavePicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) backupCommand(PlaybackService.BACKUP_EXPORT, Bundle().apply { putString("uri", uri.toString()) })
         else backupUi.busy = false
@@ -99,7 +103,8 @@ class MainActivity : ComponentActivity() {
         }, ContextCompat.getMainExecutor(applicationContext))
     }
     private var controller by mutableStateOf<MediaController?>(null)
-    private var sessionState by mutableStateOf(JSONObject())
+    private val playbackUi=PlaybackUiState()
+    private val sessionState get()=playbackUi.snapshot
     private var connectionError by mutableStateOf("")
     private var permissionMessage by mutableStateOf("")
     private val pendingCommands = ArrayDeque<Pair<String, Bundle>>()
@@ -109,6 +114,7 @@ class MainActivity : ComponentActivity() {
         get() = documentUi.pendingReport
         set(value) { documentUi.pendingReport = value }
     private var coverTargets = emptyList<String>()
+    private var playlistCoverTarget by mutableStateOf<String?>(null)
     private var pickedCover by mutableStateOf<Uri?>(null)
     private var lyricTarget: Track?
         get() = documentUi.lyricTarget
@@ -260,7 +266,12 @@ class MainActivity : ComponentActivity() {
         connected.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), args)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTiming.mark("activity_create")
+        val launch=StartupAppearance.read(this)
+        setTheme(if(launch.appearance=="AMOLED")R.style.PlayerLaunchBlack
+            else if(StartupAppearance.dark(this,launch.appearance))R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
         super.onCreate(savedInstanceState)
+        fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
         savedInstanceState?.getString("writeAction")?.let { action ->
             savedInstanceState.getBundle("writeArguments")?.let { pendingWriteAction = action to it }
         }
@@ -287,12 +298,20 @@ class MainActivity : ComponentActivity() {
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { openError = "Could not open library: ${e.message}" }
             }
-            val preferences = store?.preferences?.collectAsState()?.value ?: MusicPreferences()
+            val initialAppearance=remember{launch}
+            val preferences = store?.preferences?.collectAsState()?.value ?: initialAppearance
             val dark = when (preferences.appearance) { "Light" -> false; "Dark", "AMOLED" -> true; else -> isSystemInDarkTheme() }
-            val colors = remember(dark, preferences.appearance == "AMOLED") { playerColorScheme(dark, preferences.appearance == "AMOLED") }
+            val colors = remember(dark, preferences.appearance,preferences.accent) { playerColorScheme(dark, preferences.appearance == "AMOLED",preferences.accent) }
+            val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
+            var entered by remember { mutableStateOf(false) }
+            val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.optString("error")).any{it.isNotBlank()}
+            val showLaunch=!entered && !startupError && (store==null || !sessionState.optBoolean("ready"))
+            // The logo is only the first frame. Report usable content separately.
+            ReportDrawnWhen { store!=null && sessionState.optBoolean("ready") && !startupError }
+            SideEffect { if(!showLaunch)entered=true }
             MaterialTheme(colorScheme = colors) {
                 Surface(Modifier.fillMaxSize()) {
-                    val barColor = MaterialTheme.colorScheme.background.toArgb()
+                    val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()
                     SideEffect {
                         @Suppress("DEPRECATION")
                         if (Build.VERSION.SDK_INT < 35) {
@@ -300,16 +319,16 @@ class MainActivity : ComponentActivity() {
                             window.navigationBarColor = barColor
                         }
                         WindowCompat.getInsetsController(window, window.decorView).apply {
-                            isAppearanceLightStatusBars = !dark
-                            isAppearanceLightNavigationBars = !dark
+                            isAppearanceLightStatusBars = !showLaunch && !dark
+                            isAppearanceLightNavigationBars = !showLaunch && !dark
                         }
                     }
-                    val library = store?.state?.collectAsState()?.value ?: LibraryState()
-                    MusicScreen(listeningUi, backupUi, playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,
+                    if(showLaunch)PlayerLaunchScreen() else SongRemovalHost(songRemovalUi,controller) { MusicScreen(listeningUi, backupUi, playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,playbackUi,
                         listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"),
                         ::send, store, preferences, FeatureActions(
                             pickFolder = { folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) },
-                            pickCover = { targets -> coverTargets = targets.map { it.id.value.toString() }; coverPicker.launch(arrayOf("image/*")) },
+                            pickCover = { targets -> coverTargets = targets.map { it.id.value.toString() }; playlistCoverTarget = null; coverPicker.launch(arrayOf("image/*")) },
+                            pickPlaylistCover = { playlist -> playlistCoverTarget = playlist.id.value.toString(); coverTargets = emptyList(); coverPicker.launch(arrayOf("image/*")) },
                             importLyrics = { track -> lyricTarget = track; lyricPicker.launch(arrayOf("*/*")) },
                             exportLyrics = { track, text -> pendingLyricExport = text; lyricExport.launch(track.tags.title.replace(Regex("[\\/:*?\"<>|]"), "_") + ".lrc") },
                             commit = ::commit, undo = { confirmRestore = it to null }, recovery = ::reviewRecovery,
@@ -324,11 +343,11 @@ class MainActivity : ComponentActivity() {
                             if (Build.VERSION.SDK_INT >= 33) notificationAccess.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                                 .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
-                        })
+                        }) }
                     BackupRestoreDialog(backupUi, restore = {
                         backupCommand(PlaybackService.BACKUP_RESTORE, Bundle().apply { putString("token", backupUi.token) })
                     }, cancel = { backupUi.token = null; backupUi.summary = ""; send(PlaybackService.BACKUP_CANCEL) })
-                    importedLyrics?.let { (track, text) -> LyricsEditorDialog(track, text, sessionState.optLong("position"), ::send) { importedLyrics = null } }
+                    importedLyrics?.let { (track, text) -> LyricsEditorDialog(track, text, playbackUi.position.longValue, ::send) { importedLyrics = null } }
                     pickedCover?.let { uri ->
                         var crop by rememberSaveable(uri.toString()) { mutableStateOf(true) }
                         AlertDialog(onDismissRequest = { pickedCover = null }, title = { Text("Review cover artwork") }, text = {
@@ -337,8 +356,15 @@ class MainActivity : ComponentActivity() {
                                 AsyncImage(uri, "Selected cover", modifier = imageModifier.background(Color.Black), contentScale = if (crop) ContentScale.Crop else ContentScale.Fit)
                                 SettingCheckbox("Center square crop", crop) { crop = it }
                                 Text("Resize to at most 1024 pixels. Choose app-only use or prepare a music-file preview.") }
-                        }, confirmButton = { TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putStringArrayList("ids", ArrayList(coverTargets)); putString("uri", uri.toString()); putBoolean("crop", crop) }); pickedCover = null }) { Text("Use in this app") } },
-                            dismissButton = { Column { TextButton(enabled = !library.scanning, onClick = {
+                        }, confirmButton = { TextButton(onClick = {
+                            if (playlistCoverTarget != null) {
+                                send(PlaybackService.PLAYLIST_ART, Bundle().apply { putString("id", playlistCoverTarget); putString("uri", uri.toString()); putBoolean("crop", crop) })
+                            } else {
+                                send(PlaybackService.APP_ART, Bundle().apply { putStringArrayList("ids", ArrayList(coverTargets)); putString("uri", uri.toString()); putBoolean("crop", crop) })
+                            }
+                            pickedCover = null
+                        }) { Text("Use in this app") } },
+                            dismissButton = { Column { if (playlistCoverTarget == null) TextButton(enabled = !library.scanning, onClick = {
                                 val batch = UUID.randomUUID().toString()
                                 send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", ArrayList(coverTargets)); putString("patch", "{}"); putInt("coverMode", 1); putString("coverUri", uri.toString()); putBoolean("crop", crop) })
                                 pickedCover = null; permissionMessage = "Cover preview is being prepared. Open Settings → Edits and recovery to review it before writing."
@@ -354,7 +380,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun readState(bundle: Bundle) {
-        sessionState = runCatching { JSONObject(bundle.getString("state") ?: "{}") }.getOrDefault(JSONObject())
+        playbackUi.accept(runCatching { JSONObject(bundle.getString("state") ?: "{}") }.getOrDefault(JSONObject()))
         if (controller != null && sessionState.optBoolean("ready")) {
             val queued = pendingCommands.toList(); pendingCommands.clear()
             for ((action, args) in queued) send(action, args)
@@ -378,10 +404,12 @@ private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = 
 
 @Composable
 private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, playlistUi: PlaylistUiState, confirmImport: () -> Unit, pickPlaylist: () -> Unit,
-    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, message: String,
+    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, clock:PlaybackUiState, message: String,
     send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
     onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit) {
     var screen by rememberSaveable { mutableStateOf("Home") }
+    var dismissedByDrag by remember { mutableStateOf(false) }
+    LaunchedEffect(screen){if(screen=="Playing")dismissedByDrag=false}
     var mainScreen by rememberSaveable { mutableStateOf("Home") }
     var toolsReturn by rememberSaveable{mutableStateOf("Settings")}
     var queueFromPlaying by rememberSaveable { mutableStateOf(false) }
@@ -394,6 +422,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     var category by rememberSaveable { mutableStateOf("Songs") }
     var group by rememberSaveable { mutableStateOf<String?>(null) }
     var newest by rememberSaveable { mutableStateOf(false) }
+    var libraryGrid by rememberSaveable { mutableStateOf(false) }
     var details by remember { mutableStateOf<Track?>(null) }
     var editingIds by rememberSaveable { mutableStateOf<List<String>?>(null) }
     val editing = editingIds?.mapNotNull { id -> runCatching { library.trackById[PlaybackAuthority.id(id)] }.getOrNull() }?.takeIf { it.isNotEmpty() }
@@ -408,6 +437,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     var playlistNaming by playlistUi.naming
     var playlistCreating by playlistUi.creating
     var playlistNamingText by playlistUi.namingText
+    var playlistNamingDescription by playlistUi.namingDescription
     var playlistDeleting by playlistUi.deleting
     var queueClearing by remember { mutableStateOf(false) }
     fun openPlaylistPicker(ids: List<TrackId>) { playlistPickerName = ""; playlistPicker = ids }
@@ -417,21 +447,28 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     val ready = playback.optBoolean("ready") && controller != null
     val tileMin = 144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)
     val currentId = playback.optString("currentId")
-    val current = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
-    val filtered = remember(library.tracks, search, newest) {
+    val selected = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
+    val current = selected?.takeUnless { library.details[it.id]?.hidden==true }
+    LaunchedEffect(selected?.id,library.details[selected?.id]?.hidden) {
+        if(selected!=null && library.details[selected.id]?.hidden==true && screen=="Playing")screen=mainScreen
+    }
+    val removeSong=LocalSongRemoval.current
+    // Keep Library's list cached across tabs, but do not prepare it for Home.
+    val filtered by remember(library.tracks, search, newest) { lazy {
         val found = library.tracks.filter { (it.tags.title + " " + artist(it) + " " + it.tags.album.orEmpty()).contains(search, true) }
         if (newest) found.sortedByDescending { it.addedAtMs } else found.sortedWith(compareBy<Track> { it.tags.title.lowercase() }.thenBy { it.id.value.toString() })
-    }
+    } }
     fun start(tracks: List<Track>, index: Int, resume: Boolean = false, origin: String = "Library · All songs") {
         send(PlaybackService.START, collectionBundle(tracks, index, resume).apply { putString("origin", origin.take(200)) })
         keyboard?.hide(); screen = "Playing"
     }
     fun playPlaylist(args: Bundle) { send(PlaybackService.PLAYLIST_START, args); keyboard?.hide(); screen = "Playing" }
-    val secondary = screen in setOf("Playing","Queue","Audio controls","Equalizer","Playback widget")
+    val secondary = screen in setOf("Playing","Queue","Audio controls","Audio info","Equalizer","Playback widget")
     val nested = secondary || (screen == "Playlists" && playlistDetail != null) || (screen == "Library" && (group != null || selecting))
     fun back() {
         when {
             screen=="Equalizer"->screen="Audio controls"
+            screen=="Audio info"->screen="Audio controls"
             screen=="Audio controls"||screen=="Playback widget"->screen=toolsReturn
             screen == "Queue" && queueFromPlaying -> screen = "Playing"
             secondary -> screen = mainScreen
@@ -446,30 +483,33 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val useRail = configuration.screenWidthDp >= 600 && configuration.screenWidthDp > configuration.screenHeightDp
+    val browseScreen=if(screen=="Playing")mainScreen else screen
+    val browseSecondary=browseScreen in setOf("Queue","Audio controls","Audio info","Equalizer","Playback widget")
+    val browseNested=browseSecondary || (browseScreen=="Playlists" && playlistDetail!=null) ||
+        (browseScreen=="Library" && (group!=null || selecting))
+    Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
-    if (useRail && !secondary) PlayerRail(screen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
+    if (useRail && !browseSecondary) PlayerRail(browseScreen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
     Scaffold(modifier = Modifier.weight(1f).imePadding(), topBar = {
-        if (screen == "Playing") Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { back() }) { Icon(PlayerGlyph.Back, "Back") }
-            IconButton(onClick = { screen = "Library"; mainScreen = "Library"; group = null; selecting = false; selection = emptySet(); focusSearch = true }) { Icon(PlayerGlyph.Search, "Search music") }
-        } else TopAppBar(title = { Text(when (screen) {
-            "Home" -> "Local Music"; "Library" -> "Your library"; "Playing" -> "Now playing"; "Queue" -> "Up next"; else -> screen
+        TopAppBar(title = { Text(when (browseScreen) {
+            "Home" -> "Local Music"; "Library" -> "Your library"; "Queue" -> "Up next"; else -> browseScreen
         }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { if (nested) IconButton(onClick = { back() }) { Icon(PlayerGlyph.Back, "Back") } },
+            navigationIcon = { if (browseNested) IconButton(onClick = { back() }) { Icon(PlayerGlyph.Back, "Back") } },
             actions = {
-                IconButton(onClick = { screen = "Library"; mainScreen = "Library"; group = null; selecting = false; selection = emptySet(); focusSearch = true }) { Icon(PlayerGlyph.Search, "Search music") }
+                if(!browseSecondary){
                 if (screen != "Queue") IconButton(onClick = { keyboard?.hide(); queueFromPlaying = screen == "Playing"; screen = "Queue" }) { Icon(PlayerGlyph.Queue, "Open queue") }
+                }
             })
     }, bottomBar = {
-        Column(if (secondary || useRail) Modifier.navigationBarsPadding() else Modifier) {
-            if (current != null && screen != "Playing") CompactPlayer(current, store?.artwork(current.id),
+        Column(if (browseSecondary || useRail) Modifier.navigationBarsPadding() else Modifier) {
+            if (current != null) CompactPlayer(current, store?.artwork(current.id),
                 playback.optBoolean("playWhenReady"), ready,
-                if (playback.optLong("duration") > 0) playback.optLong("position").toFloat() / playback.optLong("duration") else 0f,
+                { if (playback.optLong("duration") > 0) clock.position.longValue.toFloat() / playback.optLong("duration") else 0f },
                 open = { keyboard?.hide(); screen = "Playing" },
                 toggle = { if (playback.optBoolean("playWhenReady")) controller?.pause() else controller?.play() },
+                previous = { controller?.seekToPrevious() },
                 next = { controller?.seekToNext() })
-            if (!secondary && !useRail) PlayerNavigation(screen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
+            if (!browseSecondary && !useRail) PlayerNavigation(browseScreen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
         }
     }) { padding ->
         Column(Modifier.padding(padding).consumeWindowInsets(padding).fillMaxSize()) {
@@ -477,14 +517,10 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             if (message.isNotBlank()) PlayerMessage(message)
             if (library.error.isNotBlank()) PlayerMessage(library.error) { send(PlaybackService.CLEAR_ERROR, Bundle.EMPTY) }
             if (playback.optString("error").isNotBlank()) PlayerMessage(playback.optString("error"))
-            if (library.scanning) {
-                LinearProgressIndicator(Modifier.fillMaxWidth())
-                Row(Modifier.padding(horizontal = 16.dp)) {
-                    Text("Scanning… ${library.scanned} songs", Modifier.weight(1f))
-                    TextButton(onClick = { send(PlaybackService.CANCEL_SCAN, Bundle.EMPTY) }) { Text("Cancel") }
-                }
-            }
-            when (screen) {
+            AnimatedContent(targetState=browseScreen,modifier=Modifier.weight(1f),label="Screen transition",
+                transitionSpec={fadeIn(tween(170)) togetherWith fadeOut(tween(110))}) { displayedScreen ->
+            Column(Modifier.fillMaxSize()) {
+            when (displayedScreen) {
                 "Home" -> Box(Modifier.weight(1f)) {
                     HomeLibraryScreen(library, store, preferences.homeGrid, homeSearch, ready,
                         onSearch = { homeSearch = it }, changeGrid = { grid -> send(PlaybackService.HOME_VIEW, Bundle().apply { putBoolean("grid", grid) }) },
@@ -493,10 +529,11 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         playlistCard = { playlist, count -> PlaylistCard(playlist, count, store, library.revision,
                             { playlistDetail = playlist; mainScreen = "Playlists"; screen = "Playlists" },
                             { playPlaylist(playlistArgs(playlist.id)) }, { playPlaylist(playlistArgs(playlist.id, shuffle = true)) },
-                            { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name },
-                            { playlistDeleting = playlist }) },
+                            { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name; playlistNamingDescription = playlist.description ?: "" },
+                            { playlistDeleting = playlist }, { actions.pickPlaylistCover(playlist) }) },
                         allPlaylists = { playlistDetail = null; mainScreen = "Playlists"; screen = "Playlists" },
-                        allSongs = { category = "Songs"; group = null; newest = true; mainScreen = "Library"; screen = "Library" })
+                        allSongs = { category = "Songs"; group = null; newest = true; mainScreen = "Library"; screen = "Library" },
+                        editTags = { editingIds = listOf(it.id.value.toString()) })
                 }
                 "Library" -> {
                     fun groupName(track: Track): String = when (category) {
@@ -506,9 +543,25 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         else -> ""
                     }
                     val groups = remember(filtered, category, library.details) {
-                        if (category == "Songs") emptyMap<String, List<Track>>() else filtered.groupBy(::groupName).toSortedMap()
+                        if (category == "Songs") emptyMap<String, List<Track>>()
+                        else if (category == "Folders") {
+                            filtered.groupBy(::groupName).mapValues { (_, tracks) ->
+                                tracks.sortedWith(
+                                    compareBy<Track> { it.tags.trackNumber ?: Int.MAX_VALUE }
+                                        .thenBy { it.sources.firstOrNull()?.uri ?: "" }
+                                )
+                            }.toSortedMap()
+                        } else filtered.groupBy(::groupName).toSortedMap()
                     }
-                    val shown = remember(filtered, category, group, library.details) { if (category == "Songs") filtered else filtered.filter { groupName(it) == group } }
+                    val shown = remember(filtered, category, group, library.details) {
+                        if (category == "Songs") filtered
+                        else if (category == "Folders" && group != null) {
+                            filtered.filter { groupName(it) == group }.sortedWith(
+                                compareBy<Track> { it.tags.trackNumber ?: Int.MAX_VALUE }
+                                    .thenBy { it.sources.firstOrNull()?.uri ?: "" }
+                            )
+                        } else filtered.filter { groupName(it) == group }
+                    }
                     if (category == "Artists" && group != null && !selecting) {
                         val artistTracks = remember(filtered, group) { filtered.filter { groupName(it) == group } }
                         Box(Modifier.weight(1f)) { ArtistPage(group.orEmpty(), artistTracks, preferences.artists[ArtistProfile.key(group.orEmpty())], store, ready, listeningUi, send,
@@ -519,14 +572,12 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                 }); screen = "Playing" }
                             }, details = { details = it }, addToPlaylist = { openPlaylistPicker(listOf(it.id)) },
                             addCollectionToPlaylist = { openPlaylistPicker(it.map { track -> track.id }) },
-                            album = { track -> category = "Albums"; group = "${track.tags.album ?: "Unknown album"} · ${track.tags.albumArtist ?: artist(track)}" }) }
+                            album = { track -> category = "Albums"; group = "${track.tags.album ?: "Unknown album"} · ${track.tags.albumArtist ?: artist(track)}" },
+                            editTags = { editingIds = listOf(it.id.value.toString()) }) }
                     } else LazyColumn(Modifier.weight(1f), state = libraryScroll, contentPadding = PaddingValues(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item(key = "search") {
-                            OutlinedTextField(search, { search = it }, label = { Text("Search songs, artists or albums") }, singleLine = true,
-                                leadingIcon = { Icon(PlayerGlyph.Search, null) },
-                                trailingIcon = { if (search.isNotEmpty()) IconButton(onClick = { search = "" }) { Icon(PlayerGlyph.Close, "Clear search") } },
-                                modifier = Modifier.fillMaxWidth().focusRequester(searchFocus))
+                            MusicSearchField(search,{search=it},"Search your library",Modifier.focusRequester(searchFocus))
                         }
                         item(key = "categories") { PlayerActions {
                             listOf("Songs", "Albums", "Artists", "Folders").forEach { name ->
@@ -535,34 +586,71 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         } }
                         item(key = "sort") { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(countLabel(filtered.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                            if (category != "Songs" && group == null) {
+                                IconToggleButton(checked = libraryGrid, onCheckedChange = { libraryGrid = it }, enabled = ready) {
+                                    Icon(if (libraryGrid) PlayerGlyph.Grid else PlayerGlyph.List, if (libraryGrid) "Grid view" else "List view")
+                                }
+                            }
                             TextButton(onClick = { newest = !newest }) { Text(if (newest) "Newest first" else "Title A–Z") }
                         } }
                         if (category != "Songs" && group == null) {
-                            items(groups.keys.toList(), key = { "group-$it" }) { key ->
-                                val first = groups[key]?.firstOrNull()
-                                val collection = groups.getValue(key)
-                                val playable = collection.filter { it.availability == Availability.AVAILABLE }
-                                val kind = category.removeSuffix("s")
-                                val extras = when (category) {
-                                    "Albums" -> buildList<Pair<String, () -> Unit>> {
-                                        if (collection.size in 1..50) add("Edit album" to { editingIds = collection.map { it.id.value.toString() } })
-                                        if (collection.size in 1..5000) add("Find cover" to { listeningUi.resetLookup(); listeningUi.coverTargets = collection })
+                            val keysList = groups.keys.toList()
+                            if (libraryGrid) {
+                                items(keysList.chunked(2), key = { "grid-row-${it.joinToString()}" }) { rowKeys ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        for (key in rowKeys) {
+                                            Box(Modifier.weight(1f)) {
+                                                val first = groups[key]?.firstOrNull()
+                                                val collection = groups.getValue(key)
+                                                val playable = collection.filter { it.availability == Availability.AVAILABLE }
+                                                val kind = category.removeSuffix("s")
+                                                val extras = when (category) {
+                                                    "Albums" -> buildList<Pair<String, () -> Unit>> {
+                                                        if (collection.size in 1..50) add("Edit album" to { editingIds = collection.map { it.id.value.toString() } })
+                                                        if (collection.size in 1..5000) add("Find cover" to { listeningUi.resetLookup(); listeningUi.coverTargets = collection })
+                                                    }
+                                                    "Artists" -> listOf<Pair<String, () -> Unit>>("Find artist" to { listeningUi.resetLookup(); listeningUi.artistTarget = key })
+                                                    else -> emptyList()
+                                                }
+                                                CollectionCard(if(category=="Folders")folderDisplayPath(key)else key, if (category == "Artists") preferences.artists[ArtistProfile.key(key)]?.imagePath else first?.let { store?.artwork(it.id) },
+                                                    collection.size, kind, ready && playable.isNotEmpty(), open = { group = key },
+                                                    play = { if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
+                                                    shuffle = { if (playable.isNotEmpty()) {
+                                                        send(PlaybackService.START, collectionBundle(playable, 0).apply { putBoolean("shuffle", true); putString("origin", "$kind: $key".take(200)) })
+                                                        keyboard?.hide(); screen = "Playing"
+                                                    } }, addToPlaylist = { openPlaylistPicker(collection.map { it.id }) }, extraActions = extras)
+                                            }
+                                        }
+                                        if (rowKeys.size == 1) Spacer(Modifier.weight(1f))
                                     }
-                                    "Artists" -> listOf<Pair<String, () -> Unit>>("Find artist" to { listeningUi.resetLookup(); listeningUi.artistTarget = key })
-                                    else -> emptyList()
                                 }
-                                CollectionRow(key, if (category == "Artists") preferences.artists[ArtistProfile.key(key)]?.imagePath else first?.let { store?.artwork(it.id) },
-                                    collection.size, kind, ready && playable.isNotEmpty(), open = { group = key },
-                                    play = { if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
-                                    shuffle = { if (playable.isNotEmpty()) {
-                                        send(PlaybackService.START, collectionBundle(playable, 0).apply { putBoolean("shuffle", true); putString("origin", "$kind: $key".take(200)) })
-                                        keyboard?.hide(); screen = "Playing"
-                                    } }, addToPlaylist = { openPlaylistPicker(collection.map { it.id }) }, extraActions = extras)
+                            } else {
+                                items(keysList, key = { "group-$it" }) { key ->
+                                    val first = groups[key]?.firstOrNull()
+                                    val collection = groups.getValue(key)
+                                    val playable = collection.filter { it.availability == Availability.AVAILABLE }
+                                    val kind = category.removeSuffix("s")
+                                    val extras = when (category) {
+                                        "Albums" -> buildList<Pair<String, () -> Unit>> {
+                                            if (collection.size in 1..50) add("Edit album" to { editingIds = collection.map { it.id.value.toString() } })
+                                            if (collection.size in 1..5000) add("Find cover" to { listeningUi.resetLookup(); listeningUi.coverTargets = collection })
+                                        }
+                                        "Artists" -> listOf<Pair<String, () -> Unit>>("Find artist" to { listeningUi.resetLookup(); listeningUi.artistTarget = key })
+                                        else -> emptyList()
+                                    }
+                                    CollectionRow(if(category=="Folders")folderDisplayPath(key)else key, if (category == "Artists") preferences.artists[ArtistProfile.key(key)]?.imagePath else first?.let { store?.artwork(it.id) },
+                                        collection.size, kind, ready && playable.isNotEmpty(), open = { group = key },
+                                        play = { if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
+                                        shuffle = { if (playable.isNotEmpty()) {
+                                            send(PlaybackService.START, collectionBundle(playable, 0).apply { putBoolean("shuffle", true); putString("origin", "$kind: $key".take(200)) })
+                                            keyboard?.hide(); screen = "Playing"
+                                        } }, addToPlaylist = { openPlaylistPicker(collection.map { it.id }) }, extraActions = extras)
+                                }
                             }
                             if (groups.isEmpty()) item { EmptyMusicState("No matching music", "Scan your library or try another search.") }
                         } else {
                             if (group != null) item(key = "collection") {
-                                MarqueeText(group.orEmpty(), style = MaterialTheme.typography.titleLarge)
+                                MarqueeText(if(category=="Folders")folderDisplayPath(group.orEmpty())else group.orEmpty(), style = MaterialTheme.typography.titleLarge)
                                 TextButton(onClick = { group = null }) { Text("All $category") }
                             }
                             item(key = "selection") { PlayerActions {
@@ -581,59 +669,21 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                     "Albums" -> "Album · ${group.orEmpty()}"; "Folders" -> "Folder · ${group.orEmpty()}"; else -> "Library · All songs"
                                 }) }, send, store?.artwork(track.id), if (selecting) track.id in selection else null,
                                     { selection = if (track.id in selection) selection - track.id else selection + track.id },
-                                    { openPlaylistPicker(listOf(track.id)) }, { details = track })
+                                    { openPlaylistPicker(listOf(track.id)) }, { details = track },
+                                    editTags = { editingIds = listOf(track.id.value.toString()) })
                             }
                         }
                     }
                 }
-                "Playing" -> Box(Modifier.weight(1f)) {
-                    if (current == null) Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("Choose a song from your library.")
-                        Button(onClick = { screen = "Library"; mainScreen = "Library" }) { Text("Browse music") }
-                    } else NowPlayingPanel(current, store?.artwork(current.id), playback, controller, ready, preferences.artworkSize, store, library.revision, send, actions,
-                        openQueue = { queueFromPlaying = true; screen = "Queue" }, details = { details = current },
-                        openAudio={toolsReturn="Playing";screen="Audio controls"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"})
-                }
-                "Queue" -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        Section("Playing now")
-                        if (current != null) ListItem(modifier = Modifier.clickable { screen = "Playing" },
-                            leadingContent = { CoverArt(store?.artwork(current.id), current.tags.title, Modifier.size(48.dp)) },
-                            headlineContent = { MarqueeText(current.tags.title) },
-                            supportingContent = { Text(playback.optString("collectionLabel", "Library").replace("Listening collection", "Library"), maxLines = 2) })
-                    }
-                    item { Section("Queued by you") }
-                    val manual = playback.optJSONArray("manual")
-                    val manualIds = playback.optJSONArray("manualIds")
-                    val editable = manualIds != null && manual != null && manualIds.length() == manual.length()
-                    val count = playback.optInt("manualCount")
-                    if (manual == null || manual.length() == 0) item { Text("Use a song’s menu to queue it. Duplicate songs are allowed.") }
-                    // Keys bind each row to its occurrence identity, so an open menu follows its song when rows shift.
-                    items(manual?.length() ?: 0, key = { manualIds?.optString(it).orEmpty().ifEmpty { "row-$it" } }) { index ->
-                        val track = runCatching { library.trackById[PlaybackAuthority.id(manual!!.optString(index))] }.getOrNull()
-                        val entryId = manualIds?.optString(index).orEmpty()
-                        ManualQueueRow(index, manual?.length() ?: 0, track, ready && editable && entryId.isNotBlank(),
-                            move = { target -> send(PlaybackService.QUEUE_MOVE, Bundle().apply { putString("entry", entryId); putInt("index", target) }) },
-                            remove = { send(PlaybackService.QUEUE_REMOVE, Bundle().apply { putString("entry", entryId) }) })
-                    }
-                    if (count > 0) item { TextButton(enabled = ready, onClick = { queueClearing = true }) { Text("Clear queue") } }
-                    item { Text(countLabel(count, "queued song"), style = MaterialTheme.typography.labelMedium); Section("Coming up") }
-                    val sequence = playback.optJSONArray("sequence")
-                    items(sequence?.length() ?: 0) { index ->
-                        val track = runCatching { library.trackById[PlaybackAuthority.id(sequence!!.optString(index))] }.getOrNull()
-                        ListItem(leadingContent = { CoverArt(track?.let { store?.artwork(it.id) }, track?.tags?.title ?: "Unavailable song", Modifier.size(44.dp)) },
-                            headlineContent = { MarqueeText(track?.tags?.title ?: "Unavailable song") },
-                            supportingContent = { Text(track?.let(::artist).orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) })
-                    }
-                    item { Text(countLabel(playback.optInt("sequenceCount"), "song") + " remaining" + if (playback.optInt("sequenceCount") > 60) " (first 60 shown)" else "", style = MaterialTheme.typography.bodySmall) }
-                }
+                "Queue" -> QueuePanel(library,store,current,playback,ready,send,
+                    openPlaying={screen="Playing"},clear={queueClearing=true},modifier=Modifier.weight(1f))
                 "Playlists" -> {
                     val transferBusy = playlistUi.fileBusy.value || playlistUi.pendingExport.value != null
                     val detail = playlistDetail
                     if (detail == null) LazyVerticalGrid(columns = GridCells.Adaptive(tileMin), modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         item(span = { GridItemSpan(maxLineSpan) }) { PlayerActions {
-                            FilledTonalButton(enabled = ready, onClick = { playlistNamingText = ""; playlistCreating = true }) { Text("New playlist") }
+                            FilledTonalButton(enabled = ready, onClick = { playlistNamingText = ""; playlistNamingDescription = ""; playlistCreating = true }) { Text("New playlist") }
                             OutlinedButton(enabled = ready && !transferBusy && playlistUi.importPreview.value == null, onClick = pickPlaylist) { Text("Import file") }
                         } }
                         if (playlistUi.fileMessage.value.isNotBlank()) item(span = { GridItemSpan(maxLineSpan) }) { Text(playlistUi.fileMessage.value) }
@@ -643,7 +693,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         items(library.playlists, key = { it.first.id.value.toString() }) { (playlist, count) ->
                             PlaylistCard(playlist, count, store, library.revision, { playlistDetail = playlist },
                                 { playPlaylist(playlistArgs(playlist.id)) }, { playPlaylist(playlistArgs(playlist.id, shuffle = true)) },
-                                { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name }, { playlistDeleting = playlist })
+                                { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name; playlistNamingDescription = playlist.description ?: "" }, { playlistDeleting = playlist }, { actions.pickPlaylistCover(playlist) })
                         }
                     } else {
                         val stored = library.playlists.firstOrNull { it.first.id == detail.id }?.first ?: detail
@@ -655,29 +705,54 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         }
                         val entries = playlistDetailLoad?.takeIf { it.first == stored.id }?.second ?: emptyList()
                         val loadedHere = playlistDetailLoad?.first == stored.id
-                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        val entryList=rememberLazyListState()
+                        fun moveEntry(id:String,index:Int) = send(PlaybackService.PLAYLIST_MOVE,Bundle().apply {
+                            putString("id",stored.id.value.toString());putString("entry",id);putInt("index",index)
+                        })
+                        val entryOrder=rememberEntryReorder(entries.map{it.id.value.toString()},entryList,::moveEntry)
+                        val entryMap=remember(entries){entries.associateBy{it.id.value.toString()}}
+                        LazyColumn(Modifier.weight(1f),state=entryList, contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             item { TextButton(onClick = { playlistDetail = null }) { Text("All playlists") } }
                             item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 PlaylistCover(stored, store, library.revision, Modifier.size(88.dp))
                                 Column(Modifier.weight(1f).padding(start = 16.dp)) {
                                     Text("PLAYLIST", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                     MarqueeText(stored.name, style = MaterialTheme.typography.headlineSmall)
+                                    val desc = stored.description
+                                    if (!desc.isNullOrBlank()) {
+                                        Text(desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                     Text(if (loadedHere) countLabel(entries.size, "song") else "Loading…", style = MaterialTheme.typography.bodyMedium)
                                 }
                             } }
                             item { PlayerActions {
                                 Button(enabled = ready && entries.isNotEmpty(), onClick = { playPlaylist(playlistArgs(stored.id)) }) { Icon(PlayerGlyph.Play, null); Spacer(Modifier.width(6.dp)); Text("Play") }
                                 FilledTonalButton(enabled = ready && entries.isNotEmpty(), onClick = { playPlaylist(playlistArgs(stored.id, shuffle = true)) }) { Icon(PlayerGlyph.Shuffle, null); Spacer(Modifier.width(6.dp)); Text("Shuffle") }
-                                OutlinedButton(enabled = ready && !transferBusy, onClick = { playlistUi.exportTarget.value = stored }) { Text("Export file") }
-                                TextButton(enabled = ready, onClick = { playlistNaming = stored; playlistCreating = false; playlistNamingText = stored.name }) { Text("Rename") }
-                                TextButton(enabled = ready, onClick = { playlistDeleting = stored }) { Text("Delete") }
+                                var menuOpen by remember(stored.id) { mutableStateOf(false) }
+                                Box {
+                                    IconButton(enabled = ready, onClick = { menuOpen = true }) { Icon(PlayerGlyph.More, "Playlist options") }
+                                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                        DropdownMenuItem(text = { Text("Edit details") }, onClick = {
+                                            menuOpen = false; playlistNaming = stored; playlistCreating = false; playlistNamingText = stored.name; playlistNamingDescription = stored.description ?: ""
+                                        })
+                                        DropdownMenuItem(text = { Text("Export file") }, enabled = ready && !transferBusy, onClick = {
+                                            menuOpen = false; playlistUi.exportTarget.value = stored
+                                        })
+                                        DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                                            menuOpen = false; playlistDeleting = stored
+                                        })
+                                    }
+                                }
                             } }
                             if (playlistUi.fileMessage.value.isNotBlank()) item { Text(playlistUi.fileMessage.value) }
                             if (loadedHere && entries.isEmpty()) item { EmptyMusicState("No songs yet", "Use a song's options menu to add it to this playlist.") }
                             if (entries.isNotEmpty()) item { Text("Saved order · repeated songs are kept", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            itemsIndexed(entries, key = { _, entry -> entry.id.value.toString() }) { index, entry ->
+                            itemsIndexed(entryOrder.ids, key = { _, id -> id }) { index, id ->
+                                val entry=entryMap[id] ?: return@itemsIndexed
                                 val track = library.trackById[entry.trackId]
                                 PlaylistEntryRow(entry, index, entries.size, track, art = track?.let { store?.artwork(it.id) },
+                                    modifier=Modifier.animateItem(placementSpec=if(entryOrder.dragging==id)null else androidx.compose.animation.core.spring()).then(entryOrder.row(id)),
+                                    handle={EntryDragHandle(id,index,entries.size,entryOrder,ready,::moveEntry)},
                                     play = { playPlaylist(playlistArgs(stored.id, entry.id.value.toString())) },
                                     move = { target -> send(PlaybackService.PLAYLIST_MOVE, Bundle().apply { putString("id", stored.id.value.toString()); putString("entry", entry.id.value.toString()); putInt("index", target) }) },
                                     remove = { send(PlaybackService.PLAYLIST_REMOVE, Bundle().apply { putString("id", stored.id.value.toString()); putString("entry", entry.id.value.toString()) }) })
@@ -685,7 +760,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         }
                     }
                 }
-                "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"})}
+                "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"},{screen="Audio info"})}
+                "Audio info"->Box(Modifier.weight(1f)){AudioInfoPanel(controller,currentId)}
                 "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,send)}
                 "Playback widget"->Box(Modifier.weight(1f)){WidgetSettingsPanel(preferences.widgets,ready,current,current?.let{store?.artwork(it.id)},send)}
                 "Settings" -> Box(Modifier.weight(1f)) {
@@ -694,6 +770,31 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         widgets = { toolsReturn = "Settings"; screen = "Playback widget" },
                         scan = onScan, notifications = onNotifications, report = onExport,
                         licenses = { licenses = true }, openEdit = { nativeBatch = it })
+                }
+            }
+        }
+    }
+    }
+    }
+    }
+    AnimatedVisibility(visible=screen=="Playing",enter=slideInVertically(tween(240)){it},
+        exit=if(dismissedByDrag)ExitTransition.None else slideOutVertically(tween(220)){it}) {
+        PlayerMotionFrame(true,{dismissedByDrag=true;back()},Modifier.fillMaxSize()) { _ ->
+            Scaffold(modifier=Modifier.fillMaxSize().imePadding(),topBar={
+                Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal=8.dp),
+                    horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
+                    Spacer(Modifier.size(48.dp))
+                    Text("NOW PLAYING",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.size(48.dp))
+                }
+            }) { padding ->
+                Box(Modifier.padding(padding).consumeWindowInsets(padding).navigationBarsPadding().fillMaxSize()) {
+                    if (current == null) Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("Choose a song from your library.")
+                        Button(onClick = { screen = "Library"; mainScreen = "Library" }) { Text("Browse music") }
+                    } else NowPlayingPanel(current, store?.artwork(current.id), playback, controller, ready, preferences.artworkSize, store, library.revision, send, actions,
+                        openQueue = { queueFromPlaying = true; screen = "Queue" }, details = { details = current },
+                        openAudio={toolsReturn="Playing";screen="Audio controls"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"},openAlbum={category="Albums";search="";group=current.tags.album ?: "Unknown album";mainScreen="Library";screen="Library"},clock=clock)
                 }
             }
         }
@@ -717,6 +818,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             TextButton(onClick = { editingIds = listOf(track.id.value.toString()); details = null }) { Text("Edit tags…") }
             TextButton(onClick = { openPlaylistPicker(listOf(track.id)); details = null }) { Text("Add to playlist…") }
             TextButton(onClick = { actions.pickCover(listOf(track)); details = null }) { Text("Choose artwork…") }
+            TextButton(enabled=ready&&!library.editBusy,onClick={details=null;removeSong(track,false)}){Text("Remove from library...")}
+            TextButton(enabled=ready&&!library.editBusy,onClick={details=null;removeSong(track,true)}){Text("Delete file from phone...")}
             TextButton(onClick = { send(PlaybackService.APP_ART, Bundle().apply { putString("id", track.id.value.toString()); putBoolean("remove", true) }); details = null }) { Text("Remove cover in this app") }
             TextButton(enabled = !library.scanning, onClick = {
                 val batch = UUID.randomUUID().toString(); nativeBatch = batch; details = null
@@ -746,10 +849,20 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         val target = playlistNaming
         AlertDialog(onDismissRequest = { playlistCreating = false; playlistNaming = null },
             title = { Text(if (target == null) "New playlist" else "Rename playlist") },
-            text = { Column { OutlinedTextField(playlistNamingText, { playlistNamingText = it.take(Playlists.MAX_NAME_CHARS) }, label = { Text("Playlist name") }, singleLine = true) } },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(playlistNamingText, { playlistNamingText = it.take(Playlists.MAX_NAME_CHARS) }, label = { Text("Playlist name") }, singleLine = true)
+                OutlinedTextField(playlistNamingDescription, { playlistNamingDescription = it }, label = { Text("Description (optional)") }, maxLines = 3)
+            } },
             confirmButton = { TextButton(enabled = ready && playlistNamingText.isNotBlank(), onClick = {
-                if (target == null) send(PlaybackService.PLAYLIST_CREATE, Bundle().apply { putString("name", playlistNamingText) })
-                else send(PlaybackService.PLAYLIST_RENAME, Bundle().apply { putString("id", target.id.value.toString()); putString("name", playlistNamingText) })
+                if (target == null) send(PlaybackService.PLAYLIST_CREATE, Bundle().apply {
+                    putString("name", playlistNamingText)
+                    if (playlistNamingDescription.isNotBlank()) putString("description", playlistNamingDescription)
+                })
+                else send(PlaybackService.PLAYLIST_RENAME, Bundle().apply {
+                    putString("id", target.id.value.toString())
+                    putString("name", playlistNamingText)
+                    putString("description", playlistNamingDescription)
+                })
                 playlistCreating = false; playlistNaming = null }) { Text(if (target == null) "Create" else "Rename") } },
             dismissButton = { TextButton(onClick = { playlistCreating = false; playlistNaming = null }) { Text("Cancel") } })
     }
@@ -761,7 +874,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         text = { Text("Pending next-up songs are removed. The song that is playing, its position, history and shuffle stay untouched.") },
         confirmButton = { TextButton(enabled = ready, onClick = { send(PlaybackService.QUEUE_CLEAR, Bundle.EMPTY); queueClearing = false }) { Text("Clear queue") } },
         dismissButton = { TextButton(onClick = { queueClearing = false }) { Text("Cancel") } })
-    editing?.let { tracks -> TagEditorDialog(tracks, library, send, actions, { nativeBatch = it }) { editingIds = null } }
+    editing?.let { tracks -> TagEditorDialog(tracks, library, store, send, actions, { nativeBatch = it }) { editingIds = null } }
     nativeBatch?.let { batch -> NativePreviewDialog(batch, library, send, actions) { nativeBatch = null } }
     if (licenses) {
         val context = androidx.compose.ui.platform.LocalContext.current
@@ -775,7 +888,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
 @Composable private fun Section(title: String) { Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 12.dp)) }
 
 @Composable private fun PlaylistRow(playlist: Playlist, count: Int, open: () -> Unit, play: () -> Unit,
-    shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit) {
+    shuffle: () -> Unit, rename: () -> Unit, delete: () -> Unit, chooseArtwork: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     ListItem(modifier = Modifier.combinedClickable(onClick = open, onLongClickLabel = "Playlist options", onLongClick = { menu = true }), headlineContent = { MarqueeText(playlist.name) },
         supportingContent = { Text(if (count == 1) "1 song" else countLabel(count, "song")) },
@@ -783,47 +896,32 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Play") }, enabled = count > 0, onClick = { menu = false; play() })
                 DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
+                DropdownMenuItem(text = { Text("Choose artwork") }, onClick = { menu = false; chooseArtwork() })
                 DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; rename() })
                 DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete() })
             } } })
 }
 
-@Composable private fun ManualQueueRow(index: Int, total: Int, track: Track?, editable: Boolean,
-    move: (Int) -> Unit, remove: () -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    ListItem(modifier = Modifier.combinedClickable(enabled = editable, onClick = { menu = true }, onLongClickLabel = "Queue options", onLongClick = { menu = true }),
-        leadingContent = { Text("${index + 1}.") },
-        headlineContent = { MarqueeText(track?.tags?.title ?: "Unavailable song") },
-        supportingContent = { Text(if (track == null) "Not in the library yet; scan again or remove this entry."
-            else artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingContent = { Box { IconButton(onClick = { menu = true }, enabled = editable) { Icon(PlayerGlyph.More, "Options for queue entry ${index + 1}") }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0, onClick = { menu = false; move(index - 1) })
-                DropdownMenuItem(text = { Text("Move down") }, enabled = index < total - 1, onClick = { menu = false; move(index + 1) })
-                DropdownMenuItem(text = { Text("Remove entry") }, onClick = { menu = false; remove() })
-            } } })
-}
-
 @Composable private fun PlaylistEntryRow(entry: PlaylistEntry, index: Int, total: Int, track: Track?, art: String? = null,
-    play: () -> Unit, move: (Int) -> Unit, remove: () -> Unit) {
+    modifier:Modifier=Modifier,handle:@Composable ()->Unit={},play: () -> Unit, move: (Int) -> Unit, remove: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    ListItem(modifier = Modifier.combinedClickable(onClick = { if (track?.availability == Availability.AVAILABLE) play() }, onLongClickLabel = "Playlist entry options", onLongClick = { menu = true }),
+    ListItem(modifier = modifier.combinedClickable(onClick = { if (track?.availability == Availability.AVAILABLE) play() }, onLongClickLabel = "Playlist entry options", onLongClick = { menu = true }),
         leadingContent = { CoverArt(art, track?.tags?.title ?: "Unavailable song", Modifier.size(48.dp)) },
         headlineContent = { MarqueeText(track?.tags?.title ?: "Unavailable song") },
         supportingContent = { Text(if (track == null) "Not in the library yet; scan again or remove this entry."
             else artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingContent = { Box { IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for playlist entry ${index + 1}") }
+        trailingContent = { Row { Box { IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for playlist entry ${index + 1}") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Play from here") }, enabled = track?.availability == Availability.AVAILABLE, onClick = { menu = false; play() })
                 DropdownMenuItem(text = { Text("Move up") }, enabled = index > 0, onClick = { menu = false; move(index - 1) })
                 DropdownMenuItem(text = { Text("Move down") }, enabled = index < total - 1, onClick = { menu = false; move(index + 1) })
                 DropdownMenuItem(text = { Text("Remove entry") }, onClick = { menu = false; remove() })
-            } } })
+            } };handle() } })
 }
 
 @Composable private fun SongRow(track: Track, ready: Boolean, play: () -> Unit, send: (String, Bundle) -> Unit,
     art: String? = null, selected: Boolean? = null, toggle: (() -> Unit)? = null, addToPlaylist: () -> Unit = {},
-    details: () -> Unit) {
+    details: () -> Unit, editTags: (() -> Unit)? = null) {
     val menu = remember(track.id) { mutableStateOf(false) }
     ListItem(modifier = Modifier.combinedClickable(enabled = ready,
         onClick = { if (selected != null) toggle?.invoke() else if (track.availability == Availability.AVAILABLE) play() },
@@ -831,5 +929,5 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
         headlineContent = { MarqueeText(track.tags.title) },
         supportingContent = { Text(artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu) })
+        trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags) })
 }

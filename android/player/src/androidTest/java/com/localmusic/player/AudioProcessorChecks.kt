@@ -21,6 +21,48 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite == "ui-startup") {
+                val count=UiStartupChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nStartup display checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-dismiss-frame") {
+                val count=UiDismissFrameChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nDismissed frame checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-motion" || suite == "ui-launch") {
+                val count=UiMotionChecks.run(this,suite=="ui-launch")
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nMotion/launch checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-responsive") {
+                val count=UiResponsiveChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nResponsive UI checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "ui-state") {
+                val count=UiStateChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nUI settings checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "precision") {
+                val count = PrecisionAudioChecks.run(targetContext)
+                results.putInt("checksPassed", count)
+                results.putString("stream", "\nPrecision audio checks passed: $count\n")
+                finish(Activity.RESULT_OK, results)
+                return
+            }
             if (suite == "flac-queue") {
                 results.putString("stream", "\n" + FlacIndexChecks.queueRegression(targetContext, requireNotNull(fixtureUri)))
                 results.putInt("checksPassed", 1)

@@ -32,7 +32,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     var engine = newEngine(false); private set
     private fun newEngine(attach:Boolean=true):ExoPlayer {
         val processor=MusicAudioProcessor()
-        val output=LocalAudioTrackProvider()
+        val output=LocalAudioTrackProvider(context)
         // Local files need less prefill after a seek than the generic one-second default.
         // Keep steady-state loading and starvation recovery unchanged.
         val loadControl=DefaultLoadControl.Builder().setBufferDurationsMs(
@@ -46,6 +46,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         }
         processors[value]=processor
         outputProviders[value]=output
+        if(attach)output.preferAndroidUsb=audioSettings.preferAndroidUsb
         if(attach)listen(value)
         return value
     }
@@ -82,16 +83,25 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     val player = NormalSessionPlayer(this)
     val sleep = SleepTimer { android.os.SystemClock.elapsedRealtime() }
-    val current: Track? get() = queue.current?.trackId?.let { store?.state?.value?.trackById?.get(it) }
+    val current: Track? get() = queue.current?.trackId?.let { id ->
+        store?.state?.value?.let { state -> state.trackById[id]?.takeUnless { state.details[id]?.hidden==true } }
+    }
     val tracks: List<Track> get() = store?.state?.value?.tracks.orEmpty()
     private val noisy = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { pause("Output disconnected. Reconnect and press Play.") }
     }
     private val removed = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(devices:Array<out AudioDeviceInfo>) {
+            if(ready&&audioSettings.preferAndroidUsb&&devices.any{it.isSink&&(it.type==AudioDeviceInfo.TYPE_USB_DEVICE||it.type==AudioDeviceInfo.TYPE_USB_HEADSET)}){
+                pause("USB output connected. Press Play to use the preferred Android USB route.")
+                engine.stop()
+            }
+        }
         override fun onAudioDevicesRemoved(devices: Array<out AudioDeviceInfo>) {
             if (devices.any { it.isSink && it.type in setOf(AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET,
                 AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                 AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO) }) pause("Output disconnected. Reconnect and press Play.")
+            if(audioSettings.preferAndroidUsb&&devices.any{it.isSink&&(it.type==AudioDeviceInfo.TYPE_USB_DEVICE||it.type==AudioDeviceInfo.TYPE_USB_HEADSET)})engine.stop()
         }
     }
     private var lastPersistAt = 0L
@@ -165,6 +175,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         store = value
         seekIndexes.coordinateFileOperations(value.operationMutex)
         audioSettings=value.preferences.value.audio
+        outputProviders.values.forEach{it.preferAndroidUsb=audioSettings.preferAndroidUsb}
         when (val saved = withContext(Dispatchers.IO) { value.repository().loadSession() }) {
             is SessionLoad.Restored -> { queue = saved.queue; load(queue.selection, false)
                 restoreEvidence = JSONObject().put("result", "restored_paused").put("savedAtMs", saved.savedAtMs).put("usedPrevious", saved.usedPrevious).put("positionMs", queue.positionMs).put("autoplay", false) }
@@ -297,7 +308,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         lookahead = null; lookaheadToken = null
         if (track == null || track.availability != Availability.AVAILABLE || track.sources.isEmpty()) {
             seekIndexes.setPlaybackWindow(null)
-            engine.stop(); engine.clearMediaItems(); queue.pause(); error = "Saved song is unavailable. Scan again or select another song."
+            engine.stop(); engine.clearMediaItems(); queue.pause()
+            error = if(store?.state?.value?.details?.get(selection.entry.trackId)?.hidden==true) ""
+                else "Saved song is unavailable. Scan again or select another song."
             persist(); update(); return
         }
         error = ""; engine.pause()
@@ -331,6 +344,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     fun moveInQueue(entry: EntryId, index: Int) {
         require(ready) { "The library is still opening." }
         queue.moveOccurrence(entry, index); persist(); update()
+    }
+    fun playQueueEntry(entry:EntryId) {
+        require(ready){"The library is still opening."}
+        val snapshot=queue.snapshot()
+        val target=(snapshot.manual+snapshot.order.drop(snapshot.cursor+1)).firstOrNull{it.id==entry}
+            ?: throw IllegalArgumentException("That queued entry no longer exists.")
+        require(store?.state?.value?.trackById?.get(target.trackId)?.availability==Availability.AVAILABLE){"Song unavailable. Check access or storage and scan again."}
+        observePosition();persist()
+        load(queue.selectOccurrence(entry),true)
     }
     /** Clears pending next-up entries; safe while playing or paused. */
     fun clearQueue() {
@@ -374,7 +396,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         val plan = if (sleep.atTrackEnd() || fileClosedForEdit != null || engine.currentMediaItem?.mediaId != queue.current?.id?.value?.toString()) null
             else (lookahead?:standbyPlan)?.takeIf { it.matches(snapshot) } ?: GaplessPlanner.prepare(snapshot)
         val next = plan?.next?.entry?.trackId?.let { id -> tracks.firstOrNull { it.id == id && it.availability == Availability.AVAILABLE && it.sources.isNotEmpty() && store?.isEditing(id) != true } }
-        val window=if(next==null)null else CrossfadeRules.window(audioSettings.crossfadeSeconds,current?.audio?.durationMs?:0,next.audio.durationMs,queue.repeat,sleep.atTrackEnd())
+        val window=if(next==null)null else CrossfadeRules.window(audioSettings.effectiveCrossfadeSeconds,current?.audio?.durationMs?:0,next.audio.durationMs,queue.repeat,sleep.atTrackEnd())
         if(window!=null){
             reconciling=true
             try{
@@ -438,10 +460,17 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     }
     fun audioSettingsChanged(value:AudioSettings){
         if(value==audioSettings)return
-        val transportChanged=value.crossfadeSeconds!=audioSettings.crossfadeSeconds
+        val routeChanged=value.preferAndroidUsb!=audioSettings.preferAndroidUsb
+        val transportChanged=value.crossfadeSeconds!=audioSettings.crossfadeSeconds||routeChanged
         audioSettings=value
         if(transportChanged){finishFade();discardStandby();rejectedFade=null}
+        outputProviders.values.forEach{it.preferAndroidUsb=value.preferAndroidUsb}
         for((deck,id)in deckTracks)configureDeck(deck,id)
+        if(routeChanged&&ready&&fileClosedForEdit==null){
+            reconciling=true
+            try{seekDetails=null;reprepareForAudioRoute(engine)}finally{reconciling=false}
+            event("android_usb_preference_changed",JSONObject().put("enabled",value.preferAndroidUsb))
+        }
         if(ready)update()
     }
     private fun releaseDeck(deck:ExoPlayer){deck.pause();deck.release();processors.remove(deck);deckTracks.remove(deck);outputProviders.remove(deck)}
@@ -467,7 +496,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         if(!engine.isPlaying||incoming.playbackState!=Player.STATE_READY||fadingOut!=null||!plan.matches(queue.snapshot()))return
         val duration=engine.duration.takeIf{it>0}?:return
         val nextDuration=incoming.duration.takeIf{it>0}?:return
-        val window=CrossfadeRules.window(audioSettings.crossfadeSeconds,duration,nextDuration,queue.repeat,sleep.atTrackEnd())?:return
+        val window=CrossfadeRules.window(audioSettings.effectiveCrossfadeSeconds,duration,nextDuration,queue.repeat,sleep.atTrackEnd())?:return
         if(duration-engine.currentPosition !in 1..window.durationMs)return
         reconciling=true
         try{
@@ -501,6 +530,29 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("engineState", engine.playbackState).put("playWhenReady", engine.playWhenReady).put("isPlaying", engine.isPlaying)
             .put("interactive", context.getSystemService(PowerManager::class.java).isInteractive).put("error", error))
     }
+    /** Bounded read-only snapshot; no playback, queue or persistence operations. */
+    fun audioInfo():JSONObject {
+        val track=current
+        val pcm=processors[engine]?.lastPcm
+        val status=when {
+            !ready->"Opening library"
+            track==null->"No song selected"
+            engine.playerError!=null->"Playback error"
+            engine.playbackState==Player.STATE_BUFFERING->"Buffering"
+            engine.playbackState==Player.STATE_ENDED->"Finished"
+            engine.isPlaying->"Playing"
+            !engine.playWhenReady->"Paused"
+            else->"Waiting for playback"
+        }
+        return JSONObject().put("capturedAt",java.time.Instant.now().toString()).put("status",status)
+            .put("preferAndroidUsb",audioSettings.preferAndroidUsb).put("eqEnabled",audioSettings.eqEnabled)
+            .put("preset",audioSettings.preset.name).put("replayGain",audioSettings.replayGain.name)
+            .put("source",track?.let{JSONObject().put("title",it.tags.title).put("quality",PlaybackPresentation.quality(it.audio))
+                .put("channels",it.audio.channels?:JSONObject.NULL)}?:JSONObject.NULL)
+            .put("processing",pcm?.let{JSONObject().put("sampleRateHz",it.sampleRateHz).put("channelCount",it.channelCount)
+                .put("inputEncoding",it.inputEncoding).put("outputEncoding",it.outputEncoding)}?:JSONObject.NULL)
+            .put("client",outputProviders[engine]?.outputJson()?:JSONObject.NULL)
+    }
     fun report(): String {
         observePosition()
         val format = engine.audioFormat
@@ -525,12 +577,16 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
                 JSONObject().put("type", it.type).put("product", it.productName.toString()).put("sampleRatesHz", JSONArray(it.sampleRates.toList()))
             })).put("measurementLimits", "Decoder input and available output capabilities are not a measured active HAL/DAC rate. Internal processing is unknown.")
             .put("processing",JSONObject().put("eqEnabled",audioSettings.eqEnabled).put("preset",audioSettings.preset.name)
-                .put("replayGain",audioSettings.replayGain.name).put("crossfadeSeconds",audioSettings.crossfadeSeconds).put("crossfading",fadingOut!=null)
-                .put("limits","Normal Media3 PCM processing; current default sink uses the integer processing chain. Source precision does not establish sink/DAC precision or bit-perfect output."))
+                .put("replayGain",audioSettings.replayGain.name).put("crossfadeSeconds",audioSettings.effectiveCrossfadeSeconds).put("crossfading",fadingOut!=null)
+                .put("preferAndroidUsb",audioSettings.preferAndroidUsb).put("savedCrossfadeSeconds",audioSettings.crossfadeSeconds)
+                .put("pcm",processors[engine]?.lastPcm?.let{JSONObject().put("sampleRateHz",it.sampleRateHz).put("channelCount",it.channelCount)
+                    .put("inputEncoding",it.inputEncoding).put("outputEncoding",it.outputEncoding)}?:JSONObject.NULL)
+                .put("limits","Normal decoded PCM: Double EQ/ReplayGain, then float PCM into Media3. Float has about 24 significant binary bits, not 32-bit integer precision. Android may resample or change precision; no physical DAC or bit-perfect measurement."))
             .put("buffering",JSONObject().put("startAndSeekPrefillMs",START_BUFFER_MS)
                 .put("starvationRecoveryPrefillMs",DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
                 .put("limits","Prefill is media duration, not a guaranteed wall-clock seek latency. State events do not measure the time sound reaches the listener."))
             .put("outputStartup",outputProviders[engine]?.startup?.json()?:JSONObject.NULL)
+            .put("normalPcmOutput",outputProviders[engine]?.outputJson()?:JSONObject.NULL)
             .put("flacSeekIndexes",seekIndexes.status(engine.currentMediaItem?.localConfiguration?.uri))
             .put("events", JSONArray(events.toString())).toString(2)
     }
@@ -548,6 +604,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)
             .put("sequence", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.trackId.value.toString() }))
+            .put("sequenceIds", JSONArray(snapshot.order.drop(snapshot.cursor + 1).take(60).map { it.id.value.toString() }))
             .put("sequenceCount", (snapshot.order.size - snapshot.cursor - 1).coerceAtLeast(0))
             .put("sleepMode", sleep.state.mode.name)
             .put("sleepRemaining", sleep.state.remainingMs)

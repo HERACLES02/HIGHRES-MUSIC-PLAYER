@@ -30,7 +30,8 @@ import kotlinx.coroutines.sync.withLock
 
 private val Context.musicPreferences by preferencesDataStore("local-music-settings")
 data class MusicPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
-    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large")
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large",val accent:ThemeAccent=ThemeAccent.SAGE)
+private fun BackupPreferences.forPlayer()=MusicPreferences(appearance,autoScan,homeGrid,audio,widgets,artists,artworkSize,accent)
 data class LyricsChoice(val receipt: String, val candidate: LyricsCandidate)
 
 data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Map<TrackId, Long> = emptyMap(),
@@ -38,11 +39,18 @@ data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Ma
     val details: Map<TrackId, LibraryExtras> = emptyMap(), val folders: List<FolderGrant> = emptyList(), val revision: Long = 0,
     val edits: List<FileEditRow> = emptyList(), val editBusy: Boolean = false,
     val playlists: List<Pair<Playlist, Int>> = emptyList(),
-    val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap())
+    val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap(),
+    val removedTracks: List<Track> = emptyList())
 
 class MusicApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val storage by lazy { scope.async { MusicStore(this@MusicApplication, scope).also { it.initialize() } } }
+    override fun onCreate() {
+        super.onCreate()
+        StartupTiming.mark("application_create")
+        // Begin the same recovery-safe IO work while the activity classes load.
+        storage
+    }
 }
 
 /** Owns database access, never an audio engine or playback position timer. */
@@ -79,6 +87,8 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     suspend fun repository() = PlayerRepository(database.await())
     private val mutable = MutableStateFlow(LibraryState())
     val state = mutable.asStateFlow()
+    // Progress is retained for reports; the visible list need not recompose for every scanned file.
+    val uiState = state.map { it.copy(scanned=0,message="") }.distinctUntilChanged()
     private sealed interface SessionTask {
         data class Save(val snapshot: QueueSnapshot): SessionTask
         data class Barrier(val result: CompletableDeferred<Unit>): SessionTask
@@ -94,8 +104,9 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
             autoScan=values[booleanPreferencesKey("autoScan")]?:extended.autoScan,homeGrid=values[booleanPreferencesKey("homeGrid")]?:extended.homeGrid)
     }
     val preferences = context.musicPreferences.data.catch { emit(emptyPreferences()) }.map { values ->
-        val p=readPreferences(values);MusicPreferences(p.appearance,p.autoScan,p.homeGrid,p.audio,p.widgets,p.artists,p.artworkSize)
-    }.stateIn(scope, SharingStarted.Eagerly, MusicPreferences())
+        readPreferences(values).forPlayer()
+            .also { StartupAppearance.write(context,it) }
+    }.stateIn(scope, SharingStarted.Eagerly, StartupAppearance.read(context))
     suspend fun setPreferences(appearance: String, autoScan: Boolean) {
         AppBackups(context,this).recoverPreferences()
         require(appearance in setOf("System", "Light", "Dark", "AMOLED"))
@@ -112,6 +123,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         values[stringPreferencesKey("listeningTools")]=encoded
     }}
     suspend fun setAudio(value:AudioSettings)=updateTools{it.copy(audio=value)}
+    suspend fun setAccent(value:ThemeAccent)=updateTools{it.copy(accent=value)}
     suspend fun setWidgets(value:WidgetSettings)=updateTools{it.copy(widgets=value)}
     suspend fun setArtworkSize(value:String) {
         require(value in setOf("Compact","Large","Full width"))
@@ -165,9 +177,15 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     fun error(text: String) { mutable.update { it.copy(error = text) } }
     fun clearError() { mutable.update { it.copy(error = "") } }
     suspend fun initialize() {
+        StartupTiming.mark("store_initialize")
         AppBackups(context, this).recoverPreferences()
+        val initial=backupPreferences().forPlayer()
+        preferences.first{it==initial}
+        StartupTiming.mark("preferences_ready")
         FileEdits(context, this).inspectRecovery()
+        StartupTiming.mark("edit_recovery_ready")
         refresh()
+        StartupTiming.mark("library_ready")
     }
     suspend fun refresh() = withContext(Dispatchers.IO) {
         val repo = repository()
@@ -179,7 +197,9 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
             extras[t.id]?.let { detail ->
             t.copy(tags = TagPatch(detail.tagFields).apply(detail.tagsOverride ?: t.tags))
         } ?: t }
-        val tracks = allTracks.filter { FolderScanPolicy.includes(it, selected) }
+        val removed = allTracks.filter { extras[it.id]?.hidden==true }
+        val tracks = allTracks.filter { FolderScanPolicy.includes(it, selected) && extras[it.id]?.hidden!=true }
+        val playbackTracks = allTracks.associate { it.id to if(extras[it.id]?.hidden==true)it.copy(availability=Availability.MISSING) else it }
         val resumes = repo.continuePositions(tracks)
         val existingArtwork = extras.values.mapNotNull { it.artworkOverride ?: it.artworkPath }
             .filter { it.isNotBlank() }.distinct().filter { java.io.File(it).exists() }.toHashSet()
@@ -188,7 +208,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         }.toMap()
         val edits = repo.edits()
         val playlists = repo.playlists()
-        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists, trackById = allTracks.associateBy { it.id }, artworkPaths = artworkPaths) }
+        mutable.update { it.copy(tracks = tracks, continues = resumes, details = extras, folders = folders, revision = it.revision + 1, edits = edits, playlists = playlists, trackById = playbackTracks, artworkPaths = artworkPaths, removedTracks=removed) }
     }
     suspend fun favorite(id: TrackId) {
         val repo = repository(); val track = repo.track(id) ?: return

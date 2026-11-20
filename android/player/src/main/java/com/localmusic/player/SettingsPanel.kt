@@ -3,18 +3,24 @@ package com.localmusic.player
 import android.net.Uri
 import android.os.Bundle
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.localmusic.core.ThemeAccent
 
 @Composable
 fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: Boolean,
     backupUi: BackupUiState, actions: FeatureActions, send: (String, Bundle) -> Unit,
     audio: () -> Unit, widgets: () -> Unit, scan: () -> Unit, notifications: () -> Unit,
     report: () -> Unit, licenses: () -> Unit, openEdit: (String) -> Unit) {
+    var removedSongs by remember{mutableStateOf(false)}
+    if(removedSongs)RemovedSongsDialog(library,ready,send){removedSongs=false}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SettingsCard("Sound & widgets") {
@@ -25,6 +31,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
             Text("Find artist pages and album covers in your library.", style = MaterialTheme.typography.bodySmall)
         }
         SettingsCard("Appearance") {
+            Text("Theme",style=MaterialTheme.typography.titleMedium)
             PlayerActions {
                 listOf("System", "Light", "Dark", "AMOLED").forEach { name ->
                     FilterChip(selected = preferences.appearance == name, enabled = ready, onClick = {
@@ -32,6 +39,19 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
                             putString("appearance", name); putBoolean("autoScan", preferences.autoScan)
                         })
                     }, label = { Text(name) })
+                }
+            }
+            Text("System follows your phone. AMOLED uses black backgrounds.",style=MaterialTheme.typography.bodySmall)
+            HorizontalDivider()
+            Text("Accent color",style=MaterialTheme.typography.titleMedium)
+            PlayerActions {
+                ThemeAccent.entries.forEach { accent ->
+                    FilterChip(selected=preferences.accent==accent,enabled=ready,
+                        onClick={send(PlaybackService.THEME_ACCENT,Bundle().apply{putString("accent",accent.name)})},
+                        label={Text(accent.label)},leadingIcon={
+                            Box(Modifier.size(14.dp).background(accentPreviewColor(accent),CircleShape)
+                                .border(1.dp,MaterialTheme.colorScheme.outlineVariant,CircleShape))
+                        })
                 }
             }
         }
@@ -52,8 +72,11 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
                 Icon(PlayerGlyph.Scan, null); Spacer(Modifier.width(8.dp)); Text("Scan chosen folders")
             }
             OutlinedButton(onClick = actions.pickFolder, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Choose music folder / SD card") }
+            OutlinedButton(enabled=ready,onClick={removedSongs=true},modifier=Modifier.fillMaxWidth()){Text("Removed songs (${library.removedTracks.size})")}
             library.folders.forEach { folder ->
-                Text(Uri.parse(folder.treeUri).lastPathSegment ?: "Music folder", style = MaterialTheme.typography.bodySmall)
+                val path=Uri.parse(folder.treeUri).lastPathSegment.orEmpty()
+                val storage=if(path.startsWith("primary:"))"Phone" else "Storage"
+                Text("$storage / ${folderDisplayPath(path)}", style = MaterialTheme.typography.bodySmall)
             }
             SettingSwitch("Rescan chosen folders when music changes", preferences.autoScan, ready) { value ->
                 send(PlaybackService.PREFERENCES, Bundle().apply {
@@ -79,7 +102,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
         }
         SettingsCard("Playback & support") {
             Text("Normal playback", style = MaterialTheme.typography.titleMedium)
-            Text("High-resolution and Direct USB output are planned for a later update.", style = MaterialTheme.typography.bodySmall)
+            Text("Audio settings include an optional Android USB high-resolution route. Experimental Direct USB remains separate.", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = notifications, modifier = Modifier.fillMaxWidth()) { Text("Playback notifications") }
             OutlinedButton(onClick = report, enabled = ready, modifier = Modifier.fillMaxWidth()) { Text("Save playback report") }
         }

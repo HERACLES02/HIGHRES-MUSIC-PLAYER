@@ -22,7 +22,7 @@ object SeekChecks {
         val bytes=AtomicLong(); val opens=AtomicLong(); val firstAudio=AtomicLong()
         val firstPcm=AtomicLong();val flushed=AtomicLong();val sinkInit=AtomicLong();val ready=AtomicLong()
         var sinkBufferBytes=0
-        lateinit var measuredSink:DefaultAudioSink
+        var productionOutput:LocalAudioTrackProvider?=null
         val factory=DataSource.Factory {
             val upstream:DataSource=DefaultDataSource.Factory(context).createDataSource()
             object:DataSource by upstream {
@@ -66,12 +66,10 @@ object SeekChecks {
                             }
                         }
                     })
-                    val sink=if(variant=="production" || variant=="production-no-index") {
-                        val method=MusicRenderers::class.java.getDeclaredMethod("buildAudioSink",Context::class.java,
-                            Boolean::class.javaPrimitiveType,Boolean::class.javaPrimitiveType).apply { isAccessible=true }
-                        method.invoke(MusicRenderers(context,MusicAudioProcessor()),context,enableFloatOutput,enableAudioTrackPlaybackParams) as DefaultAudioSink
+                    val sink:AudioSink=if(variant=="production" || variant=="production-no-index") {
+                        val output=LocalAudioTrackProvider(context);productionOutput=output
+                        MusicRenderers(context,MusicAudioProcessor(),output).buildAudioSink(context,enableFloatOutput,enableAudioTrackPlaybackParams)
                     } else builder.build()
-                    measuredSink=sink
                     return object:ForwardingAudioSink(sink) {
                         override fun flush(){flushed.set(SystemClock.elapsedRealtime());firstPcm.set(0);super.flush()}
                         override fun handleBuffer(buffer:ByteBuffer,presentationTimeUs:Long,encodedAccessUnitCount:Int):Boolean {
@@ -107,14 +105,13 @@ object SeekChecks {
             }
             if(variant=="production")output.append("privateIndex=${indexes.status()}\n")
             if(variant=="production"&&android.os.Build.VERSION.SDK_INT>=31)main {
-                // Inspect the real output, not a duplicate calculation of the policy. This field
-                // is in our pinned Media3 dependency, not a hidden Android platform API.
-                val trackField=DefaultAudioSink::class.java.getDeclaredField("audioTrack").apply { isAccessible=true }
-                val track=trackField.get(measuredSink) as android.media.AudioTrack
-                check(track.startThresholdInFrames<=track.sampleRate/10) {
-                    "Output waits for ${track.startThresholdInFrames} frames before starting; expected at most 100ms (${track.sampleRate/10}) without shrinking capacity ${track.bufferCapacityInFrames}."
+                // The provider records the actual Android API return, not a duplicate policy calculation.
+                val startup=requireNotNull(productionOutput?.startup)
+                val actual=requireNotNull(startup.actualFrames)
+                check(actual<=startup.sampleRate/10) {
+                    "Output waits for $actual frames before starting; expected at most 100ms (${startup.sampleRate/10}) without shrinking capacity ${startup.capacityFrames}."
                 }
-                output.append("production capacityFrames=${track.bufferCapacityInFrames} startFrames=${track.startThresholdInFrames}\n")
+                output.append("production capacityFrames=${startup.capacityFrames} startFrames=$actual\n")
             }
             for(target in listOf(25000L,83000L,147000L,17000L)) {
                 // Start from a stopped loader so byte counts belong to this seek.
@@ -126,9 +123,27 @@ object SeekChecks {
                 waitFor("seek to $target"){firstAudio.get()!=0L&&player.isPlaying&&player.currentPosition>=target}
                 output.append("target=$target audioResumeMs=${firstAudio.get()-start} flushMs=${flushed.get()-start} pcmMs=${firstPcm.get()-start} initMs=${sinkInit.get()-start} readyMs=${ready.get()-start} sinkBufferBytes=$sinkBufferBytes bytes=${bytes.get()-initialBytes} opens=${opens.get()-initialOpens}\n")
             }
+            var mediaCount=0
+            main {
+                mediaCount=player.mediaItemCount
+                productionOutput?.preferAndroidUsb=true
+                check(reprepareForAudioRoute(player)){"Playing route reprepare was skipped"}
+            }
+            waitFor("playing after route reprepare"){player.isPlaying}
+            main {check(player.mediaItemCount==mediaCount&&player.currentPosition>=17000){"Route reprepare lost source or position"}}
+            if(variant=="production")main {
+                val usb=context.getSystemService(android.media.AudioManager::class.java).getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                    .any{it.type==android.media.AudioDeviceInfo.TYPE_USB_DEVICE||it.type==android.media.AudioDeviceInfo.TYPE_USB_HEADSET}
+                if(!usb)check(productionOutput?.pcmOutput?.strategy=="Normal buffering"){"USB preference changed output without a USB device"}
+            }
+            output.append("playing route reprepare retained media items and position; no-USB fallback checked\n")
             main { player.pause();player.seekTo(95000) }
             waitFor("paused seek ready"){player.playbackState==Player.STATE_READY}
             main { check(!player.playWhenReady&&!player.isPlaying){"Paused seek started playback"} }
+            main {productionOutput?.preferAndroidUsb=false;check(reprepareForAudioRoute(player)){"Paused route reprepare was skipped"}}
+            waitFor("paused route reprepare ready"){player.playbackState==Player.STATE_READY}
+            main {check(!player.playWhenReady&&!player.isPlaying&&player.mediaItemCount==mediaCount&&player.currentPosition==95000L){"Paused route reprepare changed pause intent/source/position"}}
+            output.append("paused route reprepare retained media items, 95000 ms and pause intent\n")
             return output.toString()
         } finally { main { player.release() }; indexes.close() }
     }

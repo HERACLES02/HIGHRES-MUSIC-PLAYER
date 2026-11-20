@@ -20,6 +20,10 @@ try {
     $result | Write-Output
     if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch 'INSTRUMENTATION_RESULT: checksPassed=8' -or
         ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw 'Audio processor regression checks failed.' }
+    $result = & $adb @deviceArgs shell am instrument -r -w -e suite precision 'com.localmusic.player.test/com.localmusic.player.AudioProcessorChecks'
+    $result | Write-Output
+    if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch 'INSTRUMENTATION_RESULT: checksPassed=35' -or
+        ($result -join "`n") -notmatch 'INSTRUMENTATION_CODE: -1') { throw 'Precision PCM/sink regression checks failed.' }
     $artArgs = @('shell', 'am', 'instrument', '-r', '-w', '-e', 'suite', 'artwork')
     $expected = 4
     if ($ArtworkFixtureUri) { $artArgs += @('-e', 'fixtureUri', $ArtworkFixtureUri); $expected = 5 }
