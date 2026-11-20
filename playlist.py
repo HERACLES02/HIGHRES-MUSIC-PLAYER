@@ -643,6 +643,28 @@ def clear():
     clear_playlist(DEFAULT_PLAYLIST_ID)
 
 
+@_locked
+def relink_track(old_id: str, new_id: str) -> None:
+    """Replace a missing reference only in the authenticated user's data."""
+    bucket = _bucket()
+    referenced = old_id in bucket["likes"] or old_id in bucket["history"] or any(
+        old_id in item["tracks"] for item in bucket["playlists"].values())
+    if not referenced or old_id == new_id:
+        raise ValueError("This missing song is not referenced by your account.")
+    if old_id in bucket["likes"]:
+        bucket["likes"].discard(old_id)
+        bucket["likes"].add(new_id)
+    for item in bucket["playlists"].values():
+        item["tracks"] = list(dict.fromkeys(new_id if tid == old_id else tid for tid in item["tracks"]))
+    if old_id in bucket["history"]:
+        old = bucket["history"].pop(old_id)
+        if new_id not in bucket["history"]:
+            bucket["history"][new_id] = old
+        else:
+            bucket["history"][new_id]["play_count"] = int(bucket["history"][new_id].get("play_count", 0)) + int(old.get("play_count", 0))
+    save_playlist()
+
+
 def artwork_key(value: str) -> str:
     return hashlib.sha1(value.encode("utf-8")).hexdigest()
 

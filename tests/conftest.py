@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 _DEFAULT_MUSIC_DIR = Path(tempfile.mkdtemp(prefix="music_player_tests_music_"))
 os.environ["MUSIC_DIR"] = str(_DEFAULT_MUSIC_DIR)
 os.environ["PLAYLIST_FILE"] = str(Path(tempfile.mkdtemp(prefix="music_player_tests_state_")) / "playlist.json")
+os.environ["ARTWORK_DIR"] = str(Path(os.environ["PLAYLIST_FILE"]).with_name("artwork"))
 os.environ["SECRET_KEY"] = "test-only-secret"
 os.environ["ADMIN_USERNAME"] = "test-admin"
 # A real werkzeug hash for the literal password "test-admin-password", so
@@ -75,4 +76,6 @@ def music_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(library, "TRACKS", [])
     monkeypatch.setattr(library, "COVERS", {})
     monkeypatch.setattr(library, "TRACK_BY_ID", {})
+    monkeypatch.setattr(library, "CATALOG", {})
+    monkeypatch.setattr(library, "CATALOG_FILE", None)
     yield tmp_path

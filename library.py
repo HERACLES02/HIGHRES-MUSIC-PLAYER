@@ -1,4 +1,6 @@
 import os
+import json
+import time
 import mimetypes
 import threading
 from dataclasses import dataclass
@@ -37,10 +39,17 @@ class Track:
     cover_mime: Optional[str] = None
     url: Optional[str] = None
     cover_url: Optional[str] = None
+    file_size: int = 0
+    modified_at: float = 0
+    added_at: float = 0
 
 TRACKS: list[Track] = []
 COVERS: dict[str, bytes] = {}
 TRACK_BY_ID: dict[str, Track] = {}
+CATALOG_FILE: Optional[Path] = None
+CATALOG: dict[str, dict] = {}
+SCAN_STATUS = {"running": False, "phase": "idle", "scanned": 0, "total": 0, "issues": []}
+_SCAN_REQUEST_LOCK = threading.Lock()
 
 LYRIC_TAGS = (
     "lyrics",
@@ -144,13 +153,15 @@ def _all_tag_values(tags, *keys) -> list[str]:
 
     return [v for v in values if v.strip()]
 
-def _read_tags(file_path: Path) -> Tuple[str, str, str, Optional[str], Optional[bytes]]:
+def _read_tags(file_path: Path, issues=None) -> Tuple[str, str, str, Optional[str], Optional[bytes]]:
     try:
         mut = MutagenFile(file_path)
     except Exception:
         # A single corrupt/truncated/zero-byte audio file must not take down
         # the whole library scan - fall back to filename-derived metadata.
         mut = None
+    if mut is None and issues is not None:
+        issues.append({"path": str(file_path.relative_to(MUSIC_DIR)), "error": "Audio tags could not be read; filename fallback is being used."})
     title = file_path.stem
     artist = "Unknown Artist"
     album = "Unknown Album"
@@ -169,7 +180,7 @@ def _read_tags(file_path: Path) -> Tuple[str, str, str, Optional[str], Optional[
     return title, artist, album, cover_mime, cover_bytes
 
 
-_REFRESH_LOCK = threading.Lock()
+_REFRESH_LOCK = threading.RLock()
 
 
 def refresh_library() -> None:
@@ -178,27 +189,62 @@ def refresh_library() -> None:
     # the background file-watcher can trigger a refresh at any time,
     # including while a manual refresh or metadata-edit refresh is running.
     with _REFRESH_LOCK:
-        _refresh_library_unlocked()
+        SCAN_STATUS.update(running=True, phase="discovering", scanned=0, total=0, issues=[], error=None)
+        try:
+            _refresh_library_unlocked()
+        except Exception as exc:
+            SCAN_STATUS["error"] = str(exc)
+        finally:
+            SCAN_STATUS.update(running=False, phase="finished", finished_at=time.time())
+
+
+def request_refresh() -> bool:
+    """Start at most one manual scan; the HTTP request can return immediately."""
+    with _SCAN_REQUEST_LOCK:
+        if SCAN_STATUS["running"]:
+            return False
+        SCAN_STATUS.update(running=True, phase="queued", scanned=0, total=0, issues=[], error=None)
+        threading.Thread(target=refresh_library, daemon=True).start()
+        return True
 
 
 def _refresh_library_unlocked() -> None:
-    global TRACKS, COVERS, TRACK_BY_ID
+    global TRACKS, COVERS, TRACK_BY_ID, CATALOG
 
     tracks: list[Track] = []
     covers: dict[str, bytes] = {}
     track_by_id: dict[str, Track] = {}
+    if CATALOG_FILE and CATALOG_FILE.exists():
+        try:
+            catalog = json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+            if not isinstance(catalog, dict):
+                raise ValueError("Invalid library index")
+            CATALOG = {str(key): value for key, value in catalog.items() if isinstance(value, dict)}
+        except (OSError, ValueError):
+            SCAN_STATUS["issues"].append({"path": "Library index", "error": "Saved index could not be read; existing in-memory records were kept."})
 
     audio_files = sorted(
         [p for p in MUSIC_DIR.rglob("*") if p.is_file() and p.suffix.lower() in AUDIO_EXTS]
     )
 
-    for  p in audio_files:
-        title, artist, album, cover_mime, cover_bytes = _read_tags(p)
+    SCAN_STATUS.update(phase="reading", total=len(audio_files))
+    for number, p in enumerate(audio_files, 1):
+        SCAN_STATUS["scanned"] = number
+        try:
+            if MUSIC_DIR not in p.resolve().parents:
+                raise ValueError("File points outside the music folder")
+            stat = p.stat()
+            title, artist, album, cover_mime, cover_bytes = _read_tags(p, SCAN_STATUS["issues"])
+        except Exception as exc:
+            SCAN_STATUS["issues"].append({"path": str(p.relative_to(MUSIC_DIR)), "error": str(exc)})
+            continue
         rel = str(p.relative_to(MUSIC_DIR)).replace("\\", "/")
         folder = str(p.parent.relative_to(MUSIC_DIR)).replace("\\", "/")
         if folder == ".":
             folder = ""
         tid = stable_id_for_relpath(rel)
+        previous = CATALOG.get(tid, {})
+        added_at = previous.get("added_at", time.time())
 
         
         t = Track(
@@ -209,9 +255,14 @@ def _refresh_library_unlocked() -> None:
                 album=album,
                 folder=folder,
                 cover_mime=cover_mime,
+                file_size=stat.st_size,
+                modified_at=stat.st_mtime,
+                added_at=added_at,
             )
         tracks.append(t)
         track_by_id[tid] = t
+        CATALOG[tid] = {"id": tid, "relpath": rel, "title": title, "artist": artist,
+                        "album": album, "file_size": stat.st_size, "added_at": added_at}
 
         if cover_bytes and cover_mime:
             covers[tid] = cover_bytes
@@ -219,6 +270,11 @@ def _refresh_library_unlocked() -> None:
     TRACKS = tracks
     COVERS = covers
     TRACK_BY_ID = track_by_id
+    if CATALOG_FILE:
+        CATALOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temporary = CATALOG_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps(CATALOG), encoding="utf-8")
+        temporary.replace(CATALOG_FILE)
 
 
 WATCH_LIBRARY = os.environ.get("WATCH_LIBRARY", "1") == "1"
@@ -395,6 +451,10 @@ def derived_metadata_for_track(track_id: str) -> dict:
 
 
 def update_metadata(track_id: str, title: str, artist: str, album: str) -> dict:
+    return update_metadata_fields(track_id, {"title": title, "artist": artist, "album": album})
+
+
+def update_metadata_fields(track_id: str, fields: dict) -> dict:
     file_path = _track_path(track_id)
     try:
         audio = MutagenFile(file_path, easy=True)
@@ -409,12 +469,10 @@ def update_metadata(track_id: str, title: str, artist: str, album: str) -> dict:
         except Exception:
             pass
 
-    next_title = title.strip() or file_path.stem
-    next_artist = artist.strip() or "Unknown Artist"
-    next_album = album.strip() or "Unknown Album"
-    audio["title"] = [next_title]
-    audio["artist"] = [next_artist]
-    audio["album"] = [next_album]
+    defaults = {"title": file_path.stem, "artist": "Unknown Artist", "album": "Unknown Album"}
+    changed = {key: str(value).strip() or defaults[key] for key, value in fields.items() if key in defaults}
+    for key, value in changed.items():
+        audio[key] = [value]
     audio.save()
 
     # Title/artist/album are the only fields this touches, and they don't
@@ -424,21 +482,10 @@ def update_metadata(track_id: str, title: str, artist: str, album: str) -> dict:
     # library just to pick up the one field we already know we just wrote).
     track = TRACK_BY_ID.get(track_id)
     if track is not None:
-        track.title = next_title
-        track.artist = next_artist
-        track.album = next_album
+        for key, value in changed.items():
+            setattr(track, key, value)
 
     return metadata_for_track(track_id)
-
-
-def update_metadata_fields(track_id: str, fields: dict) -> dict:
-    current = metadata_for_track(track_id)
-    return update_metadata(
-        track_id,
-        str(fields.get("title", current["title"])),
-        str(fields.get("artist", current["artist"])),
-        str(fields.get("album", current["album"])),
-    )
 
 
 def safe_resolve(relpath: str) -> Path:

@@ -27,6 +27,8 @@ from werkzeug.http import is_resource_modified
 import playlist
 import library
 import artist_info
+import metadata_edits
+import maintenance
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 BACKGROUND_EXTS = IMAGE_EXTS | {".mp4", ".webm", ".mov"}
@@ -304,47 +306,64 @@ def api_derive_track_metadata(track_id: str):
 @app.patch("/api/tracks/<string:track_id>/metadata")
 def api_update_track_metadata(track_id: str):
     data = request.get_json(silent=True) or {}
-    try:
-        updated = library.update_metadata(
-            track_id,
-            str(data.get("title", "")),
-            str(data.get("artist", "")),
-            str(data.get("album", "")),
-        )
-    except ValueError as exc:
-        return {"ok": False, "error": str(exc)}, 400
-    return {"ok": True, "track": updated}
+    data.update(track_ids=[track_id], single=True)
+    return metadata_edit_response(data)
 
 @app.post("/api/tracks/metadata/batch")
 def api_batch_update_metadata():
     data = request.get_json(silent=True) or {}
-    track_ids = [str(item) for item in data.get("track_ids", []) if str(item) in library.TRACK_BY_ID]
-    if not track_ids:
-        return {"ok": False, "error": "Select at least one track"}, 400
+    return metadata_edit_response(data)
 
-    mode = str(data.get("mode", "set"))
-    updated = []
+
+def metadata_edit_response(data):
     try:
-        if mode == "derive":
-            for track_id in track_ids:
-                fields = library.derived_metadata_for_track(track_id)
-                updated.append(library.update_metadata_fields(track_id, fields))
-        else:
-            fields = {
-                key: str(data.get(key, "")).strip()
-                for key in ("title", "artist", "album")
-                if str(data.get(key, "")).strip()
-            }
-            if "title" in fields and len(track_ids) > 1:
-                return {"ok": False, "error": "Title can only be batch-set for one track"}, 400
-            if not fields:
-                return {"ok": False, "error": "Enter at least one metadata field"}, 400
-            for track_id in track_ids:
-                updated.append(library.update_metadata_fields(track_id, fields))
-    except ValueError as exc:
+        with metadata_edits.LOCK, library._REFRESH_LOCK:
+            rows = metadata_edits.preview(data)
+            expected = metadata_edits.token(rows, app.secret_key, current_username())
+            if data.get("preview"):
+                return {"ok": True, "rows": rows, "preview_token": expected}
+            supplied = str(data.get("preview_token", ""))
+            if not secrets.compare_digest(supplied, expected):
+                return {"ok": False, "error": "Preview is missing or a file changed. Preview the changes again before saving."}, 409
+            return metadata_edits.execute(rows, current_username())
+    except (ValueError, OSError) as exc:
         return {"ok": False, "error": str(exc)}, 400
 
-    return {"ok": True, "updated": len(updated), "tracks": updated}
+
+@app.get("/api/metadata/history")
+def api_metadata_history():
+    try:
+        with metadata_edits.LOCK:
+            return jsonify(metadata_edits.history(current_username()))
+    except (ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
+@app.post("/api/metadata/history/<string:job_id>/undo")
+def api_undo_metadata(job_id):
+    try:
+        with metadata_edits.LOCK, library._REFRESH_LOCK:
+            return metadata_edits.undo(job_id, current_username())
+    except (ValueError, OSError) as exc:
+        return {"ok": False, "error": str(exc)}, 400
+
+
+@app.get("/api/library-health")
+def api_library_health():
+    return jsonify(maintenance.report())
+
+
+@app.post("/api/library/relink")
+def api_relink_track():
+    data = request.get_json(silent=True) or {}
+    old_id, new_id = str(data.get("old_id", "")), str(data.get("new_id", ""))
+    if old_id in library.TRACK_BY_ID or new_id not in library.TRACK_BY_ID:
+        return {"ok": False, "error": "Rescan first, then select an existing replacement for a missing song."}, 400
+    try:
+        playlist.relink_track(old_id, new_id)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    return {"ok": True}
 
 def _uploaded_image_temp():
     uploaded = request.files.get("cover")
@@ -562,8 +581,8 @@ def background_media():
 
 @app.post("/api/refresh")
 def api_refresh():
-    library.refresh_library()
-    return {"ok": True, "count": len(library.TRACKS)}
+    started = library.request_refresh()
+    return {"ok": True, "started": started, "scan": dict(library.SCAN_STATUS)}, 202
 
 @app.get("/music/<path:filename>")
 def music(filename: str):
@@ -887,6 +906,7 @@ def api_playlist_tracks():
 
 
 def initialize_state():
+    library.CATALOG_FILE = playlist.ARTWORK_DIR / "library-index.json"
     library.refresh_library()
     playlist.load_playlist()
     playlist.migrate_legacy_int_ids(library.TRACKS)
