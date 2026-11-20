@@ -80,10 +80,12 @@ private suspend fun persistence(path: Path) {
 private suspend fun playlistOperations(path: Path) {
     var db = openPlayerDatabase(path.toString()); var repo = PlayerRepository(db)
     repo.saveTrack(track(1)); repo.saveTrack(track(2)); repo.saveTrack(track(3))
-    val first = repo.createPlaylist("  Alpha mix  ")
+    val first = repo.createPlaylist("  Alpha mix  ", description = "Alpha description")
     expect(first.name == "Alpha mix", "Created playlist name is trimmed")
+    expect(first.description == "Alpha description", "Created playlist retains description")
     expect(repo.playlists() == listOf(first to 0), "Created playlist appears with zero entries and a trimmed name")
     val second = repo.createPlaylist("Beta list")
+    expect(second.description == null, "Created playlist without description defaults to null")
     repo.addPlaylistEntries(first.id, listOf(id(1), id(1), id(2)))
     val (_, entries) = repo.playlist(first.id)!!
     expect(entries.map { it.trackId } == listOf(id(1), id(1), id(2)) && entries.map { it.rank }.distinct().size == 3,
@@ -100,9 +102,9 @@ private suspend fun playlistOperations(path: Path) {
     val (_, remaining) = repo.playlist(first.id)!!
     expect(remaining.map { it.trackId } == listOf(id(2), id(1)), "Remove targets one occurrence; the other repeated song stays")
     expect(remaining.map { it.id } == listOf(removal[1].id, removal[2].id), "Remaining occurrences keep their identities")
-    repo.renamePlaylist(first.id, "Alpha final")
+    repo.renamePlaylist(first.id, "Alpha final", "Updated description")
     val renamed = repo.playlist(first.id)!!.first
-    expect(renamed.name == "Alpha final" && renamed.id == first.id, "Rename keeps identity and entries")
+    expect(renamed.name == "Alpha final" && renamed.id == first.id && renamed.description == "Updated description", "Rename keeps identity and entries")
     expect(repo.playlist(second.id)?.second?.size == 0, "Delete/rename of one playlist leaves others untouched")
     expect(repo.playlist(first.id)!!.second == remaining, "Unknown occurrence rejected without partial change")
     expect(repo.playlists().size == 2, "Add into a deleted/missing playlist creates nothing")
@@ -111,8 +113,8 @@ private suspend fun playlistOperations(path: Path) {
     db.close()
     db = openPlayerDatabase(path.toString()); repo = PlayerRepository(db)
     val reopened = repo.playlist(first.id)!!
-    expect(reopened.first.name == "Alpha final" && reopened.second.map { it.id } == remaining.map { it.id },
-        "Occurrence identities, order and name survive a real disk reopen")
+    expect(reopened.first.name == "Alpha final" && reopened.first.description == "Updated description" && reopened.second.map { it.id } == remaining.map { it.id },
+        "Occurrence identities, order, name and description survive a real disk reopen")
     expect(repo.playlists() == listOf(renamed to 2, second to 0, third to 1), "Playlist summaries survive reopen")
     repo.deletePlaylist(first.id)
     expect(repo.playlist(first.id) == null && repo.playlists() == listOf(second to 0, third to 1), "Delete affects only that playlist")
@@ -238,7 +240,9 @@ private suspend fun migration(path: Path) {
     expect(repo.track(id(1))?.sources?.single()?.uri == "content://legacy", "Migration preserves source identity")
     expect(db.records().problems().isEmpty(), "Migration adds recovery table without phantom data")
     db.close(); db = openPlayerDatabase(path.toString())
-    expect(PlayerRepository(db).playlist(pid)?.first?.name == "v1 playlist", "Migrated DB reopens successfully")
+    val migrated = PlayerRepository(db).playlist(pid)?.first
+    expect(migrated?.name == "v1 playlist", "Migrated DB reopens successfully")
+    expect(migrated?.description == null, "Migrated v1 playlist starts with null description")
     db.close()
 }
 
@@ -307,6 +311,7 @@ fun main() = runBlocking {
     var primary: Throwable? = null
     try {
         libraryReadChecks(directory.resolve("library-read.db"))
+        removalChecks(directory.resolve("removal.db"))
         enrichmentChecks(); audioCodecChecks(); providerChecks(); codecChecks(); backupArchiveChecks(); backupRepositoryChecks(directory.resolve("backup.db")); persistence(directory.resolve("library.db")); recovery(directory.resolve("recovery.db"))
         versions(directory.resolve("versions.db")); migration(directory.resolve("migration.db"))
         playlistOperations(directory.resolve("playlists.db"))

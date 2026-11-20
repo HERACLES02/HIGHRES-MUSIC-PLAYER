@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 
 @Database(entities = [TrackRow::class, SourceRow::class, PlaylistRow::class, PlaylistEntryRow::class,
     FavoriteRow::class, LyricsRow::class, LyricsSelectionRow::class, SessionRow::class,
-    SessionProblemRow::class, ResumeRow::class, FolderGrantRow::class, LibraryExtraRow::class, FileEditRow::class], version = 3, exportSchema = true)
+    SessionProblemRow::class, ResumeRow::class, FolderGrantRow::class, LibraryExtraRow::class, FileEditRow::class], version = 5, exportSchema = true)
 @ConstructedBy(PlayerDatabaseConstructor::class)
 abstract class PlayerDatabase : RoomDatabase() { abstract fun records(): PlayerDao }
 
@@ -22,6 +22,16 @@ expect object PlayerDatabaseConstructor : RoomDatabaseConstructor<PlayerDatabase
 }
 
 object PlayerMigrations {
+    val from4To5 = object : Migration(4, 5) {
+        override fun migrate(connection: SQLiteConnection) {
+            try { connection.execSQL("ALTER TABLE playlist ADD COLUMN description TEXT") } catch (_: Throwable) {}
+        }
+    }
+    val from3To4 = object : Migration(3, 4) {
+        override fun migrate(connection: SQLiteConnection) {
+            try { connection.execSQL("ALTER TABLE playlist ADD COLUMN artwork TEXT") } catch (_: Throwable) {}
+        }
+    }
     val from2To3 = object : Migration(2, 3) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("CREATE TABLE IF NOT EXISTS `library_extra` (`trackId` TEXT NOT NULL, `payload` TEXT NOT NULL, PRIMARY KEY(`trackId`), FOREIGN KEY(`trackId`) REFERENCES `track`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT)")
@@ -39,4 +49,4 @@ object PlayerMigrations {
 
 fun RoomDatabase.Builder<PlayerDatabase>.configured(): PlayerDatabase =
     setDriver(BundledSQLiteDriver()).setQueryCoroutineContext(Dispatchers.IO)
-        .addMigrations(PlayerMigrations.from1To2, PlayerMigrations.from2To3).build()
+        .addMigrations(PlayerMigrations.from1To2, PlayerMigrations.from2To3, PlayerMigrations.from3To4, PlayerMigrations.from4To5).build()

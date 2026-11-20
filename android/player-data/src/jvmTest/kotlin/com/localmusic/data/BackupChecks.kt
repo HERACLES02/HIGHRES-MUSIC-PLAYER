@@ -14,6 +14,14 @@ fun backupArchiveChecks() {
     fun verify(ok:Boolean,label:String){count++;check(ok){"Backup archive: $label"}}
     fun rejects(label:String,action:()->Unit){var rejected=false;try{action()}catch(_:Exception){rejected=true};verify(rejected,label)}
     val legacyPreferences = """{"version":1,"appearance":"System","autoScan":false,"homeGrid":true}"""
+    verify(PreferenceCodec.decode(legacyPreferences).accent==ThemeAccent.SAGE,"older preferences retain the original Sage accent")
+    for(accent in ThemeAccent.entries){
+        val preference=BackupPreferences(appearance="AMOLED",autoScan=true,homeGrid=false,accent=accent)
+        verify(PreferenceCodec.decode(PreferenceCodec.encode(preference))==preference,"accent and existing appearance choices survive persistence: $accent")
+    }
+    var invalidAccent=false
+    try{PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"accent\":\"UNKNOWN\"}")}catch(_:IllegalArgumentException){invalidAccent=true}
+    verify(invalidAccent,"invalid accent cannot silently alter restored appearance")
     fun encodedArtwork(text: String) = Json.parseToJsonElement(PreferenceCodec.encode(PreferenceCodec.decode(text))).jsonObject["artworkSize"]?.jsonPrimitive?.content
     verify(encodedArtwork(legacyPreferences) == "Large", "legacy settings default to large artwork")
     val compactPreferences = legacyPreferences.dropLast(1) + ",\"artworkSize\":\"Compact\"}"
@@ -64,7 +72,7 @@ fun backupArchiveChecks() {
     val legacy=ByteArrayOutputStream().also{out->ZipOutputStream(out).use{zip->for((n,v)in mapOf("manifest.json" to legacyManifest,"data.json" to legacyData)){zip.putNextEntry(ZipEntry(n));zip.write(v);zip.closeEntry()}}}.toByteArray()
     verify(BackupArchive.read(legacy.inputStream()).state==backup,"version 1 backups restore with effects off and no invented profiles")
     val artist=com.localmusic.core.ArtistProfile("00000000-0000-0000-0000-000000000005","Mira",biography="Offline biography",imagePath=name,imageCredit="Test creator",savedAtMs=123)
-    val prefs=backup.preferences.copy(audio=AudioSettings(true,EqPreset("Test",-2.0),listOf(EqPreset("Saved")),ReplayGainMode.ALBUM,4),artists=mapOf("mira" to artist),widgets=WidgetSettings("Light",false))
+    val prefs=backup.preferences.copy(audio=AudioSettings(true,EqPreset("Test",-2.0),listOf(EqPreset("Saved")),ReplayGainMode.ALBUM,4),artists=mapOf("mira" to artist),widgets=WidgetSettings("Light",false),accent=ThemeAccent.OCEAN)
     val modern=backup.copy(preferences=prefs)
     verify(BackupArchive.read(encode(BackupBundle(modern,mapOf(name to art))).inputStream()).state==modern,"v2 saves effects, preset bank, widget choice and credited artist with artwork")
     val converted=checkNotNull(AudioCodec::class.java.getResourceAsStream("/eq/external-graphic.json")).bufferedReader(Charsets.UTF_8).use{AudioCodec.importPreset(it.readText()).preset}

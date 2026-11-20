@@ -24,6 +24,18 @@ fun enrichmentChecks(){
     until=0;clock+=20000
     response=EnrichmentResponse(200,"application/json","""{"releases":[{"id":"00000000-0000-0000-0000-000000000002","title":"Album","date":"2026","country":"GB","disambiguation":"Deluxe","artist-credit":[{"name":"Mira"}]}]}""".toByteArray())
     val release=client.searchReleases("Mira","Album").single();verify(release.edition=="Deluxe"&&release.country=="GB","release edition and country retained")
+    response=EnrichmentResponse(200,"application/json","""{"recordings":[{"id":"00000000-0000-0000-0000-000000000003","title":"Song One","disambiguation":"Radio Edit","artist-credit":[{"name":"Mira"}],"first-release-date":"2025","releases":[{"id":"00000000-0000-0000-0000-000000000002","title":"Album","date":"2026","country":"GB","media":[{"track":[{"number":"4","title":"Song One"}]}]}]}]}""".toByteArray())
+    val recording=client.searchRecordings("Song One","Mira","MusicBrainz").single()
+    verify(recording.source=="MusicBrainz"&&recording.title=="Song One"&&recording.artist=="Mira"&&recording.album=="Album"&&recording.trackNumber=="4"&&recording.date=="2026"&&recording.disambiguation=="Radio Edit","recording details extracted")
+    response=EnrichmentResponse(200,"text/javascript; charset=utf-8","""{"resultCount":1,"results":[{"trackId":123,"trackName":"Song One","artistName":"Mira","collectionName":"Album","trackNumber":4,"releaseDate":"2026-01-01","country":"USA","primaryGenreName":"Folk","artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/100x100bb.jpg"}]}""".toByteArray())
+    val itunesRec=client.searchItunesRecordings("Song One").single()
+    verify(itunesRec.source=="iTunes"&&itunesRec.imageUrl?.contains("600x600bb")==true&&itunesRec.album=="Album","itunes song and high-res art with text/javascript content type")
+    response=EnrichmentResponse(200,"application/json","""{"data":[{"id":456,"title":"Song One","artist":{"name":"Mira"},"album":{"title":"Album","cover_xl":"https://e-cdns-images.dzcdn.net/images/cover/xl.jpg"}}]}""".toByteArray())
+    val deezerRec=client.searchDeezerRecordings("Song One").single()
+    verify(deezerRec.source=="Deezer"&&deezerRec.imageUrl?.contains("dzcdn.net")==true&&deezerRec.artist=="Mira","deezer song and cover art")
+    response=EnrichmentResponse(200,"image/jpeg",byteArrayOf(9,9,9))
+    verify(client.downloadCover("https://is1-ssl.mzstatic.com/image/thumb/600x600bb.jpg").contentEquals(byteArrayOf(9,9,9)),"cover download verified")
+    rejects{client.downloadCover("https://evil.invalid/cover.jpg")}
     response=EnrichmentResponse(200,"application/json","""{"images":[{"front":true,"thumbnails":{"500":"https://evil.invalid/picture.jpg"}}]}""".toByteArray())
     rejects{client.cover(release)}
     response=EnrichmentResponse(302,"",byteArrayOf(),location="http://127.0.0.1/private");rejects{client.cover(release)}

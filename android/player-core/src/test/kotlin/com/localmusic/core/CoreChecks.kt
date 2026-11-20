@@ -67,6 +67,31 @@ private fun queueChecks() {
     expect(q.upcomingManual.isEmpty(), "Clearing an empty queue is a safe no-op")
     val dup = ListeningQueue(Random(0)); dup.start(listOf(track(1), track(1), track(2)), 0)
     val first = dup.current!!; expect(dup.next()?.entry?.trackId == track(1) && dup.current?.id != first.id, "Collection duplicate occurrences preserved")
+    val upcoming = queue()
+    upcoming.updatePosition(17000); upcoming.pause()
+    val beforeReorder = upcoming.snapshot()
+    val lastUpcoming = beforeReorder.order.last()
+    upcoming.moveOccurrence(lastUpcoming.id, 0)
+    expect(upcoming.snapshot().order.drop(1).map { it.trackId } == listOf(track(4), track(2), track(3)),
+        "Reorder coming-up songs without changing the active occurrence")
+    expect(upcoming.current == beforeReorder.history.last() && upcoming.positionMs == 17000L && !upcoming.isPlaying,
+        "Coming-up drag preserves paused state and position")
+    expect(ListeningQueue().restore(upcoming.snapshot()), "Reordered collection snapshot remains restorable")
+    val picked = queue()
+    picked.addToQueue(track(9)); picked.addToQueue(track(9)); picked.addToQueue(track(8))
+    val queuedCopies = picked.upcomingManual
+    picked.updatePosition(12000); picked.pause()
+    expect(picked.selectOccurrence(queuedCopies[1].id).entry == queuedCopies[1] && picked.positionMs == 0L,
+        "Tap starts the requested duplicate occurrence at the beginning")
+    expect(picked.upcomingManual == listOf(queuedCopies[0], queuedCopies[2]), "Tap retains other manual occurrences")
+    expect(picked.previous()?.entry?.trackId == track(1), "Tapped song participates in playback history")
+    picked.selectOccurrence(picked.snapshot().order.last().id)
+    expect(picked.current?.trackId == track(4) && picked.upcomingManual.size == 2, "Collection tap skips to the chosen song and retains the manual queue")
+    val tapped = picked.snapshot()
+    failure { picked.selectOccurrence(EntryId.new()) }
+    failure { picked.selectOccurrence(queuedCopies[1].id) }
+    expect(picked.snapshot() == tapped, "Stale tap identities are rejected atomically")
+    expect(ListeningQueue().restore(tapped), "Tapped queue snapshot remains restorable")
     repeat(100) { seed ->
         val shuffled = ListeningQueue(Random(seed)); shuffled.start(tracks, 2, true)
         val visited = mutableListOf(shuffled.current!!.trackId)
@@ -105,7 +130,7 @@ private fun queueChecks() {
         val rng = Random(seed)
         val model = ListeningQueue(Random(seed)); model.start(tracks, rng.nextInt(4), seed % 2 == 0)
         repeat(100) {
-            when (rng.nextInt(10)) {
+            when (rng.nextInt(12)) {
                 0 -> model.next(rng.nextBoolean())
                 1 -> model.previous()
                 2 -> model.setShuffle(!model.shuffle)
@@ -128,6 +153,8 @@ private fun queueChecks() {
                     model.upcomingManual.firstOrNull()?.let { model.moveOccurrence(it.id, rng.nextInt(model.upcomingManual.size)) }
                 }
                 9 -> if (model.upcomingManual.isNotEmpty()) model.clearManualEntries()
+                10 -> model.upcomingManual.lastOrNull()?.let { model.selectOccurrence(it.id) }
+                11 -> model.snapshot().let { snapshot -> snapshot.order.drop(snapshot.cursor+1).lastOrNull()?.let { model.selectOccurrence(it.id) } }
             }
             val copy = ListeningQueue(Random(seed))
             expect(copy.restore(model.snapshot()), "Every reachable mixed-command state can be restored seed=$seed")

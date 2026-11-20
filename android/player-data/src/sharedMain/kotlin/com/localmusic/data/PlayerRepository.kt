@@ -144,31 +144,36 @@ class PlayerRepository(private val database: PlayerDatabase) {
         require(entries.map { it.id }.distinct().size == entries.size)
         require(entries.map { it.rank }.distinct().size == entries.size)
         val key = playlist.id.value.toString()
-        dao.putPlaylist(PlaylistRow(key, playlist.name)); dao.clearEntries(key)
+        dao.putPlaylist(PlaylistRow(key, playlist.name, playlist.artwork, playlist.description)); dao.clearEntries(key)
         for (entry in entries) dao.insertEntry(PlaylistEntryRow(entry.id.value.toString(), key, entry.trackId.value.toString(), entry.rank))
     }
     suspend fun playlist(id: PlaylistId): Pair<Playlist, List<PlaylistEntry>>? = transaction {
         val key = id.value.toString()
-        dao.playlist(key)?.let { row -> Playlist(id, row.name) to dao.entries(key).map {
+        dao.playlist(key)?.let { row -> Playlist(id, row.name, row.artwork, row.description) to dao.entries(key).map {
             PlaylistEntry(EntryId(uuid(it.id)), id, TrackId(uuid(it.trackId)), it.rank)
         } }
     }
 
     /** Summaries with entry counts; created/deleted playlists refresh through storage.refresh() */
     suspend fun playlists(): List<Pair<Playlist, Int>> = dao.playlists().map {
-        Playlist(PlaylistId(uuid(it.id)), it.name) to dao.entryCount(it.id)
+        Playlist(PlaylistId(uuid(it.id)), it.name, it.artwork, it.description) to dao.entryCount(it.id)
     }
 
-    suspend fun createPlaylist(name: String, trackIds: List<TrackId> = emptyList()): Playlist = transaction {
-        val playlist = Playlist(PlaylistId.new(), Playlists.requireName(name))
-        dao.putPlaylist(PlaylistRow(playlist.id.value.toString(), playlist.name))
+    suspend fun createPlaylist(name: String, trackIds: List<TrackId> = emptyList(), description: String? = null): Playlist = transaction {
+        val playlist = Playlist(PlaylistId.new(), Playlists.requireName(name), description = description?.trim()?.ifBlank { null })
+        dao.putPlaylist(PlaylistRow(playlist.id.value.toString(), playlist.name, playlist.artwork, playlist.description))
         if (trackIds.isNotEmpty()) persistPlaylist(playlist, Playlists.append(playlist.id, emptyList(), trackIds))
         playlist
     }
 
-    suspend fun renamePlaylist(id: PlaylistId, name: String) = transaction {
-        require(dao.playlist(id.value.toString()) != null) { "The playlist was already deleted." }
-        dao.putPlaylist(PlaylistRow(id.value.toString(), Playlists.requireName(name)))
+    suspend fun renamePlaylist(id: PlaylistId, name: String, description: String? = null) = transaction {
+        val current = requireNotNull(dao.playlist(id.value.toString())) { "The playlist was already deleted." }
+        dao.putPlaylist(PlaylistRow(id.value.toString(), Playlists.requireName(name), current.artwork, description?.trim()?.ifBlank { null }))
+    }
+
+    suspend fun setPlaylistArtwork(id: PlaylistId, artwork: String?) = transaction {
+        val current = requireNotNull(dao.playlist(id.value.toString())) { "The playlist was already deleted." }
+        dao.putPlaylist(PlaylistRow(current.id, current.name, artwork, current.description))
     }
 
     suspend fun deletePlaylist(id: PlaylistId) = transaction {
@@ -179,7 +184,7 @@ class PlayerRepository(private val database: PlayerDatabase) {
     private suspend fun playlistInTransaction(id: PlaylistId): Pair<Playlist, List<PlaylistEntry>> {
         val key = id.value.toString()
         val row = dao.playlist(key) ?: error("The playlist was already deleted.")
-        return Playlist(id, row.name) to dao.entries(key).map {
+        return Playlist(id, row.name, row.artwork, row.description) to dao.entries(key).map {
             PlaylistEntry(EntryId(uuid(it.id)), id, TrackId(uuid(it.trackId)), it.rank)
         }
     }

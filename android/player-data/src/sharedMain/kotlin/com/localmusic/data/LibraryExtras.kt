@@ -9,7 +9,7 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
     val tagsOverride: MusicTags? = null, val sidecarUri: String? = null,
     val sidecarVersion: String? = null, val embeddedVersion: String? = null, val tagFields: Map<String, String> = emptyMap(),
     val overridesVersion:Long=0,val lyricsAdjustmentMs:Long?=null,val replayGainTags:Map<String,String> = emptyMap(),val replayGainScanned:Boolean=false,
-    val artworkCredit:String?=null,val artworkSourceUrl:String?=null) {
+    val artworkCredit:String?=null,val artworkSourceUrl:String?=null,val hidden:Boolean=false) {
     init { require(lyricsAdjustmentMs == null || lyricsAdjustmentMs in -86_400_000L..86_400_000L) }
     fun encode(): String = buildJsonObject {
         put("version", 1)
@@ -24,6 +24,7 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
         put("lyricsAdjustmentMs", lyricsAdjustmentMs)
         put("replayGainTags",JsonObject(replayGainTags.mapValues{JsonPrimitive(it.value)}));put("replayGainScanned",replayGainScanned)
         put("artworkCredit",artworkCredit);put("artworkSourceUrl",artworkSourceUrl)
+        put("hidden",hidden)
     }.toString()
     companion object {
         fun decode(text: String): LibraryExtras {
@@ -35,7 +36,7 @@ data class LibraryExtras(val folders: Map<String, String> = emptyMap(), val cano
             return LibraryExtras(map("folders"), map("canonical"), optional("artworkPath"), optional("artworkStamp"), optional("artworkOverride"),
                 o["tagsOverride"]?.takeUnless { it is JsonNull }?.let { ModelCodec.tags(it.toString()) }, optional("sidecarUri"), optional("sidecarVersion"), optional("embeddedVersion"), map("tagFields"), o["overridesVersion"]?.jsonPrimitive?.long ?: 0,
                 o["lyricsAdjustmentMs"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.long,map("replayGainTags"),o["replayGainScanned"]?.jsonPrimitive?.boolean?:false,
-                optional("artworkCredit"),optional("artworkSourceUrl"))
+                optional("artworkCredit"),optional("artworkSourceUrl"),o["hidden"]?.jsonPrimitive?.boolean?:false)
         }
     }
 }
