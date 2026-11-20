@@ -32,7 +32,8 @@ fun ArtworkCredits(detail:LibraryExtras?){
 
 @Composable
 fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:MusicStore?,ready:Boolean,ui:ListeningToolsUi,
-    send:(String,Bundle)->Unit,play:(List<Track>,Int,Boolean)->Unit,details:(Track)->Unit,addToPlaylist:(Track)->Unit,album:(Track)->Unit,addCollectionToPlaylist:(List<Track>)->Unit){
+    send:(String,Bundle)->Unit,play:(List<Track>,Int,Boolean)->Unit,details:(Track)->Unit,addToPlaylist:(Track)->Unit,album:(Track)->Unit,addCollectionToPlaylist:(List<Track>)->Unit,
+    editTags:((Track)->Unit)?=null){
     var editingNote by rememberSaveable(name){mutableStateOf(false)}
     var note by rememberSaveable(name){mutableStateOf("")}
     var photoTarget by rememberSaveable{mutableStateOf<String?>(null)}
@@ -80,7 +81,7 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
             val menu=remember(track.id){mutableStateOf(false)}
             ListItem(modifier=Modifier.combinedClickable(enabled=ready,onClick={if(track.availability==Availability.AVAILABLE)play(tracks,tracks.indexOf(track),false)},onLongClickLabel="Song options",onLongClick={menu.value=true}),
             leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp))},headlineContent={MarqueeText(track.tags.title)},
-            supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)},menu)})}
+            supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)},menu,editTags?.let{{it(track)}})})}
     }
     if(editingNote)AlertDialog(onDismissRequest={editingNote=false},title={Text("Artist note")},text={OutlinedTextField(note,{note=it.take(6000)},modifier=Modifier.fillMaxWidth().heightIn(min=160.dp,max=340.dp),label={Text("About this artist")})},
         confirmButton={TextButton(enabled=ready,onClick={send(PlaybackService.ARTIST_NOTE,Bundle().apply{putString("name",name);putString("text",note)});editingNote=false}){Text("Save")}},dismissButton={TextButton(onClick={editingNote=false}){Text("Cancel")}})

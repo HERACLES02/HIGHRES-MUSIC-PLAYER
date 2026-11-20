@@ -26,6 +26,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.launch
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.localmusic.core.*
@@ -36,7 +45,7 @@ private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, 
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
-    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,clock:PlaybackUiState?=null) {
+    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,clock:PlaybackUiState?=null) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
@@ -63,9 +72,45 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
             else -> 320.dp
         })
         val header: @Composable () -> Unit = {
+            val scope = rememberCoroutineScope()
+            var offset by remember(track.id) { mutableFloatStateOf(0f) }
+            var settling by remember(track.id) { mutableStateOf(false) }
+            var epoch by remember(track.id) { mutableIntStateOf(0) }
+            val swipeThreshold = with(LocalDensity.current) { 80.dp.toPx() }
+            val flingThreshold = with(LocalDensity.current) { 500.dp.toPx() }
+
+            suspend fun settle(velocity: Float) {
+                if (settling) return
+                settling = true
+                val started = epoch
+                try {
+                    val triggerPrevious = offset > swipeThreshold || velocity > flingThreshold
+                    val triggerNext = offset < -swipeThreshold || velocity < -flingThreshold
+                    if (triggerPrevious && ready) controller?.seekToPrevious()
+                    else if (triggerNext && ready) controller?.seekToNext()
+
+                    animate(offset, 0f, initialVelocity = velocity,
+                        animationSpec = spring(dampingRatio = .9f, stiffness = 500f)) { value, _ ->
+                        if (started == epoch) offset = value
+                    }
+                } finally {
+                    if (started == epoch) {
+                        offset = 0f
+                        settling = false
+                    }
+                }
+            }
+
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 CoverArt(art, track.tags.title, Modifier.size(artworkSize)
-                    .shadow(12.dp,RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)))
+                    .graphicsLayer { translationX = offset }
+                    .draggable(
+                        state = rememberDraggableState { delta -> if (!settling) offset += delta },
+                        orientation = Orientation.Horizontal,
+                        enabled = ready,
+                        onDragStopped = { velocity -> scope.launch { settle(velocity) } }
+                    )
+                    .shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         MarqueeText(track.tags.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold,textAlign=TextAlign.Center),autoScroll=true)
@@ -73,7 +118,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
                             modifier = Modifier.clickable(onClickLabel = "Open artist page", onClick = openArtist),
                             style = MaterialTheme.typography.bodyLarge.copy(textAlign=TextAlign.Center),
                             color = MaterialTheme.colorScheme.primary,autoScroll=true)
-                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true) }
+                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, modifier = Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum), style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true) }
                     }
 
                 }

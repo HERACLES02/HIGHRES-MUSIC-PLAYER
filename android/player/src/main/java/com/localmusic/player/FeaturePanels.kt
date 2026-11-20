@@ -12,15 +12,19 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.mapSaver
 import androidx.compose.runtime.snapshots.SnapshotStateMap
+import android.net.Uri
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import coil3.compose.AsyncImage
 import com.localmusic.core.*
 import com.localmusic.data.FileEditRow
 import com.localmusic.data.LyricsSource
+import com.localmusic.data.RecordingCandidate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalUriHandler
@@ -29,6 +33,7 @@ import java.io.File
 import java.util.UUID
 
 data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track>) -> Unit,
+                          val pickPlaylistCover: (Playlist) -> Unit,
     val importLyrics: (Track) -> Unit, val exportLyrics: (Track, String) -> Unit,
     val commit: (List<FileEditRow>) -> Unit, val undo: (FileEditRow) -> Unit, val recovery: (FileEditRow) -> Unit,
     val createBackup: () -> Unit, val restoreBackup: () -> Unit, val backupBusy: Boolean)
@@ -201,7 +206,30 @@ private fun fieldLabel(key: String): String = when (key) {
     "TRACKNUMBER" -> "Track number"; "DISCNUMBER" -> "Disc number"; "DATE" -> "Date"; "GENRE" -> "Genre"; else -> "Comment"
 }
 
-@Composable fun TagEditorDialog(tracks: List<Track>, library: LibraryState, send: (String, Bundle) -> Unit,
+@Composable
+private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, modifier: Modifier = Modifier) {
+    var path by remember(url) { mutableStateOf<String?>(null) }
+    var loading by remember(url) { mutableStateOf(url != null) }
+    LaunchedEffect(url, store) {
+        if (url == null || store == null) { loading = false; return@LaunchedEffect }
+        loading = true
+        path = store.artistLookup.thumbnail(url)
+        loading = false
+    }
+    Surface(modifier, shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (path != null) {
+                AsyncImage(model = File(path!!), contentDescription = "Cover for $title", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else if (loading) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(PlayerGlyph.Music, null, Modifier.size(24.dp))
+            }
+        }
+    }
+}
+
+@Composable fun TagEditorDialog(tracks: List<Track>, library: LibraryState, store: MusicStore?, send: (String, Bundle) -> Unit,
     actions: FeatureActions, openNative: (String) -> Unit, dismiss: () -> Unit) {
     val draftKey = tracks.joinToString { it.id.value.toString() }
     val enabled = rememberSaveable(draftKey, saver = mapSaver<SnapshotStateMap<String, Boolean>>(
@@ -213,11 +241,191 @@ private fun fieldLabel(key: String): String = when (key) {
         val shared = tracks.map { tagValue(it.tags, key) }.distinct(); put(key, shared.singleOrNull().orEmpty())
     } } }
     var preview by rememberSaveable(draftKey) { mutableStateOf(false) }
+    var manualMode by rememberSaveable(draftKey) { mutableStateOf(false) }
+
+    var searchTitle by rememberSaveable(draftKey) { mutableStateOf(tracks.map { it.tags.title }.distinct().singleOrNull().orEmpty()) }
+    var searchArtist by rememberSaveable(draftKey) { mutableStateOf(tracks.flatMap { it.tags.artists }.distinct().firstOrNull().orEmpty()) }
+    var selectedProvider by rememberSaveable(draftKey) { mutableStateOf("All") }
+    var searchBusy by remember { mutableStateOf(false) }
+    var searchResults by remember { mutableStateOf<List<RecordingCandidate>>(emptyList()) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var selectedCandidateId by rememberSaveable(draftKey) { mutableStateOf<String?>(null) }
+    var selectedCandidate by remember { mutableStateOf<RecordingCandidate?>(null) }
+    var stagedCoverPath by rememberSaveable(draftKey) { mutableStateOf<String?>(null) }
+    var stagingArt by remember { mutableStateOf(false) }
+    var applyArtwork by rememberSaveable(draftKey) { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
+
+    val providers = listOf("All", "iTunes", "Deezer", "MusicBrainz")
     val fields = TagPatch.KEYS.filter { enabled[it] == true }.associateWith { values[it].orEmpty() }
     val patch = runCatching { TagPatch(fields) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(if (preview) "Review ${countLabel(tracks.size, "song")}" else "Edit ${countLabel(tracks.size, "song")}") }, text = {
-        Column(Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!preview) {
+
+    AlertDialog(onDismissRequest = dismiss, title = {
+        Text(when {
+            preview -> "Review ${countLabel(tracks.size, "song")}"
+            manualMode -> "Manual edit: ${countLabel(tracks.size, "song")}"
+            else -> "Find tags online: ${countLabel(tracks.size, "song")}"
+        })
+    }, text = {
+        Column(Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (preview) {
+                for (track in tracks) {
+                    Text(track.tags.title, fontWeight = FontWeight.Bold)
+                    fields.forEach { (key, value) -> Text("${fieldLabel(key)}: ${tagValue(track.tags, key).ifEmpty { "(empty)" }} → ${value.ifEmpty { "(clear)" }}") }
+                    if (applyArtwork && stagedCoverPath != null) {
+                        Text("Artwork: Replace front cover with online image from ${selectedCandidate?.source ?: "search"}", color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                patch.exceptionOrNull()?.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text("Use in this app keeps the music file unchanged. Embedding prepares a backed-up file preview before writing.")
+            } else if (!manualMode) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Search for tags & artwork", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f, fill = false))
+                    OutlinedButton(onClick = { manualMode = true }) { Text("Manual edit") }
+                }
+
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    providers.forEach { provider ->
+                        FilterChip(
+                            selected = selectedProvider == provider,
+                            onClick = { selectedProvider = provider; searchError = null },
+                            label = { Text(provider) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(searchTitle, { searchTitle = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Track title") }, singleLine = true)
+                OutlinedTextField(searchArtist, { searchArtist = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Artist") }, singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        enabled = !searchBusy && (searchTitle.isNotBlank() || searchArtist.isNotBlank()) && store != null,
+                        onClick = {
+                            scope.launch {
+                                searchBusy = true
+                                searchError = null
+                                try {
+                                    val results = store?.artistLookup?.searchRecordings(searchTitle, searchArtist, selectedProvider).orEmpty()
+                                    searchResults = results
+                                    if (results.isEmpty()) searchError = "No matching tracks found on $selectedProvider. Try refining or switch provider."
+                                } catch (e: Exception) {
+                                    searchError = e.message ?: "Failed to query $selectedProvider."
+                                } finally {
+                                    searchBusy = false
+                                }
+                            }
+                        }
+                    ) {
+                        Text(if (searchBusy) "Searching…" else "Search online")
+                    }
+                    if (searchBusy) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+
+                searchError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+
+                if (selectedCandidate != null) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f))) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                Text("Selected match (${selectedCandidate?.source ?: "online"})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f, fill = false))
+                                SuggestionChip(onClick = {}, label = { Text(selectedCandidate?.source.orEmpty(), style = MaterialTheme.typography.labelSmall) })
+                            }
+                            Text("${values["TITLE"].orEmpty()} · ${values["ARTIST"].orEmpty()}", fontWeight = FontWeight.SemiBold)
+                            val selectedMeta = listOfNotNull(values["ALBUM"]?.let { "Album: $it" }, values["TRACKNUMBER"]?.let { "#$it" }, values["DATE"]?.let { "Year: $it" }).joinToString(" · ")
+                            if (selectedMeta.isNotBlank()) Text(selectedMeta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                            if (selectedCandidate?.imageUrl != null || stagedCoverPath != null) {
+                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Surface(Modifier.size(60.dp), shape = MaterialTheme.shapes.small) {
+                                        if (stagedCoverPath != null) {
+                                            AsyncImage(model = File(stagedCoverPath!!), contentDescription = "Selected cover", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                        } else if (stagingArt) {
+                                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                                        } else {
+                                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Icon(PlayerGlyph.Music, null, Modifier.size(24.dp)) }
+                                        }
+                                    }
+                                    Column(Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(checked = applyArtwork, onCheckedChange = { applyArtwork = it })
+                                            Text("Apply artwork to ${countLabel(tracks.size, "song")}", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        TextButton(onClick = { actions.pickCover(tracks) }) {
+                                            Text("Choose a different image…")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (fields.isNotEmpty()) {
+                    Text("Ready to apply (${fields.size} fields set):", fontWeight = FontWeight.SemiBold)
+                    fields.forEach { (key, value) -> Text("${fieldLabel(key)}: $value", style = MaterialTheme.typography.bodySmall) }
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                }
+
+                if (searchResults.isNotEmpty()) {
+                    Text(if (selectedCandidate != null) "Other online matches:" else "Matching tracks & artwork:", fontWeight = FontWeight.SemiBold)
+                    searchResults.forEach { candidate ->
+                        val isSelected = candidate.id == selectedCandidateId
+                        Card(
+                            onClick = {
+                                selectedCandidateId = candidate.id
+                                selectedCandidate = candidate
+                                values["TITLE"] = candidate.title; enabled["TITLE"] = true
+                                values["ARTIST"] = candidate.artist; enabled["ARTIST"] = true
+                                candidate.album?.let { values["ALBUM"] = it; enabled["ALBUM"] = true }
+                                candidate.trackNumber?.let { values["TRACKNUMBER"] = it; enabled["TRACKNUMBER"] = true }
+                                candidate.date?.let { values["DATE"] = it; enabled["DATE"] = true }
+                                candidate.disambiguation?.let { if (values["GENRE"].isNullOrBlank()) { values["GENRE"] = it; enabled["GENRE"] = true } }
+                                val img = candidate.imageUrl
+                                if (img != null) {
+                                    applyArtwork = true
+                                    scope.launch {
+                                        stagingArt = true
+                                        try {
+                                            stagedCoverPath = store?.artistLookup?.thumbnail(img) ?: store?.artistLookup?.stageCoverUrl(img)
+                                        } catch (_: Exception) {
+                                            stagedCoverPath = null
+                                        } finally {
+                                            stagingArt = false
+                                        }
+                                    }
+                                } else {
+                                    stagedCoverPath = null
+                                }
+                            },
+                            colors = if (isSelected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else CardDefaults.cardColors(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(Modifier.padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                CandidateThumbnail(candidate.imageUrl, candidate.title, store, Modifier.size(56.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(candidate.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                        SuggestionChip(onClick = {}, label = { Text(candidate.source, style = MaterialTheme.typography.labelSmall) })
+                                    }
+                                    Text(candidate.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    val meta = listOfNotNull(
+                                        candidate.album?.let { "Album: $it" },
+                                        candidate.trackNumber?.let { "#$it" },
+                                        candidate.date?.let { "Year: $it" },
+                                        candidate.country
+                                    ).joinToString(" · ")
+                                    if (meta.isNotBlank()) Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
+                TextButton(onClick = { actions.pickCover(tracks) }) { Text("Choose artwork from phone") }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Manual tag editing", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                    OutlinedButton(onClick = { manualMode = false }) { Text("Search online") }
+                }
                 Text("Only checked fields change. Clear explicitly to remove a value. Use one artist per line.")
                 TagPatch.KEYS.forEach { key ->
                     SettingCheckbox("Change ${fieldLabel(key).lowercase()}", enabled[key] == true) { enabled[key] = it }
@@ -226,9 +434,6 @@ private fun fieldLabel(key: String): String = when (key) {
                     TextButton(onClick = { values[key] = ""; enabled[key] = true }) { Text("Clear ${fieldLabel(key).lowercase()}") }
                 }
                 TextButton(onClick = { actions.pickCover(tracks) }) { Text("Choose artwork (separate edit)") }
-            } else for (track in tracks) {
-                Text(track.tags.title, fontWeight = FontWeight.Bold)
-                fields.forEach { (key, value) -> Text("${fieldLabel(key)}: ${tagValue(track.tags, key).ifEmpty { "(empty)" }} → ${value.ifEmpty { "(clear)" }}") }
             }
             patch.exceptionOrNull()?.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (preview) Text("Use in this app keeps the music file unchanged. Embedding prepares a backed-up file preview before writing.")
@@ -236,16 +441,37 @@ private fun fieldLabel(key: String): String = when (key) {
     }, confirmButton = {
         if (!preview) TextButton(enabled = fields.isNotEmpty() && patch.isSuccess, onClick = { preview = true }) { Text("Preview") }
         else TextButton(onClick = {
-            send(PlaybackService.APP_TAGS, Bundle().apply { putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) }); dismiss()
+            send(PlaybackService.APP_TAGS, Bundle().apply { putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) })
+            if (applyArtwork && stagedCoverPath != null) {
+                send(PlaybackService.APP_ART, Bundle().apply {
+                    putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() }))
+                    putString("uri", Uri.fromFile(File(stagedCoverPath)).toString())
+                    putString("sourceUrl", selectedCandidate?.imageUrl.orEmpty())
+                    putString("credit", selectedCandidate?.source ?: "Online search")
+                })
+            }
+            dismiss()
         }) { Text("Use in this app") }
     }, dismissButton = {
-        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-            if (preview) TextButton(enabled = !library.scanning, onClick = {
-                val batch = UUID.randomUUID().toString()
-                send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) })
-                dismiss(); openNative(batch)
-            }) { Text("Embed in files…") }
-            TextButton(onClick = dismiss) { Text("Cancel") }
+        Column(horizontalAlignment = Alignment.End) {
+            if (preview) {
+                TextButton(enabled = !library.scanning, onClick = {
+                    val batch = UUID.randomUUID().toString()
+                    send(PlaybackService.EDIT_PREPARE, Bundle().apply {
+                        putString("batch", batch)
+                        putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() }))
+                        putString("patch", JSONObject(fields).toString())
+                        if (applyArtwork && stagedCoverPath != null) {
+                            putString("coverUri", Uri.fromFile(File(stagedCoverPath)).toString())
+                            putInt("coverMode", 1)
+                        }
+                    })
+                    dismiss(); openNative(batch)
+                }) { Text("Embed in files…") }
+                TextButton(onClick = { preview = false }) { Text("Back") }
+            } else {
+                TextButton(onClick = dismiss) { Text("Cancel") }
+            }
         }
     })
 }

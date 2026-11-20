@@ -32,6 +32,24 @@ class ArtistLookup(private val context:Context,private val store:MusicStore){
     suspend fun searchCovers(artist:String,album:String):List<ReleaseCandidate> = withContext(Dispatchers.IO){
         val found=runInterruptible{client.searchReleases(artist,album)};releases.clear();releases.putAll(found.associateBy{it.id});found
     }
+    suspend fun searchRecordings(title:String,artist:String,provider:String="All"):List<RecordingCandidate> = withContext(Dispatchers.IO){
+        runInterruptible{client.searchRecordings(title,artist,provider)}
+    }
+    suspend fun stageCoverUrl(url:String):String = withContext(Dispatchers.IO){
+        val bytes=runInterruptible{client.downloadCover(url)}
+        previewImage(bytes)
+    }
+    private val thumbnailCache = ConcurrentHashMap<String, String>()
+    suspend fun thumbnail(url: String): String? = withContext(Dispatchers.IO) {
+        thumbnailCache[url]?.let { if (File(it).exists()) return@withContext it }
+        try {
+            val path = stageCoverUrl(url)
+            thumbnailCache[url] = path
+            path
+        } catch (_: Exception) {
+            null
+        }
+    }
     private fun previewImage(bytes:ByteArray):String {
         val file=File.createTempFile("provider-image-",".tmp",context.cacheDir)
         try{
