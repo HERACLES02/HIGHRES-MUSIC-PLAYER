@@ -12,6 +12,12 @@ The release page includes the signed APK, its SHA-256 checksum, and backup and r
 - [Flask Music Player](docs/flask-player.md) covers setup and use of the local browser player.
 - [Music USB Probe](android/STAGE_A.md) covers the separate Android USB audio diagnostic.
 
+## Local Music screenshots
+
+| Library | Now Playing | Equalizer |
+| --- | --- | --- |
+| <img src="docs/screenshots/library.jpg" alt="Library with search, song sorting, and the mini-player" width="220"> | <img src="docs/screenshots/now-playing.jpg" alt="Now Playing with cover art, audio format, and playback controls" width="220"> | <img src="docs/screenshots/equalizer.jpg" alt="Equalizer response graph and preamp controls" width="220"> |
+
 ## Report a beta bug
 
 Open [one GitHub issue per bug](https://github.com/HERACLES02/HIGHRES-MUSIC-PLAYER/issues/new). Include:
