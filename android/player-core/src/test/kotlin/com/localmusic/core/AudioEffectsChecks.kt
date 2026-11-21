@@ -5,6 +5,9 @@ import kotlin.math.*
 fun audioEffectsChecks(){
     eqResponseChecks()
     androidUsbRulesChecks()
+    pcmOutputConverterChecks()
+    usbRoutePolicyChecks()
+    clippingFeedbackChecks()
     var count=0
     fun verify(ok:Boolean,label:String){count++;check(ok){"Audio effects: $label"}}
     fun rejects(block:()->Unit){var failed=false;try{block()}catch(_:IllegalArgumentException){failed=true};verify(failed,"invalid settings rejected")}

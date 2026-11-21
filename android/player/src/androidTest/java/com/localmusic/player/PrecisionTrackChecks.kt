@@ -29,11 +29,11 @@ internal object PrecisionTrackChecks {
         }
     }
     fun run(context:Context):Int {
-        var track:ObservedTrack?=null
+        val tracks = mutableListOf<ObservedTrack>()
         val provider=object:DefaultAudioSink.AudioTrackProvider by DefaultAudioSink.AudioTrackProvider.DEFAULT {
             override fun getAudioTrack(config:AudioSink.AudioTrackConfig,attributes:AudioAttributes,sessionId:Int,context:Context?):AudioTrack {
                 check(config.encoding==C.ENCODING_PCM_FLOAT){"Full sink reduced float precision"}
-                return ObservedTrack(config,sessionId).also{track=it}
+                return ObservedTrack(config,sessionId).also{tracks+=it}
             }
         }
         val sink=PrecisionAudioSink(DefaultAudioSink.Builder(context).setEnableFloatOutput(true)
@@ -62,8 +62,9 @@ internal object PrecisionTrackChecks {
             check(accepted){"Gapless next buffer did not drain"}
             sink.playToEndOfStream()
             val expected=List((warmupFrames-1)*2){0f}+(1..5).flatMap{listOf(it/8388608f,-it/8388608f)}+listOf(0f,0f)
-            check(track?.accepted==expected){"Full sink changed low bits or gapless trimming: ${track?.accepted?.takeLast(16)} (size ${track?.accepted?.size}, expected ${expected.size})"}
-            check(track.sampleRate==96000){"AudioTrack client rate changed"}
+            val allAccepted=tracks.flatMap{it.accepted}
+            check(allAccepted==expected){"Full sink changed low bits or gapless trimming: ${allAccepted.takeLast(16)} (size ${allAccepted.size}, expected ${expected.size})"}
+            check(tracks.all{it.sampleRate==96000}){"AudioTrack client rate changed"}
             return 3
         }finally{sink.reset();sink.release()}
     }

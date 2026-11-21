@@ -26,7 +26,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Player build or checks failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-player-data.py')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen Room schemas changed.' }
-    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.1-direct-coverage' } else { 'local-music-0.14.1' }
+    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.2-direct-coverage' } else { 'local-music-0.14.2' }
     $apkName = if ($OptimizedPreview) { "$releaseName-optimized-preview.apk" } else { "$releaseName-debug.apk" }
     $apk = Join-Path $projectRoot "releases/$apkName"
     Copy-Item -LiteralPath (Join-Path $projectRoot "player/build/outputs/apk/$variantName/player-$variantName.apk") -Destination $apk -Force

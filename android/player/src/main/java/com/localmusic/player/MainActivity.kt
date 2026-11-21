@@ -957,7 +957,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                 }
                 "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"},{screen="Audio info"})}
                 "Audio info"->Box(Modifier.weight(1f)){AudioInfoPanel(controller,currentId)}
-                "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,send)}
+                "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,playback.optBoolean("clipping"),send)}
                 "Playback widget"->Box(Modifier.weight(1f)){WidgetSettingsPanel(preferences.widgets,ready,current,current?.let{store?.artwork(it.id)},send)}
                 "Settings" -> Box(Modifier.weight(1f)) {
                     SettingsPanel(library, preferences, ready, backupUi, actions, send,

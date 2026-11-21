@@ -12,8 +12,8 @@ android {
         minSdk = 30
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
-        versionCode = 49
-        versionName = if(experimentalDirectUsb)"0.14.1-direct-coverage" else "0.14.1"
+        versionCode = 50
+        versionName = if(experimentalDirectUsb)"0.14.2-direct-coverage" else "0.14.2"
         buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake {
@@ -51,8 +51,8 @@ kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarg
 dependencies {
     implementation(project(":player-core"))
     implementation(project(":player-data"))
-    implementation("androidx.media3:media3-exoplayer:1.8.0")
-    implementation("androidx.media3:media3-session:1.8.0")
+    implementation("androidx.media3:media3-exoplayer:1.10.1")
+    implementation("androidx.media3:media3-session:1.10.1")
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.compose.material3:material3")
