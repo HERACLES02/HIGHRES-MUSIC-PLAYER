@@ -57,7 +57,7 @@ internal fun InputStream.matchesFixture(sha256: String): Boolean {
 internal class ControlledPeer(host: String) {
     private val peer = privatePeerAddress(host)
 
-    fun fetch(staged: File, sha256: String) {
+    fun fetch(staged: File, sha256: String, onProgress: (received: Long, total: Long) -> Unit) {
         require(fixtureHashPattern.matches(sha256))
         if (staged.isFile && staged.inputStream().use { it.matchesFixture(sha256) }) return
 
@@ -92,12 +92,14 @@ internal class ControlledPeer(host: String) {
                     FileOutputStream(staged).use { destination ->
                         var remaining = size
                         val buffer = ByteArray(64 * 1024)
+                        onProgress(0, size)
                         while (remaining > 0) {
                             if (Thread.currentThread().isInterrupted) throw InterruptedException()
                             val count = input.read(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
                             check(count >= 0) { "The peer disconnected before the fixture finished." }
                             destination.write(buffer, 0, count)
                             remaining -= count
+                            onProgress(size - remaining, size)
                         }
                         destination.fd.sync()
                     }

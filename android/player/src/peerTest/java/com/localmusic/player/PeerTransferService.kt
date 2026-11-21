@@ -1,0 +1,166 @@
+package com.localmusic.player
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+import android.os.SystemClock
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.localmusic.core.Availability
+import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
+
+internal const val PEER_FOLDER_GRANT_FLAGS =
+    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+internal data class PeerTransferState(val running: Boolean = false, val message: String = "")
+
+class PeerTransferService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val notifications by lazy { getSystemService(NotificationManager::class.java) }
+    private var transfer: Job? = null
+
+    override fun onBind(intent: Intent): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (transfer != null) return START_NOT_STICKY
+        val tree = intent?.data
+        val address = intent?.getStringExtra(EXTRA_ADDRESS)
+        val sha256 = intent?.getStringExtra(EXTRA_HASH)
+        if (tree == null || address == null || sha256 == null) {
+            state = PeerTransferState(message = "The download request was incomplete. Please retry.")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        notifications.createNotificationChannel(
+            NotificationChannel(CHANNEL, "Controlled FLAC downloads", NotificationManager.IMPORTANCE_LOW)
+        )
+        startForeground(NOTIFICATION_ID, notification(CHECKING))
+        transfer = scope.launch {
+            val cpu = getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "${packageName}:peer-transfer")
+                .apply { setReferenceCounted(false) }
+            try {
+                cpu.acquire(WAKE_LOCK_TIMEOUT_MS)
+                val uri = fetchAndPublish(tree, address, sha256)
+                showProgress("Verified the FLAC. Scanning the Library…")
+                val store = (application as MusicApplication).storage.await()
+                if (store.state.value.folders.none { it.treeUri == tree.toString() }) {
+                    store.addFolder(tree, PEER_FOLDER_GRANT_FLAGS)
+                }
+                // Wait for any active scan, even with automatic rescans disabled.
+                store.scan()
+                check(store.state.value.tracks.count { track ->
+                    track.availability == Availability.AVAILABLE && track.sources.any { it.uri == uri.toString() }
+                } == 1) { "The verified file is saved. Retry to finish adding it to the Library." }
+                state = PeerTransferState(message = "Ready in Library. The FLAC was verified by SHA-256.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state = PeerTransferState(
+                    message = "Download or import stopped. ${e.message ?: "Check the controlled peer and try again."}"
+                )
+            } finally {
+                cpu.release()
+                if (isActive) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String): Uri =
+        runInterruptible(Dispatchers.IO) {
+            val destination = FixtureDestination(contentResolver, tree)
+            destination.requireWritable()
+            destination.findFinished()?.takeIf { destination.matches(it, sha256) }?.let { return@runInterruptible it }
+            val staged = File(filesDir, "peer-fixture-$sha256.part")
+            var lastUpdate = 0L
+            ControlledPeer(address).fetch(staged, sha256) { received, total ->
+                val now = SystemClock.elapsedRealtime()
+                if (received == 0L || received == total || now - lastUpdate >= 1_000) {
+                    lastUpdate = now
+                    scope.launch {
+                        showProgress("Downloading $received / $total bytes", (received * 100 / total).toInt())
+                    }
+                }
+            }
+            destination.publish(staged, sha256).also { staged.delete() }
+        }
+
+    private fun showProgress(message: String, percent: Int? = null) {
+        state = PeerTransferState(running = true, message = message)
+        notifications.notify(NOTIFICATION_ID, notification(message, percent))
+    }
+
+    private fun notification(message: String, percent: Int? = null): Notification {
+        val open = Intent(this, PeerTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        return Notification.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Controlled FLAC download")
+            .setContentText(message)
+            .setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE))
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setProgress(100, percent ?: 0, percent == null)
+            .apply {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+                }
+            }
+            .build()
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        state = PeerTransferState(message = "Android ended the download. Tap Download or retry to try again.")
+        scope.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    override fun onDestroy() {
+        if (transfer?.isActive == true) state = PeerTransferState(message = "Download stopped. Please retry.")
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val CHANNEL = "peer-transfer"
+        private const val NOTIFICATION_ID = 45416
+        private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1_000L
+        private const val EXTRA_ADDRESS = "address"
+        private const val EXTRA_HASH = "sha256"
+        private const val CHECKING = "Checking the destination and fixture…"
+
+        internal var state by mutableStateOf(PeerTransferState())
+            private set
+
+        internal fun start(context: Context, tree: Uri, address: String, sha256: String) {
+            if (state.running) return
+            context.startForegroundService(Intent(context, PeerTransferService::class.java).setData(tree)
+                .putExtra(EXTRA_ADDRESS, address).putExtra(EXTRA_HASH, sha256))
+            state = PeerTransferState(running = true, message = CHECKING)
+        }
+    }
+}

@@ -7,6 +7,7 @@ from pathlib import Path
 import secrets
 import socket
 import struct
+import time
 
 
 REMOTE_PATH = r"Fixture\peer-tone.flac"
@@ -45,7 +46,7 @@ def receive_frame(sock):
     return exact(sock, size)
 
 
-def serve(control, address, fixture, truncate):
+def serve(control, address, fixture, truncate, kib_per_second):
     if receive_frame(control) != b"\x01" + string("local-music-fixture") + string("P") + pack("I", 0):
         raise ValueError("Unexpected control PeerInit")
     if receive_frame(control) != pack("I", 43) + string(REMOTE_PATH):
@@ -62,7 +63,15 @@ def serve(control, address, fixture, truncate):
         if offset > len(fixture):
             raise ValueError("Invalid requested offset")
         end = len(fixture) // 2 if truncate else len(fixture)
-        data.sendall(fixture[offset:end])
+        if kib_per_second:
+            started = time.monotonic()
+            for start in range(offset, end, 4096):
+                stop = min(start + 4096, end)
+                deadline = started + (stop - offset) / (kib_per_second * 1024)
+                time.sleep(max(0, deadline - time.monotonic()))
+                data.sendall(fixture[start:stop])
+        else:
+            data.sendall(fixture[offset:end])
         if not truncate and data.recv(1):
             raise ValueError("Unexpected data from downloader")
         print(f"Sent {end - offset}/{len(fixture)} bytes from offset {offset}", flush=True)
@@ -73,7 +82,11 @@ def main():
     parser.add_argument("fixture", type=Path)
     parser.add_argument("--bind", default="127.0.0.1", type=ipaddress.IPv4Address)
     parser.add_argument("--truncate", action="store_true", help="Disconnect after half the fixture")
+    parser.add_argument("--kib-per-second", type=int, default=0,
+                        help="Cap the transfer rate for the screen-lock test (default: unlimited)")
     args = parser.parse_args()
+    if args.kib_per_second < 0:
+        parser.error("The transfer rate must be zero or positive")
     lan = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
     if not (args.bind == ipaddress.IPv4Address("127.0.0.1") or
             any(args.bind in ipaddress.IPv4Network(net) for net in lan)):
@@ -92,7 +105,7 @@ def main():
             with control:
                 control.settimeout(10)
                 try:
-                    serve(control, address, fixture, args.truncate)
+                    serve(control, address, fixture, args.truncate, args.kib_per_second)
                 except (OSError, EOFError, ValueError) as error:
                     print(f"Transfer stopped: {error}", flush=True)
 
