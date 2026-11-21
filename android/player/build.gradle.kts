@@ -23,6 +23,12 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
         getByName("debug") { versionNameSuffix = "-debug" }
+        create("peerTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".peertest"
+            versionNameSuffix = "-peer-test"
+            matchingFallbacks += listOf("debug")
+        }
         create("preview") {
             initWith(getByName("release"))
             versionNameSuffix = "-optimized-preview"
