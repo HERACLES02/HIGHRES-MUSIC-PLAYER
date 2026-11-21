@@ -28,6 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 internal const val PEER_FOLDER_GRANT_FLAGS =
     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -62,7 +63,8 @@ class PeerTransferService : Service() {
                 .apply { setReferenceCounted(false) }
             try {
                 cpu.acquire(WAKE_LOCK_TIMEOUT_MS)
-                val uri = fetchAndPublish(tree, address, sha256)
+                val selected = intent.getStringExtra(EXTRA_TRACK)?.let { FixtureTrack.decode(JSONObject(it)) }
+                val uri = fetchAndPublish(tree, address, sha256, selected)
                 showProgress("Verified the FLAC. Scanning the Library…")
                 val store = (application as MusicApplication).storage.await()
                 if (store.state.value.folders.none { it.treeUri == tree.toString() }) {
@@ -91,11 +93,18 @@ class PeerTransferService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String): Uri =
+    private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String, selected: FixtureTrack?): Uri =
         withContext(Dispatchers.IO) {
             val destination = FixtureDestination(contentResolver, tree)
             destination.requireWritable()
             destination.findFinished()?.takeIf { destination.matches(it, sha256) }?.let { return@withContext it }
+            if (selected != null) {
+                withContext(Dispatchers.Main.immediate) { showProgress("Waiting for ${selected.user} to send the FLAC…") }
+                val staged = SoulseekFixture.fetch(selected, filesDir, sha256)
+                return@withContext runInterruptible {
+                    destination.publish(staged, sha256).also { staged.delete() }
+                }
+            }
             val staged = File(filesDir, "peer-fixture-$sha256.part")
             fetchWithReconnect(ControlledPeer(address), staged, sha256)
             runInterruptible { destination.publish(staged, sha256).also { staged.delete() } }
@@ -180,15 +189,17 @@ class PeerTransferService : Service() {
         private const val RECONNECT_DELAY_MS = 3_000L
         private const val EXTRA_ADDRESS = "address"
         private const val EXTRA_HASH = "sha256"
+        private const val EXTRA_TRACK = "fixture-track"
         private const val CHECKING = "Checking the destination and fixture…"
 
         internal var state by mutableStateOf(PeerTransferState())
             private set
 
-        internal fun start(context: Context, tree: Uri, address: String, sha256: String) {
+        internal fun start(context: Context, tree: Uri, address: String, sha256: String, track: FixtureTrack? = null) {
             if (state.running) return
             context.startForegroundService(Intent(context, PeerTransferService::class.java).setData(tree)
-                .putExtra(EXTRA_ADDRESS, address).putExtra(EXTRA_HASH, sha256))
+                .putExtra(EXTRA_ADDRESS, address).putExtra(EXTRA_HASH, sha256)
+                .putExtra(EXTRA_TRACK, track?.encode()?.toString()))
             state = PeerTransferState(running = true, message = CHECKING)
         }
     }
