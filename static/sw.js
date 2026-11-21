@@ -8,6 +8,10 @@ const CACHE_NAME = "music-player-shell-v1";
 const SHELL_ASSETS = [
   "/static/styles.css",
   "/static/app.js",
+  "/static/library-tools.js",
+  "/static/management.js",
+  "/static/listening-queue.js",
+  "/static/player-session.js",
   "/static/theme.js",
   "/static/manifest.json",
   "/static/icon.svg",
