@@ -41,7 +41,12 @@ object BackupArtwork {
         val artists = state.preferences.artists.mapValues { (_, profile) ->
             profile.copy(imagePath = profile.imagePath?.let(::asset))
         }
-        return Captured(BackupBundle(state.copy(extras = extras,
+        val playlists = state.playlists.map { p ->
+            val chosen = p.playlist.artwork
+            val artRef = if (chosen.isNullOrEmpty()) chosen else asset(chosen)
+            p.copy(playlist = p.playlist.copy(artwork = artRef, description = p.playlist.description))
+        }
+        return Captured(BackupBundle(state.copy(extras = extras, playlists = playlists,
             preferences = state.preferences.copy(artists = artists)), assets), missing.size)
     }
 }

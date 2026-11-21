@@ -70,7 +70,20 @@ class PlayerRepository(private val database: PlayerDatabase) {
                 val old = extra(track.id)
                 saveExtra(track.id, detail.copy(artworkOverride = override, artworkPath = old.artworkPath, artworkStamp = old.artworkStamp))
             }
-            for (playlist in state.playlists) persistPlaylist(playlist.playlist, playlist.entries)
+            for (playlist in state.playlists) {
+                val key = playlist.playlist.id.value.toString()
+                val existing = dao.playlist(key)
+                val targetArtwork: String?
+                val targetDescription: String?
+                if (state.version < 3 && existing != null) {
+                    targetArtwork = existing.artwork
+                    targetDescription = existing.description
+                } else {
+                    targetArtwork = playlist.playlist.artwork?.let { if (it.isEmpty()) null else assets.getValue(it) }
+                    targetDescription = playlist.playlist.description
+                }
+                persistPlaylist(playlist.playlist.copy(artwork = targetArtwork, description = targetDescription), playlist.entries)
+            }
             state.session?.let { saveSession(it, System.currentTimeMillis()) }
             for (track in state.tracks) dao.deleteResume(track.id.value.toString())
             for (resume in state.resumes) dao.putResume(resume)
