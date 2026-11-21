@@ -23,9 +23,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
 
 internal const val PEER_FOLDER_GRANT_FLAGS =
     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -90,23 +92,48 @@ class PeerTransferService : Service() {
     }
 
     private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String): Uri =
-        runInterruptible(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             val destination = FixtureDestination(contentResolver, tree)
             destination.requireWritable()
-            destination.findFinished()?.takeIf { destination.matches(it, sha256) }?.let { return@runInterruptible it }
+            destination.findFinished()?.takeIf { destination.matches(it, sha256) }?.let { return@withContext it }
             val staged = File(filesDir, "peer-fixture-$sha256.part")
-            var lastUpdate = 0L
-            ControlledPeer(address).fetch(staged, sha256) { received, total ->
-                val now = SystemClock.elapsedRealtime()
-                if (received == 0L || received == total || now - lastUpdate >= 1_000) {
-                    lastUpdate = now
-                    scope.launch {
-                        showProgress("Downloading $received / $total bytes", (received * 100 / total).toInt())
+            fetchWithReconnect(ControlledPeer(address), staged, sha256)
+            runInterruptible { destination.publish(staged, sha256).also { staged.delete() } }
+        }
+
+    private suspend fun fetchWithReconnect(peer: ControlledPeer, staged: File, sha256: String) {
+        var interruptedAt: Long? = null
+        while (true) {
+            val previousBytes = staged.length()
+            var lastUpdate = SystemClock.elapsedRealtime() - 1_000
+            try {
+                runInterruptible {
+                    peer.fetch(staged, sha256) { received, total ->
+                        val now = SystemClock.elapsedRealtime()
+                        if (received == total || now - lastUpdate >= 1_000) {
+                            lastUpdate = now
+                            scope.launch {
+                                showProgress("Downloading $received / $total bytes", (received * 100 / total).toInt())
+                            }
+                        }
                     }
                 }
+                return
+            } catch (e: PeerConnectionInterrupted) {
+                val savedBytes = staged.length()
+                val now = SystemClock.elapsedRealtime()
+                val since = if (savedBytes > previousBytes) now else interruptedAt ?: now
+                interruptedAt = since
+                check(now - since < RECONNECT_WINDOW_MS) {
+                    "Could not reconnect. $savedBytes bytes saved. Tap Download or retry."
+                }
+                withContext(Dispatchers.Main.immediate) {
+                    showProgress("Connection interrupted. $savedBytes bytes saved. Waiting for the peer…")
+                }
+                delay(RECONNECT_DELAY_MS)
             }
-            destination.publish(staged, sha256).also { staged.delete() }
         }
+    }
 
     private fun showProgress(message: String, percent: Int? = null) {
         state = PeerTransferState(running = true, message = message)
@@ -149,6 +176,8 @@ class PeerTransferService : Service() {
         private const val CHANNEL = "peer-transfer"
         private const val NOTIFICATION_ID = 45416
         private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1_000L
+        private const val RECONNECT_WINDOW_MS = 90_000L
+        private const val RECONNECT_DELAY_MS = 3_000L
         private const val EXTRA_ADDRESS = "address"
         private const val EXTRA_HASH = "sha256"
         private const val CHECKING = "Checking the destination and fixture…"

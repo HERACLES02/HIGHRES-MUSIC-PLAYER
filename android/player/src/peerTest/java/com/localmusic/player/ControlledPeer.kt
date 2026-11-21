@@ -5,11 +5,14 @@ import java.io.DataOutputStream
 import java.io.EOFException
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder.LITTLE_ENDIAN
 import java.security.MessageDigest
@@ -54,13 +57,31 @@ internal fun InputStream.matchesFixture(sha256: String): Boolean {
     return actual == sha256
 }
 
+internal class PeerConnectionInterrupted(cause: IOException) : IOException(cause)
+
 internal class ControlledPeer(host: String) {
     private val peer = privatePeerAddress(host)
 
     fun fetch(staged: File, sha256: String, onProgress: (received: Long, total: Long) -> Unit) {
         require(fixtureHashPattern.matches(sha256))
-        if (staged.isFile && staged.inputStream().use { it.matchesFixture(sha256) }) return
+        val identityFile = File(staged.path + ".identity")
+        if (!staged.isFile || !staged.inputStream().use { it.matchesFixture(sha256) }) {
+            try {
+                receive(staged, identityFile, sha256, onProgress)
+            } catch (e: IOException) {
+                if (e is EOFException || e is SocketException || e is SocketTimeoutException) {
+                    throw PeerConnectionInterrupted(e)
+                }
+                throw e
+            }
+            check(staged.inputStream().use { it.matchesFixture(sha256) }) {
+                "The downloaded fixture failed SHA-256 verification."
+            }
+        }
+        identityFile.delete()
+    }
 
+    private fun receive(staged: File, identityFile: File, sha256: String, onProgress: (Long, Long) -> Unit) {
         Socket().use { control ->
             control.connect(InetSocketAddress(peer, CONTROL_PORT), TIMEOUT_MS)
             control.soTimeout = TIMEOUT_MS
@@ -77,7 +98,9 @@ internal class ControlledPeer(host: String) {
                 val token = offer.int
                 check(offer.string() == REMOTE_PATH) { "The peer offered a different file." }
                 val size = offer.long
-                check(size in 4..MAX_FIXTURE_BYTES && !offer.hasRemaining()) { "Invalid fixture size." }
+                check(size in 4..MAX_FIXTURE_BYTES) { "Invalid fixture size." }
+                check(offer.hasRemaining()) { "Use the updated fixture peer that reports its SHA-256." }
+                check(offer.string() == sha256 && !offer.hasRemaining()) { "The peer offered a different fixture SHA-256." }
                 output.frame(intBytes(41) + intBytes(token) + byteArrayOf(1))
 
                 listener.accept().use { transfer ->
@@ -88,15 +111,22 @@ internal class ControlledPeer(host: String) {
                     check(init.get().toInt() == 1 && init.string() == "fixture-uploader" &&
                         init.string() == "F" && init.int == 0 && !init.hasRemaining() &&
                         Integer.reverseBytes(input.readInt()) == token) { "The file connection did not match the offer." }
-                    DataOutputStream(transfer.getOutputStream()).writeLong(0)
-                    FileOutputStream(staged).use { destination ->
-                        var remaining = size
+                    val identity = "${peer.hostAddress}\n$REMOTE_PATH\n$size\n$sha256"
+                    val offset = staged.length()
+                    val resume = offset in 1 until size && identityFile.isFile && identityFile.readText() == identity
+                    FileOutputStream(staged, resume).use { destination ->
+                        // Truncate an unconfirmed partial before recording the identity of the new bytes.
+                        if (!resume) identityFile.writeText(identity)
+                        val start = if (resume) offset else 0L
+                        DataOutputStream(transfer.getOutputStream())
+                            .write(ByteBuffer.allocate(8).order(LITTLE_ENDIAN).putLong(start).array())
+                        var remaining = size - start
                         val buffer = ByteArray(64 * 1024)
-                        onProgress(0, size)
+                        onProgress(start, size)
                         while (remaining > 0) {
                             if (Thread.currentThread().isInterrupted) throw InterruptedException()
                             val count = input.read(buffer, 0, minOf(remaining, buffer.size.toLong()).toInt())
-                            check(count >= 0) { "The peer disconnected before the fixture finished." }
+                            if (count < 0) throw EOFException("The peer disconnected before the fixture finished.")
                             destination.write(buffer, 0, count)
                             remaining -= count
                             onProgress(size - remaining, size)
@@ -106,7 +136,6 @@ internal class ControlledPeer(host: String) {
                 }
             }
         }
-        check(staged.inputStream().use { it.matchesFixture(sha256) }) { "The downloaded fixture failed SHA-256 verification." }
     }
 }
 

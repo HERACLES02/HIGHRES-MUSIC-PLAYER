@@ -46,13 +46,14 @@ def receive_frame(sock):
     return exact(sock, size)
 
 
-def serve(control, address, fixture, truncate, kib_per_second):
+def serve(control, address, fixture, digest, truncate, kib_per_second):
     if receive_frame(control) != b"\x01" + string("local-music-fixture") + string("P") + pack("I", 0):
         raise ValueError("Unexpected control PeerInit")
     if receive_frame(control) != pack("I", 43) + string(REMOTE_PATH):
         raise ValueError("Only the test fixture is available")
     token = secrets.randbits(32)
-    send_frame(control, pack("III", 40, 1, token) + string(REMOTE_PATH) + pack("Q", len(fixture)))
+    # The controlled fixture adds its content identity to the standard offer.
+    send_frame(control, pack("III", 40, 1, token) + string(REMOTE_PATH) + pack("Q", len(fixture)) + string(digest))
     if receive_frame(control) != pack("IIB", 41, token, 1):
         raise ValueError("Transfer was rejected")
     source = (control.getsockname()[0], 0)
@@ -62,6 +63,7 @@ def serve(control, address, fixture, truncate, kib_per_second):
         offset, = struct.unpack("<Q", exact(data, 8))
         if offset > len(fixture):
             raise ValueError("Invalid requested offset")
+        print(f"Requested offset {offset}", flush=True)
         end = len(fixture) // 2 if truncate else len(fixture)
         if kib_per_second:
             started = time.monotonic()
@@ -95,17 +97,18 @@ def main():
         fixture = source.read(MAX_BYTES + 1)
     if not fixture.startswith(b"fLaC") or len(fixture) > MAX_BYTES:
         parser.error("Provide a generated FLAC up to 64 MiB")
+    digest = hashlib.sha256(fixture).hexdigest()
     with socket.socket() as server:
         server.bind((str(args.bind), CONTROL_PORT))
         server.listen()
         print(f"Listening on {args.bind}:{CONTROL_PORT}", flush=True)
-        print(f"Fixture SHA-256: {hashlib.sha256(fixture).hexdigest()}", flush=True)
+        print(f"Fixture SHA-256: {digest}", flush=True)
         while True:
             control, (address, _) = server.accept()
             with control:
                 control.settimeout(10)
                 try:
-                    serve(control, address, fixture, args.truncate, args.kib_per_second)
+                    serve(control, address, fixture, digest, args.truncate, args.kib_per_second)
                 except (OSError, EOFError, ValueError) as error:
                     print(f"Transfer stopped: {error}", flush=True)
 

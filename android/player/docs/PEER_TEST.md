@@ -9,7 +9,7 @@
 | Soulseek.NET | The .NET Standard library would need a .NET Android runtime and an integration with the Kotlin app, or a separately packaged native bridge. | GPLv3 with additional terms, including a unique minor version when logging in. The project includes a NOTICE file. | `ConnectAsync(address, port, …)` can use a local coordination server. `DownloadAsync` accepts a byte offset and total size. [Client interface](https://github.com/jpdillingham/Soulseek.NET/blob/10f2c464c610edd9a1d11cf52f5601c24d374dad/src/ISoulseekClient.cs) · [License](https://github.com/jpdillingham/Soulseek.NET/blob/10f2c464c610edd9a1d11cf52f5601c24d374dad/LICENSE) · [Notice](https://github.com/jpdillingham/Soulseek.NET/blob/10f2c464c610edd9a1d11cf52f5601c24d374dad/NOTICE) |
 | soulseek-rs | The Rust library could be built with the NDK for each supported ABI and called through JNI. That adds a Rust build, per-ABI artifacts and bridge maintenance. | MIT. Retain the copyright and license notice when distributing the library. | `ClientSettings.server_address` can point to a local server. The download worker uses existing partial-file length to resume and sends the offset as eight little-endian bytes. [Client settings](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/soulseek-rs-lib/src/client/mod.rs) · [Download worker](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/soulseek-rs-lib/src/peer/download_peer.rs) · [License](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/LICENSE) |
 
-The APK uses a small Kotlin implementation of the documented direct peer transfer. The uploader and downloader know each other's endpoints, so the fixture needs no coordination server, account, or login. The app sends `PeerInit (P)` and `QueueUpload`, accepts the `TransferRequest`, and receives `PeerInit (F)`, the transfer token and the raw FLAC on the file connection. It sends a zero byte offset. This keeps the experiment on the existing Kotlin toolchain and adds no bundled third-party transfer code. Of the two libraries, soulseek-rs has the closer packaging fit for a future full client. Resumption after a dropped connection is tracked in issue #19. [Soulseek peer protocol](https://nicotine-plus.org/doc/SLSKPROTOCOL.html#example-flow-for-downloading-a-file)
+The APK uses a small Kotlin implementation of the documented direct peer transfer. The uploader and downloader know each other's endpoints, so the fixture needs no coordination server, account, or login. The app sends `PeerInit (P)` and `QueueUpload`, accepts the `TransferRequest`, and receives `PeerInit (F)`, the transfer token and the raw FLAC on the file connection. The updated fixture peer adds a SHA-256 field to the offer. The app can send a nonzero offset when the saved bytes match that offer's peer address, path, size, and digest. Use the fixture peer script from the same checkout as the APK. Of the two libraries, soulseek-rs has the closer packaging fit for a future full client. [Soulseek peer protocol](https://nicotine-plus.org/doc/SLSKPROTOCOL.html#example-flow-for-downloading-a-file)
 
 ## Build and try it
 
@@ -45,7 +45,37 @@ With one USB-debugging device connected, the forwarding commands use loopback at
 & $adb forward --remove tcp:45417
 ```
 
-For a failure check, run the peer with `--truncate` in a fresh disposable folder. A premature disconnect must leave the folder without a playable FLAC. For a finalization failure check, put a different disposable file named `Local Music peer fixture.flac` in an unscanned disposable folder. The transfer should report the conflict and preserve the file. Select another empty folder and retry with the peer stopped. The app can publish the verified private copy, then request the usual Library scan.
+For a failure check, run the peer with `--truncate` in a fresh disposable folder. The app should report waiting with saved bytes and eventually stop retrying if the peer stays interrupted. The folder should remain empty. For a finalization failure check, put a different disposable file named `Local Music peer fixture.flac` in an unscanned disposable folder. The transfer should report the conflict and preserve the file. Select another empty folder and retry with the peer stopped. The app can publish the verified private copy, then request the usual Library scan.
+
+## Resume over Wi-Fi after locking the phone (issue #19)
+
+Use the PC and phone on the same Wi-Fi network. Set `$peerAddress` to the PC's private Wi-Fi IPv4 address from `ipconfig`. The transfer uses Wi-Fi. USB debugging is optional for inspecting the saved file, and the transfer ports do not need USB forwarding.
+
+```powershell
+$peerAddress = '<PC Wi-Fi IPv4 address>'
+$fixture = 'android\.tools\peer-test\resume-tone.flac'
+ffmpeg -v error -n -f lavfi -i 'sine=frequency=440:sample_rate=44100:duration=120' -metadata 'title=Local Music Wi-Fi Resume Tone' -c:a flac $fixture
+python android\scripts\soulseek-fixture-peer.py $fixture --bind $peerAddress --kib-per-second 12
+```
+
+1. Enter the Wi-Fi address and printed SHA-256 in the app. Choose a fresh empty folder under **Internal storage → Music** and tap **Download or retry**. Allow notifications.
+2. Once bytes arrive, lock the screen for about ten seconds. The download notification percentage should increase. Unlock, switch Wi-Fi off, and wait until the app or notification reports **Connection interrupted** with the saved byte count. The destination folder should still be empty.
+3. Turn Wi-Fi back on. The app should continue automatically. The peer console should print `Requested offset` followed by the saved nonzero byte count. Wait for **Ready in Library**.
+4. Stop the peer, put the phone in airplane mode with Wi-Fi off, and check that **Local Music Wi-Fi Resume Tone** appears once in the Library and plays at a comfortable volume.
+
+With USB debugging, compare the published file with the original. Set `$folderName` to the disposable Music folder used above.
+
+```powershell
+$folderName = 'Peer19WiFi'
+& $adb pull "/sdcard/Music/$folderName/Local Music peer fixture.flac" android\.tools\peer-test\resume-verified.flac
+Get-FileHash -Algorithm SHA256 $fixture, android\.tools\peer-test\resume-verified.flac
+```
+
+The local transport check interrupts the real fixture script, rejects a same-size replacement, and verifies that the original resumes at the saved offset and finishes byte for byte.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\scripts\test-peer-resume.ps1
+```
 
 ## Switch apps and lock the phone (issue #18)
 
