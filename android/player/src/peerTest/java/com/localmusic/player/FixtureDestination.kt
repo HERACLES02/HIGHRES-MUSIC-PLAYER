@@ -9,7 +9,9 @@ import java.util.UUID
 private const val STORAGE_PROVIDER = "com.android.externalstorage.documents"
 private const val FINISHED_NAME = "Local Music peer fixture.flac"
 
-internal class FixtureDestination(private val resolver: ContentResolver, val tree: Uri) {
+internal class FixtureDestination(
+    private val resolver: ContentResolver, val tree: Uri, private val finishedName: String = FINISHED_NAME,
+) {
     init {
         require(tree.authority == STORAGE_PROVIDER && Docs.isTreeUri(tree) &&
             Docs.getTreeDocumentId(tree).substringAfter(':', "").isNotEmpty()) {
@@ -31,7 +33,7 @@ internal class FixtureDestination(private val resolver: ContentResolver, val tre
         val columns = arrayOf(Docs.Document.COLUMN_DOCUMENT_ID, Docs.Document.COLUMN_DISPLAY_NAME)
         requireNotNull(resolver.query(children, columns, null, null, null)) { "Could not read the destination." }.use { rows ->
             while (rows.moveToNext()) {
-                if (rows.getString(1).equals(FINISHED_NAME, ignoreCase = true)) {
+                if (rows.getString(1).equals(finishedName, ignoreCase = true)) {
                     return Docs.buildDocumentUriUsingTree(tree, rows.getString(0))
                 }
             }
@@ -64,11 +66,11 @@ internal class FixtureDestination(private val resolver: ContentResolver, val tre
             }
             check(matches(pending, sha256)) { "The destination copy failed SHA-256 verification." }
             check(findFinished() == null) { "A file appeared in the destination. Retry to check it." }
-            val finished = checkNotNull(Docs.renameDocument(resolver, pending, FINISHED_NAME)) {
+            val finished = checkNotNull(Docs.renameDocument(resolver, pending, finishedName)) {
                 "Could not finalize the fixture. Choose a writable folder and retry."
             }
             renamed = true
-            check(documentName(finished) == FINISHED_NAME) {
+            check(documentName(finished) == finishedName) {
                 runCatching { Docs.deleteDocument(resolver, finished) }
                 "The destination renamed the fixture because of a conflict. Choose another folder and retry."
             }

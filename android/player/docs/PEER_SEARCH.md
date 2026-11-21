@@ -34,7 +34,7 @@ $fixture = 'android\.tools\peer-test\search-share'
 (Get-FileHash -Algorithm SHA256 "$fixture\Amber.flac").Hash
 ```
 
-1. Open **Local Music Peer Test**. Paste the hash for `Amber.flac` and choose a fresh disposable folder under **Internal storage â†’ Music**.
+1. Open **Peer Transfer Diagnostics**. Paste the hash for `Amber.flac` and choose a fresh disposable folder under **Internal storage → Music**.
 2. Under **Private Soulseek search**, search `Amber`. Confirm the search result gives the uploader and folder. Tap **Inspect peer-fixture-aâ€™s folder** and confirm `Violet.flac` also appears.
 3. Tap **Download Amber.flac** and wait for **Ready in Library**. Confirm the destination contains one `Local Music peer fixture.flac` with the same SHA-256 as `Amber.flac`.
 4. Stop both fixture processes with Ctrl+C and remove the forwards. With the phone offline, open the Library and play the imported track by its embedded title.
@@ -46,6 +46,20 @@ $fixture = 'android\.tools\peer-test\search-share'
 ```
 
 The SHA-256 field supplies an independent check for the generated fixture. The Android service keeps the transfer in its private files until both size and SHA-256 match. The existing publisher copies through a `.part` file, checks the copy and renames it before requesting the existing Library scan. Each selection uses private staging keyed by uploader, remote path, size and fixture hash.
+
+## Download one track from the Soulseek tab
+
+Use the same ARM64 Peer Test APK, private coordinator, uploader, and ADB forwards above. The launcher entry **Local Music Peer Test** opens the regular player with the controlled Soulseek option. **Peer Transfer Diagnostics** opens the original transfer test screen.
+
+1. In **Settings**, turn off **Rescan chosen folders when music changes** and turn on **Enable Soulseek tab**.
+2. On Wi-Fi, open **Soulseek**, tap **Go online**, and search for `Amber`. Inspect the fixture uploader's folder and confirm it includes `Violet.flac`.
+3. Tap **Choose Amber.flac**. In **Downloads**, choose a fresh, writable folder under **Internal storage → Music**. Paste the SHA-256 of the uploader's `Amber.flac`, then tap **Download Amber.flac**.
+4. Wait for **Ready in Library**, then tap **Open in Library**. The regular Songs view opens on the imported track's title. Compare the saved `Amber.flac` with the fixture and confirm the track appears once.
+5. Select **Go offline** from Soulseek when finished. The file remains available to the regular offline player.
+
+This controlled build uses the generated fixture's SHA-256 to verify the private staging file and published copy. The coordinator address and test account are fixed in the engine. The regular daily-use APK has four tabs.
+
+On the ARM64 OPPO CPH1937, the tab opened offline after it was enabled. The `Amber` search found the fixture uploader and folder inspection revealed `Violet.flac`. A 165,652-byte `Amber.flac` was published to the selected folder. Its SHA-256 matched the source, and the decoded audio from the pulled file matched the embedded FLAC checksum. **Open in Library** showed one matching song with automatic rescans off.
 
 ## Test Rust download recovery
 
@@ -61,7 +75,7 @@ ffmpeg -f lavfi -i 'anoisesrc=color=white:amplitude=0.02:sample_rate=48000:durat
 
 Start the uploader with `$share` in place of `$fixture`. Paste the printed hash in Peer Test, choose a fresh disposable destination, and start with Wi-Fi connected.
 
-1. Search **Amber**, inspect the folder to find **Violet**, then tap **Download Amber.flac**. The three operations share one login.
+1. In **Peer Transfer Diagnostics**, search **Amber**, inspect the folder to find **Violet**, then tap **Download Amber.flac**. The three operations share one login.
 2. While bytes are still arriving, lock the screen. Check that the download notification advances. Pause from the notification or return to Peer Test and tap **Pause**. Tap **Resume** and check the nonzero starting offset displayed with the download progress.
 3. Turn Wi-Fi off while bytes are arriving. Compare the saved byte count in **Waiting for Wi-Fi** with the resume offset after Wi-Fi returns. The retry starts automatically.
 4. While bytes are arriving again, force-stop only Peer Test, then reopen it.

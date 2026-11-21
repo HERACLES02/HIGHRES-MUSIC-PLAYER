@@ -36,6 +36,14 @@ internal object SoulseekFixture {
         false
     }
 
+    suspend fun connect() = withContext(Dispatchers.IO) {
+        request(JSONObject().put("operation", "connect"))
+    }
+
+    suspend fun disconnect() = withContext(Dispatchers.IO) {
+        request(JSONObject().put("operation", "stop").put("disconnect", true))
+    }
+
     suspend fun search(query: String): List<FixtureTrack> = withContext(Dispatchers.IO) {
         tracks(request(JSONObject().put("operation", "search").put("query", query)))
     }
@@ -150,27 +158,34 @@ internal object SoulseekFixture {
     private external fun nativeRequest(request: String): String
 }
 
-internal data class PendingFixtureTransfer(val tree: Uri, val sha256: String, val track: FixtureTrack) {
+internal data class PendingFixtureTransfer(
+    val tree: Uri, val sha256: String, val track: FixtureTrack, val fromSoulseekTab: Boolean = false,
+) {
     fun save(context: Context) {
         val json = JSONObject().put("tree", tree.toString()).put("sha256", sha256).put("track", track.encode())
-        check(settings(context).edit().putString(KEY, json.toString()).commit()) {
+            .put("fromSoulseekTab", fromSoulseekTab)
+        check(settings(context).edit().putString(key(fromSoulseekTab), json.toString()).commit()) {
             "Could not save the download for Resume."
         }
     }
 
     companion object {
         private const val KEY = "pending-rust-transfer"
+        private fun key(fromSoulseekTab: Boolean) = if (fromSoulseekTab) "pending-soulseek-tab-transfer" else KEY
 
         private fun settings(context: Context) = context.getSharedPreferences("peer-fixture", Context.MODE_PRIVATE)
 
-        fun read(context: Context): PendingFixtureTransfer? = settings(context).getString(KEY, null)?.let { saved ->
+        fun read(context: Context, fromSoulseekTab: Boolean = false): PendingFixtureTransfer? =
+            settings(context).getString(key(fromSoulseekTab), null)?.let { saved ->
             val json = JSONObject(saved)
             PendingFixtureTransfer(Uri.parse(json.getString("tree")), json.getString("sha256"),
-                FixtureTrack.decode(json.getJSONObject("track")))
+                FixtureTrack.decode(json.getJSONObject("track")), json.optBoolean("fromSoulseekTab"))
         }
 
-        fun clear(context: Context) {
-            check(settings(context).edit().remove(KEY).commit()) { "Could not clear the saved download." }
+        fun clear(context: Context, fromSoulseekTab: Boolean = false) {
+            check(settings(context).edit().remove(key(fromSoulseekTab)).commit()) {
+                "Could not clear the saved download."
+            }
         }
     }
 }

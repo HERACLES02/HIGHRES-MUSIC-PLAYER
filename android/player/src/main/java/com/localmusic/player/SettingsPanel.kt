@@ -18,7 +18,8 @@ import com.localmusic.core.ThemeAccent
 fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: Boolean,
     backupUi: BackupUiState, actions: FeatureActions, send: (String, Bundle) -> Unit,
     audio: () -> Unit, widgets: () -> Unit, scan: () -> Unit, notifications: () -> Unit,
-    report: () -> Unit, licenses: () -> Unit, openEdit: (String) -> Unit) {
+    report: () -> Unit, licenses: () -> Unit, openEdit: (String) -> Unit,
+    extraSettings: @Composable () -> Unit = {}) {
     var removedSongs by remember{mutableStateOf(false)}
     if(removedSongs)RemovedSongsDialog(library,ready,send){removedSongs=false}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
@@ -85,6 +86,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
             }
             if (library.message.isNotBlank()) Text(library.message, style = MaterialTheme.typography.bodySmall)
         }
+        extraSettings()
         SettingsCard("Backup & restore") {
             Text("Save playlists, lyrics, chosen covers, settings and the paused queue. Music files are stored separately.")
             Text("Playback pauses during backup or restore.", style = MaterialTheme.typography.bodySmall)

@@ -172,6 +172,7 @@ fn operate(request: Value) -> Result<Value> {
     }
     let client = session.client()?;
     match operation {
+        "connect" => Ok(Value::Null),
         "search" => {
             let results = client.search(field(&request, "query")?, Duration::from_secs(4))?;
             let tracks: Vec<_> = results

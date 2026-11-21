@@ -42,7 +42,8 @@ data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Ma
     val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap(),
     val removedTracks: List<Track> = emptyList())
 
-class MusicApplication : Application() {
+open class MusicApplication : Application() {
+    internal open val soulseekTab: SoulseekTab? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val storage by lazy { scope.async { MusicStore(this@MusicApplication, scope).also { it.initialize() } } }
     override fun onCreate() {
@@ -232,11 +233,12 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         try { LibraryScanner(context, this).run() }
         finally { mutable.update { it.copy(scanning = false) }; withContext(NonCancellable) { refresh() } }
     }
-    suspend fun addFolder(uri: Uri, flags: Int) {
+    suspend fun addFolder(uri: Uri, flags: Int, scheduleScan: Boolean = true) {
         require(context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }) { "Folder read access was not granted." }
         val repo = repository(); val old = repo.folderGrants().firstOrNull { it.treeUri == uri.toString() }
         repo.saveFolderGrant(FolderGrant(old?.id ?: java.util.UUID.randomUUID(), uri.toString(), flags, System.currentTimeMillis()))
-        refresh(); requestScan()
+        refresh()
+        if (scheduleScan) requestScan()
     }
     /** Validated on the IO refresh path; rendering and media ticks never stat artwork files. */
     fun artwork(id: TrackId): String? = state.value.artworkPaths[id]

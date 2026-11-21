@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.localmusic.core.Availability
+import com.localmusic.core.TrackId
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -36,10 +37,16 @@ import org.json.JSONObject
 internal const val PEER_FOLDER_GRANT_FLAGS =
     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
+internal fun ConnectivityManager.wifiNetwork(): Network? = activeNetwork?.takeIf {
+    getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+}
+
 internal data class PeerTransferState(
     val running: Boolean = false,
     val message: String = "",
     val pausable: Boolean = false,
+    val libraryTrack: TrackId? = null,
+    val fromSoulseekTab: Boolean = false,
 )
 
 class PeerTransferService : Service() {
@@ -49,6 +56,7 @@ class PeerTransferService : Service() {
     private var transfer: Job? = null
     private var pausing = false
     private var notifiedPercent: Int? = null
+    private var fromSoulseekTab = false
 
     override fun onBind(intent: Intent): IBinder? = null
 
@@ -73,6 +81,7 @@ class PeerTransferService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        fromSoulseekTab = intent.getBooleanExtra(EXTRA_SOULSEEK_TAB, false)
 
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Controlled FLAC downloads", NotificationManager.IMPORTANCE_LOW)
@@ -86,30 +95,41 @@ class PeerTransferService : Service() {
                 cpu.acquire(WAKE_LOCK_TIMEOUT_MS)
                 val selected = intent.getStringExtra(EXTRA_TRACK)?.let { FixtureTrack.decode(JSONObject(it)) }
                 if (selected != null) withContext(Dispatchers.IO) {
-                    PendingFixtureTransfer(tree, sha256, selected).save(this@PeerTransferService)
+                    PendingFixtureTransfer(tree, sha256, selected, fromSoulseekTab).save(this@PeerTransferService)
                 }
                 val uri = fetchAndPublish(tree, address, sha256, selected)
                 showProgress("Verified the FLAC. Scanning the Library…")
                 val store = (application as MusicApplication).storage.await()
                 if (store.state.value.folders.none { it.treeUri == tree.toString() }) {
-                    store.addFolder(tree, PEER_FOLDER_GRANT_FLAGS)
+                    store.addFolder(tree, PEER_FOLDER_GRANT_FLAGS, scheduleScan = false)
                 }
                 // Wait for any active scan, even with automatic rescans disabled.
                 store.scan()
-                check(store.state.value.tracks.count { track ->
+                val imported = store.state.value.tracks.singleOrNull { track ->
                     track.availability == Availability.AVAILABLE && track.sources.any { it.uri == uri.toString() }
-                } == 1) { "The verified file is saved. Retry to finish adding it to the Library." }
-                if (selected != null) withContext(Dispatchers.IO) { PendingFixtureTransfer.clear(this@PeerTransferService) }
-                state = PeerTransferState(message = "Ready in Library. The FLAC was verified by SHA-256.")
+                }
+                checkNotNull(imported) { "The verified file is saved. Retry to finish adding it to the Library." }
+                if (selected != null) withContext(Dispatchers.IO) {
+                    PendingFixtureTransfer.clear(this@PeerTransferService, fromSoulseekTab)
+                }
+                state = PeerTransferState(
+                    message = "Ready in Library. The FLAC was verified by SHA-256.",
+                    libraryTrack = imported.id.takeIf { fromSoulseekTab },
+                    fromSoulseekTab = fromSoulseekTab,
+                )
             } catch (e: CancellationException) {
-                if (pausing) state = PeerTransferState(message = "Download paused. Tap Resume to continue.")
+                if (pausing) state = PeerTransferState(
+                    message = "Download paused. Tap Resume to continue.", fromSoulseekTab = fromSoulseekTab,
+                )
                 throw e
             } catch (e: Exception) {
                 state = PeerTransferState(
-                    message = "Download or import stopped. ${e.message ?: "Check the controlled peer and try again."}"
+                    message = "Download or import stopped. ${e.message ?: "Check the controlled peer and try again."}",
+                    fromSoulseekTab = fromSoulseekTab,
                 )
             } finally {
                 if (cpu.isHeld) cpu.release()
+                transfer = null
                 if (isActive || pausing) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -121,7 +141,9 @@ class PeerTransferService : Service() {
 
     private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String, selected: FixtureTrack?): Uri =
         withContext(Dispatchers.IO) {
-            val destination = FixtureDestination(contentResolver, tree)
+            val destination = if (fromSoulseekTab && selected != null) {
+                FixtureDestination(contentResolver, tree, selected.name)
+            } else FixtureDestination(contentResolver, tree)
             destination.requireWritable()
             destination.findFinished()?.let {
                 if (destination.matches(it, sha256)) return@withContext it
@@ -129,7 +151,7 @@ class PeerTransferService : Service() {
             }
             if (selected != null) {
                 withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = true) }
-                val staged = SoulseekFixture.fetch(selected, filesDir, sha256, ::wifiNetwork) { message, percent ->
+                val staged = SoulseekFixture.fetch(selected, filesDir, sha256, connectivity::wifiNetwork) { message, percent ->
                     withContext(Dispatchers.Main.immediate) { showProgress(message, percent) }
                 }
                 withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = false) }
@@ -176,10 +198,6 @@ class PeerTransferService : Service() {
         }
     }
 
-    private fun wifiNetwork(): Network? = connectivity.activeNetwork?.takeIf {
-        connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-    }
-
     private fun showProgress(message: String, percent: Int? = null) {
         val next = state.copy(running = true, message = message)
         if (state == next) return
@@ -191,7 +209,8 @@ class PeerTransferService : Service() {
     }
 
     private fun notification(message: String, percent: Int? = null): Notification {
-        val open = Intent(this, PeerTestActivity::class.java)
+        val open = (if (fromSoulseekTab) Intent(this, MainActivity::class.java).setAction(SOULSEEK_DOWNLOADS)
+            else Intent(this, PeerTestActivity::class.java))
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -216,14 +235,16 @@ class PeerTransferService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        state = PeerTransferState(message = "Android ended the download. Tap Download or retry to try again.")
+        state = PeerTransferState(message = "Android ended the download. Tap Resume to try again.",
+            fromSoulseekTab = fromSoulseekTab)
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
-        if (transfer?.isActive == true) state = PeerTransferState(message = "Download stopped. Please retry.")
+        if (transfer?.isActive == true) state = PeerTransferState(message = "Download stopped. Please retry.",
+            fromSoulseekTab = fromSoulseekTab)
         scope.cancel()
         super.onDestroy()
     }
@@ -238,6 +259,7 @@ class PeerTransferService : Service() {
         private const val EXTRA_ADDRESS = "address"
         private const val EXTRA_HASH = "sha256"
         private const val EXTRA_TRACK = "fixture-track"
+        private const val EXTRA_SOULSEEK_TAB = "from-soulseek-tab"
         private const val CHECKING = "Checking the destination and fixture…"
 
         internal var state by mutableStateOf(PeerTransferState())
@@ -247,12 +269,16 @@ class PeerTransferService : Service() {
             if (state.pausable) context.startService(Intent(context, PeerTransferService::class.java).setAction(ACTION_PAUSE))
         }
 
-        internal fun start(context: Context, tree: Uri, address: String, sha256: String, track: FixtureTrack? = null) {
+        internal fun start(
+            context: Context, tree: Uri, address: String, sha256: String,
+            track: FixtureTrack? = null, fromSoulseekTab: Boolean = false,
+        ) {
             if (state.running) return
             context.startForegroundService(Intent(context, PeerTransferService::class.java).setData(tree)
                 .putExtra(EXTRA_ADDRESS, address).putExtra(EXTRA_HASH, sha256)
+                .putExtra(EXTRA_SOULSEEK_TAB, fromSoulseekTab)
                 .putExtra(EXTRA_TRACK, track?.encode()?.toString()))
-            state = PeerTransferState(running = true, message = CHECKING)
+            state = PeerTransferState(running = true, message = CHECKING, fromSoulseekTab = fromSoulseekTab)
         }
     }
 }

@@ -67,7 +67,8 @@ class PeerTestActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 val transfer = PeerTransferService.state
-                val busy = transfer.running
+                val sessionOwned = (application as PeerTestApplication).soulseekTab?.ownsSession == true
+                val busy = transfer.running || sessionOwned
                 val saved = if (busy) null else PendingFixtureTransfer.read(this)
                 Surface(Modifier.fillMaxSize()) {
                     Column(
@@ -76,6 +77,7 @@ class PeerTestActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("Controlled FLAC download", style = MaterialTheme.typography.headlineSmall)
+                        if (sessionOwned) Text("Go offline in the Soulseek tab to use transfer diagnostics.")
                         OutlinedTextField(host, { host = it }, enabled = !busy, singleLine = true,
                             label = { Text("Peer IPv4 address") })
                         OutlinedTextField(hash, { hash = it }, enabled = !busy, singleLine = true,
@@ -93,7 +95,7 @@ class PeerTestActivity : ComponentActivity() {
                             Text("${saved.track.name} from ${saved.track.user} is waiting for Resume.")
                             Button(onClick = { startTransfer(saved.tree, saved.sha256, saved.track) }) { Text("Resume") }
                         }
-                        if (transfer.pausable) {
+                        if (transfer.pausable && !transfer.fromSoulseekTab) {
                             Button(onClick = { PeerTransferService.pause(this@PeerTestActivity) }) { Text("Pause") }
                         }
                         val message = if (busy) transfer.message else status ?: transfer.message
@@ -104,7 +106,7 @@ class PeerTestActivity : ComponentActivity() {
                             }
                         }
                         TextButton(onClick = { startActivity(Intent(this@PeerTestActivity, MainActivity::class.java)) },
-                            enabled = !busy) { Text("Open Library") }
+                            enabled = !transfer.running) { Text("Open Library") }
                     }
                 }
             }
@@ -122,9 +124,13 @@ class PeerTestActivity : ComponentActivity() {
             return
         }
         status = null
-        try {
+        val started = try {
             PeerTransferService.start(this, tree, address, sha256, track)
-        } catch (e: IllegalStateException) {
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
+        if (!started) {
             status = "Could not start the download. Open this screen and try again."
             return
         }
@@ -138,11 +144,17 @@ class PeerTestActivity : ComponentActivity() {
 }
 
 @androidx.compose.runtime.Composable
-private fun FixtureSearch(enabled: Boolean, canDownload: Boolean, download: (FixtureTrack) -> Unit) {
+internal fun FixtureSearch(
+    enabled: Boolean,
+    canDownload: Boolean,
+    chooseTrack: Boolean = false,
+    download: (FixtureTrack) -> Unit,
+) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf(emptyList<FixtureTrack>()) }
     var listing by remember { mutableStateOf<List<FixtureTrack>?>(null) }
+    var inspected by remember { mutableStateOf<List<FixtureTrack>?>(null) }
     var pending by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val canSearch = enabled && !pending
@@ -168,34 +180,43 @@ private fun FixtureSearch(enabled: Boolean, canDownload: Boolean, download: (Fix
     Button(enabled = canSearch && query.isNotBlank(), onClick = {
         results = emptyList()
         listing = null
+        inspected = null
         load("Searching the private fixture…") {
             results = SoulseekFixture.search(query.trim())
             message = if (results.isEmpty()) "No FLAC matches." else "Choose an uploader’s folder."
         }
     }) { Text("Search FLAC") }
     if (message.isNotEmpty()) Text(message)
-    val tracks = listing
+    val tracks = listing ?: inspected
     if (tracks == null) {
         results.groupBy { it.user to it.folder }.forEach { (key, matches) ->
             Text("${key.first} · ${key.second}")
             matches.forEach { Text("${it.name} · ${it.size} bytes") }
             TextButton(enabled = canSearch, onClick = {
                 load("Requesting the folder from ${key.first}…") {
-                    listing = SoulseekFixture.folder(matches.first())
-                    message = "${key.first} · ${key.second}"
+                    try {
+                        listing = SoulseekFixture.folder(matches.first())
+                        message = "${key.first} · ${key.second}"
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: IllegalStateException) {
+                        inspected = matches
+                        message = "Folder unavailable. Choose a search match from ${key.first}."
+                    }
                 }
             }) { Text("Inspect ${key.first}’s folder") }
         }
     } else {
         TextButton(enabled = canSearch, onClick = {
             listing = null
+            inspected = null
             message = "Choose an uploader’s folder."
         }) { Text("Back to results") }
         if (tracks.isEmpty()) Text("This folder has no downloadable FLAC tracks.")
         tracks.forEach { track ->
             Text("${track.name} · ${track.size} bytes")
             Button(enabled = canSearch && canDownload, onClick = { download(track) }) {
-                Text("Download ${track.name}")
+                Text(if (chooseTrack) "Choose ${track.name}" else "Download ${track.name}")
             }
         }
     }
