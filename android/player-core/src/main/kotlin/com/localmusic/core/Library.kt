@@ -21,7 +21,7 @@ data class AudioProperties(val durationMs: Long, val mimeType: String, val sampl
 data class Track(val id: TrackId, val tags: MusicTags, val audio: AudioProperties,
                  val sources: List<TrackSource>, val availability: Availability, val addedAtMs: Long,
                  val favorite: Boolean = false)
-data class Playlist(val id: PlaylistId, val name: String)
+data class Playlist(val id: PlaylistId, val name: String, val artwork: String? = null, val description: String? = null)
 data class PlaylistEntry(val id: EntryId, val playlistId: PlaylistId, val trackId: TrackId, val rank: Long)
 data class FolderGrant(val id: UUID, val treeUri: String, val persistedFlags: Int, val grantedAtMs: Long)
 data class ArtworkOverride(val trackId: TrackId, val privateFile: String, val sourceUrl: String? = null,

@@ -205,7 +205,17 @@ class PlaybackService : MediaLibraryService() {
                             val path = if (args.getBoolean("remove")) "" else withContext(Dispatchers.IO) {
                                 LocalArtwork(this@PlaybackService).import(Uri.parse(requireNotNull(args.getString("uri"))), args.getBoolean("crop", true))
                             }
-                            store.operationMutex.withLock { for (id in ids) store.repository().updateExtra(id) { it.copy(artworkOverride=path,artworkCredit=null,artworkSourceUrl=null,overridesVersion=it.overridesVersion+1) } };store.refresh()
+                            val credit = args.getString("credit")
+                            val sourceUrl = args.getString("sourceUrl")
+                            store.operationMutex.withLock { for (id in ids) store.repository().updateExtra(id) { it.copy(artworkOverride=path,artworkCredit=credit,artworkSourceUrl=sourceUrl,overridesVersion=it.overridesVersion+1) } };store.refresh()
+                        }
+                        PLAYLIST_ART -> {
+                            val playlistId = PlaylistId(UUID.fromString(requireNotNull(args.getString("id"))))
+                            val path = if (args.getBoolean("remove")) "" else withContext(Dispatchers.IO) {
+                                LocalArtwork(this@PlaybackService).import(Uri.parse(requireNotNull(args.getString("uri"))), args.getBoolean("crop", true))
+                            }
+                            store.operationMutex.withLock { store.repository().setPlaylistArtwork(playlistId, path.takeIf { it.isNotEmpty() }) }
+                            store.refresh()
                         }
                         EDIT_PREPARE -> {
                             check(!store.state.value.scanning) { "Wait for the scan to finish before preparing file edits." }
@@ -249,7 +259,7 @@ class PlaybackService : MediaLibraryService() {
                             val known = store.state.value.tracks.associateBy { it.id }
                             require(ids.all { known.containsKey(it) }) { "A song is no longer in the library. Scan and try again." }
                             val playlist = if (command.customAction != PLAYLIST_ADD) {
-                                store.repository().createPlaylist(requireNotNull(args.getString("name")), ids)
+                                store.repository().createPlaylist(requireNotNull(args.getString("name")), ids, args.getString("description"))
                             } else {
                                 store.repository().playlist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))))?.first
                                     ?: error("The playlist was already deleted.")
@@ -261,7 +271,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         PLAYLIST_RENAME -> {
                             store.repository().renamePlaylist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id")))),
-                                requireNotNull(args.getString("name"))); store.refreshPlaylists()
+                                requireNotNull(args.getString("name")), args.getString("description")); store.refreshPlaylists()
                         }
                         PLAYLIST_DELETE -> {
                             store.repository().deletePlaylist(PlaylistId(UUID.fromString(requireNotNull(args.getString("id"))))); store.refreshPlaylists()
@@ -430,7 +440,8 @@ class PlaybackService : MediaLibraryService() {
         const val LYRICS_PROVIDER = "com.localmusic.player.LYRICS_PROVIDER"
         const val APP_TAGS = "com.localmusic.player.APP_TAGS"
         const val APP_ART = "com.localmusic.player.APP_ART"
-        const val EDIT_PREPARE = "com.localmusic.player.EDIT_PREPARE"
+    const val PLAYLIST_ART = "com.localmusic.player.PLAYLIST_ART"
+    const val EDIT_PREPARE = "com.localmusic.player.EDIT_PREPARE"
         const val EDIT_COMMIT = "com.localmusic.player.EDIT_COMMIT"
         const val EDIT_DISCARD = "com.localmusic.player.EDIT_DISCARD"
         const val EDIT_UNDO = "com.localmusic.player.EDIT_UNDO"
@@ -452,7 +463,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
         const val OUTPUT_MODE="com.localmusic.player.OUTPUT_MODE"
         val ACTIONS = setOf(OUTPUT_MODE,SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
-            LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
+            LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, PLAYLIST_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)
     }

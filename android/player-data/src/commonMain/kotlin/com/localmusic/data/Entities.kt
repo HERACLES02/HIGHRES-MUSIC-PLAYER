@@ -17,7 +17,7 @@ data class SourceRow(@PrimaryKey val id: String, val trackId: String, val uri: S
                      val folderGrantId: String?)
 
 @Entity(tableName = "playlist")
-data class PlaylistRow(@PrimaryKey val id: String, val name: String)
+data class PlaylistRow(@PrimaryKey val id: String, val name: String, val artwork: String? = null, val description: String? = null)
 
 @Entity(tableName = "playlist_entry", foreignKeys = [
     ForeignKey(entity = PlaylistRow::class, parentColumns = ["id"], childColumns = ["playlistId"], onDelete = ForeignKey.CASCADE),

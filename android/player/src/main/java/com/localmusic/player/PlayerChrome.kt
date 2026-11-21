@@ -16,6 +16,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.Track
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
+
 /** Local vector assets shared by the native player screens. */
 object PlayerGlyph {
     private fun vector(name: String, data: String): ImageVector = ImageVector.Builder(
@@ -83,8 +101,44 @@ fun PlayerNavigation(selected: String, navigate: (String) -> Unit) {
 
 @Composable
 fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, progress: ()->Float,
-    open: () -> Unit, toggle: () -> Unit, next: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+    open: () -> Unit, toggle: () -> Unit, previous: () -> Unit, next: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var offset by remember(track.id) { mutableFloatStateOf(0f) }
+    var settling by remember(track.id) { mutableStateOf(false) }
+    var epoch by remember(track.id) { mutableIntStateOf(0) }
+    val swipeThreshold = with(LocalDensity.current) { 80.dp.toPx() }
+    val flingThreshold = with(LocalDensity.current) { 500.dp.toPx() }
+
+    suspend fun settle(velocity: Float) {
+        if (settling) return
+        settling = true
+        val started = epoch
+        try {
+            val triggerPrevious = offset > swipeThreshold || velocity > flingThreshold
+            val triggerNext = offset < -swipeThreshold || velocity < -flingThreshold
+            if (triggerPrevious && ready) previous()
+            else if (triggerNext && ready) next()
+
+            animate(offset, 0f, initialVelocity = velocity,
+                animationSpec = spring(dampingRatio = .9f, stiffness = 500f)) { value, _ ->
+                if (started == epoch) offset = value
+            }
+        } finally {
+            if (started == epoch) {
+                offset = 0f
+                settling = false
+            }
+        }
+    }
+
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+        .graphicsLayer { translationX = offset }
+        .draggable(
+            state = rememberDraggableState { delta -> if (!settling) offset += delta },
+            orientation = Orientation.Horizontal,
+            enabled = ready,
+            onDragStopped = { velocity -> scope.launch { settle(velocity) } }
+        ),
         shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
