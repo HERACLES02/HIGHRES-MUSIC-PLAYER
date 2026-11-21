@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soulseek in Local Music · Interactive mock-up</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { font-family: "Segoe UI", system-ui, sans-serif; color: #243126; background: #eeefe8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .layout { max-width: 1000px; margin: auto; padding: 42px 24px; display: grid; grid-template-columns: 1fr minmax(0, 450px); align-items: center; gap: clamp(30px, 7vw, 90px); }
+    .intro h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 650; line-height: 1.03; letter-spacing: -.055em; margin: 12px 0 20px; }
+    .intro p, .intro li { color: #4a594d; line-height: 1.55; }
+    .intro ol { padding-left: 24px; margin: 24px 0; }
+    .intro li { padding: 3px 0 3px 5px; }
+    .eyebrow { font-size: .8rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .reset { border-color: #a4b0a1; color: #344836; }
+    .phone { color-scheme: dark; background: #151c18; color: #f1f2eb; border: 5px solid #323b33; border-radius: 29px; box-shadow: 0 24px 58px #26362626; height: min(760px, max(590px, calc(100dvh - 84px))); display: flex; flex-direction: column; overflow: hidden; }
+    .app-header { padding: 17px 20px 13px; border-bottom: 1px solid #334138; }
+    .app-header .eyebrow { color: #bbcea9; }
+    h2 { margin: 3px 0 0; font-size: 1.7rem; letter-spacing: -.03em; }
+    h3, p { margin: 0; }
+    h3 { font-size: 1rem; }
+    #screen { flex: 1; overflow: auto; padding: 16px; scrollbar-color: #526553 transparent; }
+    [hidden] { display: none !important; }
+    button, input { font: inherit; }
+    button { cursor: pointer; min-height: 44px; padding: 8px 12px; border: 1px solid #526553; border-radius: 11px; background: transparent; color: inherit; }
+    button:hover:enabled { background: #aac39223; }
+    button:disabled { opacity: .5; cursor: default; }
+    :focus-visible { outline: 2px solid #95bb70; outline-offset: 3px; }
+    .primary { background: #c7e1aa; color: #20301e; border-color: transparent; font-weight: 650; }
+    .primary:hover:enabled { background: #d7efbd; }
+    nav { display: flex; gap: 4px; }
+    nav button { flex: 1; min-width: 0; padding-inline: 1px; border: 0; font-size: .85rem; }
+    nav [aria-current="page"] { background: #354732; color: #e1f5cd; font-weight: 650; }
+    .main-nav { padding: 7px; border-top: 1px solid #334138; }
+    .sub-nav { padding: 8px 16px 0; }
+    .muted { color: #b9c7bb; font-size: .88rem; line-height: 1.45; }
+    .stack { display: grid; gap: 12px; }
+    .card { padding: 14px; background: #202a23; border: 1px solid #38473c; border-radius: 15px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .peer-path { overflow-wrap: anywhere; }
+    .search { display: flex; gap: 8px; }
+    .search input { flex: 1; min-width: 0; padding: 10px; border: 1px solid #526553; border-radius: 11px; background: #202a23; color: inherit; }
+    .track { display: flex; align-items: center; gap: 11px; padding: 10px 0; min-height: 48px; cursor: pointer; }
+    .track + .track, .transfer + .transfer { border-top: 1px solid #425045; }
+    .track input { width: 19px; height: 19px; accent-color: #abcb8e; }
+    .track span { display: grid; gap: 3px; }
+    .notice { background: #352e22; border-color: #615138; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .transfer { padding: 10px 0; display: grid; gap: 7px; }
+    .transfer:last-child { padding-bottom: 0; }
+    .transfer button { justify-self: start; }
+    progress { width: 100%; accent-color: #b8d699; }
+    .highlight { border-color: #b8d699; }
+    .status { color: #daf0c5; font-size: .87rem; font-weight: 650; }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; max-width: 490px; gap: 22px; padding: 20px 12px; }
+      .intro h1 { margin-bottom: 10px; }
+      .intro ol { margin: 10px 0; }
+      .phone { height: min(760px, max(540px, 95dvh)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header class="intro">
+      <div class="eyebrow">Interactive mock-up</div>
+      <h1>Soulseek in<br>Local Music</h1>
+      <p>Try the search-to-Library flow with simulated peers, Wi-Fi, and files.</p>
+      <ol>
+        <li>Enable Soulseek in <strong>Settings</strong> and search for <strong>Amber</strong>.</li>
+        <li>Open the <strong>Studio</strong> folder to find Violet.</li>
+        <li>Try the <strong>Alternate</strong> folder for the unavailable listing and filename conflict.</li>
+      </ol>
+      <button class="reset" id="reset" type="button">Reset demo</button>
+    </header>
+    <main class="phone" aria-label="Local Music mock-up">
+      <header class="app-header">
+        <div class="eyebrow">Local Music</div>
+        <h2 id="title" tabindex="-1">Home</h2>
+      </header>
+      <nav class="sub-nav" id="soulseek-nav" aria-label="Soulseek" hidden>
+        <button type="button" data-view="Search">Search</button>
+        <button type="button" data-view="Downloads">Downloads</button>
+      </nav>
+      <div id="screen"></div>
+      <nav class="main-nav" id="main-nav" aria-label="Main navigation">
+        <button type="button" data-view="Home">Home</button>
+        <button type="button" data-view="Library">Library</button>
+        <button type="button" data-view="Playlists">Playlists</button>
+        <button type="button" data-view="Settings">Settings</button>
+        <button type="button" data-view="Search" id="soulseek-tab" hidden>Soulseek</button>
+      </nav>
+    </main>
+  </div>
+  <script>
+    "use strict";
+
+    const peers = [
+      {
+        uploader: "peer-fixture-a", folder: "Amber (Studio)", path: "Music / Amber (Studio)", available: true,
+        tracks: [
+          { name: "Amber.flac", bytes: 152312, audio: "16-bit / 44.1 kHz", match: true },
+          { name: "Violet.flac", bytes: 208640, audio: "16-bit / 44.1 kHz", match: false }
+        ]
+      },
+      {
+        uploader: "peer-fixture-b", folder: "Amber (Alternate)", path: "FLAC / Amber (Alternate)", available: false,
+        tracks: [{ name: "Amber.flac", bytes: 246180, audio: "24-bit / 48 kHz", match: true }]
+      }
+    ];
+    const existingTrack = { name: "Amber.flac", folder: peers[1].folder, source: "Existing file" };
+    const screen = document.querySelector("#screen");
+    const title = document.querySelector("#title");
+    const soulseekNav = document.querySelector("#soulseek-nav");
+    const soulseekTab = document.querySelector("#soulseek-tab");
+    const formatBytes = bytes => `${bytes.toLocaleString("en-US")} B`;
+    const trackCount = count => `${count} ${count === 1 ? "track" : "tracks"}`;
+    let view, enabled, query, inspectedPeer, batches, library, openedTrack, wifi;
+
+    function reset() {
+      enabled = false;
+      query = "";
+      inspectedPeer = null;
+      batches = [];
+      library = [existingTrack];
+      openedTrack = null;
+      wifi = false;
+      show("Home");
+    }
+
+    function show(nextView, focus = true) {
+      view = nextView;
+      const inSoulseek = ["Search", "Folder", "Downloads"].includes(view);
+      const mainView = inSoulseek ? "Soulseek" : view;
+      soulseekNav.hidden = !inSoulseek;
+      soulseekTab.hidden = !enabled;
+      title.textContent = mainView;
+      document.querySelectorAll("nav button").forEach(button => {
+        const current = button.closest("#main-nav") ? mainView : view === "Folder" ? "Search" : view;
+        if (button.textContent === current) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      render();
+      if (focus) {
+        screen.scrollTop = 0;
+        title.focus();
+      }
+    }
+
+    function render() {
+      switch (view) {
+        case "Home":
+          screen.innerHTML = `<div class="card stack"><h3>Find music with Soulseek</h3>
+            ${enabled ? '<div><button data-view="Search" type="button">Open Soulseek</button></div>' : '<p class="muted">Turn on the optional tab in Settings.</p><div><button data-view="Settings" type="button">Open Settings</button></div>'}
+          </div>`;
+          break;
+        case "Settings":
+          screen.innerHTML = `<div class="card stack"><h3>Soulseek</h3><label class="track"><input type="checkbox" role="switch" id="enable" ${enabled ? "checked" : ""}>Enable Soulseek</label><p class="muted">Show Soulseek in the main navigation.</p></div>`;
+          break;
+        case "Search": renderSearch(); break;
+        case "Folder": renderFolder(); break;
+        case "Downloads": renderDownloads(); break;
+        case "Library": renderLibrary(); break;
+        case "Playlists": screen.innerHTML = '<p class="muted">No playlists in this demo.</p>'; break;
+      }
+    }
+
+    function renderSearch() {
+      const matches = query.toLowerCase() === "amber";
+      screen.innerHTML = `<div class="stack">
+        <form class="search" id="search-form">
+          <input type="search" aria-label="Search for an artist, album, or song" placeholder="Artist, album, or song" required>
+          <button class="primary" type="submit">Search</button>
+        </form>
+        <p class="muted" role="status">${matches ? "2 uploader folders · FLAC matches" : query ? "No matches in the demo. Try Amber." : "Try searching for Amber."}</p>
+        ${matches ? peers.map((peer, index) => `<article class="card stack">
+          <div><h3>${peer.folder}</h3><p class="muted">${peer.uploader} · ${trackCount(peer.tracks.filter(track => track.match).length)} matched</p></div>
+          <p class="muted peer-path">${peer.path}</p>
+          ${peer.tracks.filter(track => track.match).map(track => `<p class="muted">${track.name} · ${formatBytes(track.bytes)} · ${track.audio}</p>`).join("")}
+          <button type="button" data-peer="${index}">Inspect ${peer.folder} folder</button>
+        </article>`).join("") : ""}
+      </div>`;
+      screen.querySelector("input").value = query;
+    }
+
+    function renderFolder() {
+      const peer = inspectedPeer;
+      const tracks = peer.available ? peer.tracks : peer.tracks.filter(track => track.match);
+      screen.innerHTML = `<div class="stack">
+        <div><button type="button" data-view="Search">← Back to results</button></div>
+        <div><h3>${peer.folder}</h3><p class="muted peer-path">${peer.uploader} · ${peer.path}</p></div>
+        ${peer.available ? "" : '<div class="card notice"><h3>Folder unavailable</h3><p class="muted">You can still select individual search matches.</p></div>'}
+        <form class="stack" id="selection-form">
+          ${peer.available ? '<div><button type="button" id="select-all">Select all FLACs</button></div>' : ""}
+          <div class="card">
+            ${tracks.map((track, index) => `<label class="track"><input type="checkbox" aria-label="${track.name}" aria-describedby="track-info-${index}"><span>${track.name}<small class="muted" id="track-info-${index}">${formatBytes(track.bytes)} · ${track.audio}</small></span></label>`).join("")}
+          </div>
+          <div class="row"><p class="muted" role="status" id="selection-summary"></p><button class="primary" type="submit" id="download">Download</button></div>
+        </form>
+      </div>`;
+      const form = screen.querySelector("#selection-form");
+      const checks = [...form.querySelectorAll("input")];
+      const selected = () => tracks.filter((_, index) => checks[index].checked);
+      const updateSummary = () => {
+        const selection = selected();
+        form.querySelector("#selection-summary").textContent = `${trackCount(selection.length)} selected · ${formatBytes(selection.reduce((total, track) => total + track.bytes, 0))}`;
+        form.querySelector("#download").disabled = selection.length === 0;
+      };
+      form.addEventListener("change", updateSummary);
+      form.querySelector("#select-all")?.addEventListener("click", () => {
+        checks.forEach(check => { check.checked = true; });
+        updateSummary();
+      });
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        if (selected().length === 0) return;
+        batches.unshift({ peer, transfers: selected().map(track => ({ track, status: wifi ? "Downloading" : "Waiting for Wi-Fi" })) });
+        show("Downloads");
+      });
+      updateSummary();
+    }
+
+    function renderDownloads() {
+      screen.innerHTML = `<div class="stack"><h3>Downloads</h3>
+        ${batches.length && !wifi ? '<div><button type="button" id="connect-wifi">Connect demo Wi-Fi</button></div>' : ""}
+        ${batches.length ? batches.map(({ peer, transfers }, batchIndex) => `<article class="card stack">
+          <div><h3>${peer.folder}</h3><p class="muted">${peer.uploader} · ${trackCount(transfers.length)}</p></div>
+          <div>${transfers.map((transfer, index) => `<section class="transfer" aria-label="${transfer.track.name}">
+            <div class="row"><strong>${transfer.track.name}</strong><span class="muted">${formatBytes(transfer.track.bytes)}</span></div>
+            <p class="status" role="status">${transfer.status}</p>
+            ${transfer.status === "Downloading" ? `<progress value="48" max="100" aria-label="${transfer.track.name} download progress"></progress><p class="muted">48% transferred</p><button type="button" data-finish="${batchIndex}:${index}">Finish demo transfer</button>` : ""}
+            ${transfer.status === "Filename conflict" ? `<div class="card notice stack">
+              <p class="muted">${peer.folder} already contains a different ${transfer.track.name}. Both choices keep the existing file.</p>
+              <div class="actions"><button type="button" data-skip="${batchIndex}:${index}">Skip</button><button class="primary" type="button" data-save="${batchIndex}:${index}">Save separate copy</button></div>
+            </div>` : ""}
+            ${transfer.status === "Skipped" ? '<p class="muted">Existing file kept.</p>' : ""}
+            ${transfer.entry && transfer.entry.name !== transfer.track.name ? `<p class="muted">Saved as ${transfer.entry.name}</p>` : ""}
+            ${transfer.status === "Ready in Library" ? `<button class="primary" type="button" data-open="${batchIndex}:${index}">Open in Library</button>` : ""}
+          </section>`).join("")}</div>
+        </article>`).join("") : '<p class="muted">Select tracks from Search to start a download.</p>'}
+      </div>`;
+    }
+
+    function markReady(transfer, entry) {
+      transfer.entry = entry;
+      transfer.status = "Ready in Library";
+    }
+
+    function publish(transfer, peer, separate = false) {
+      const findName = name => library.find(entry => entry.name === name && entry.folder === peer.folder);
+      const requestedName = transfer.track.name;
+      const existing = findName(requestedName);
+      if (existing && !separate) {
+        if (existing.source === peer.uploader) markReady(transfer, existing);
+        else transfer.status = "Filename conflict";
+        return;
+      }
+
+      let name = requestedName;
+      for (let suffix = 2; findName(name); suffix++) {
+        name = `${requestedName.slice(0, -5)} (${suffix}).flac`;
+      }
+      const entry = { name, folder: peer.folder, source: peer.uploader };
+      library.push(entry);
+      markReady(transfer, entry);
+    }
+
+    function renderLibrary() {
+      screen.innerHTML = `<div class="stack"><h3>Songs</h3>
+        ${library.map(entry => `<article class="card${entry === openedTrack ? " highlight" : ""}" ${entry === openedTrack ? 'id="opened-track" tabindex="-1"' : ""}>
+          <h3>${entry.name}</h3><p class="muted">${entry.folder} · ${entry.source}</p>
+        </article>`).join("")}
+      </div>`;
+    }
+
+    document.querySelector(".phone").addEventListener("click", event => {
+      const button = event.target.closest("button");
+      if (!button) return;
+      if (button.dataset.view) {
+        openedTrack = null;
+        show(button.dataset.view);
+      }
+      if (button.dataset.peer !== undefined) {
+        inspectedPeer = peers[Number(button.dataset.peer)];
+        show("Folder");
+      }
+      if (button.id === "connect-wifi") {
+        wifi = true;
+        for (const batch of batches) {
+          for (const transfer of batch.transfers) {
+            if (transfer.status === "Waiting for Wi-Fi") transfer.status = "Downloading";
+          }
+        }
+        show("Downloads");
+      }
+      const transferAction = button.dataset.finish ?? button.dataset.open ?? button.dataset.skip ?? button.dataset.save;
+      if (transferAction) {
+        const [batchIndex, index] = transferAction.split(":").map(Number);
+        const { peer, transfers } = batches[batchIndex];
+        const transfer = transfers[index];
+        if (button.dataset.open) {
+          openedTrack = transfer.entry;
+          show("Library");
+          screen.querySelector("#opened-track").focus();
+        } else {
+          if (button.dataset.skip) transfer.status = "Skipped";
+          else publish(transfer, peer, Boolean(button.dataset.save));
+          show("Downloads");
+        }
+      }
+    });
+
+    screen.addEventListener("change", event => {
+      if (event.target.id === "enable") {
+        enabled = event.target.checked;
+        soulseekTab.hidden = !enabled;
+      }
+    });
+
+    screen.addEventListener("submit", event => {
+      if (event.target.id !== "search-form") return;
+      event.preventDefault();
+      query = event.target.querySelector("input").value.trim();
+      show("Search", false);
+      screen.querySelector("input").focus();
+    });
+
+    document.querySelector("#reset").addEventListener("click", reset);
+    reset();
+  </script>
+</body>
+</html>
