@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -33,16 +36,34 @@ import org.json.JSONObject
 internal const val PEER_FOLDER_GRANT_FLAGS =
     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
-internal data class PeerTransferState(val running: Boolean = false, val message: String = "")
+internal data class PeerTransferState(
+    val running: Boolean = false,
+    val message: String = "",
+    val pausable: Boolean = false,
+)
 
 class PeerTransferService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val notifications by lazy { getSystemService(NotificationManager::class.java) }
+    private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private var transfer: Job? = null
+    private var pausing = false
+    private var notifiedPercent: Int? = null
 
     override fun onBind(intent: Intent): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_PAUSE) {
+            if (state.pausable) {
+                pausing = true
+                state = state.copy(pausable = false)
+                showProgress("Pausing the download.")
+                transfer?.cancel()
+            } else if (transfer == null) {
+                stopSelf(startId)
+            }
+            return START_NOT_STICKY
+        }
         if (transfer != null) return START_NOT_STICKY
         val tree = intent?.data
         val address = intent?.getStringExtra(EXTRA_ADDRESS)
@@ -64,6 +85,9 @@ class PeerTransferService : Service() {
             try {
                 cpu.acquire(WAKE_LOCK_TIMEOUT_MS)
                 val selected = intent.getStringExtra(EXTRA_TRACK)?.let { FixtureTrack.decode(JSONObject(it)) }
+                if (selected != null) withContext(Dispatchers.IO) {
+                    PendingFixtureTransfer(tree, sha256, selected).save(this@PeerTransferService)
+                }
                 val uri = fetchAndPublish(tree, address, sha256, selected)
                 showProgress("Verified the FLAC. Scanning the Library…")
                 val store = (application as MusicApplication).storage.await()
@@ -75,16 +99,18 @@ class PeerTransferService : Service() {
                 check(store.state.value.tracks.count { track ->
                     track.availability == Availability.AVAILABLE && track.sources.any { it.uri == uri.toString() }
                 } == 1) { "The verified file is saved. Retry to finish adding it to the Library." }
+                if (selected != null) withContext(Dispatchers.IO) { PendingFixtureTransfer.clear(this@PeerTransferService) }
                 state = PeerTransferState(message = "Ready in Library. The FLAC was verified by SHA-256.")
             } catch (e: CancellationException) {
+                if (pausing) state = PeerTransferState(message = "Download paused. Tap Resume to continue.")
                 throw e
             } catch (e: Exception) {
                 state = PeerTransferState(
                     message = "Download or import stopped. ${e.message ?: "Check the controlled peer and try again."}"
                 )
             } finally {
-                cpu.release()
-                if (isActive) {
+                if (cpu.isHeld) cpu.release()
+                if (isActive || pausing) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
@@ -97,10 +123,16 @@ class PeerTransferService : Service() {
         withContext(Dispatchers.IO) {
             val destination = FixtureDestination(contentResolver, tree)
             destination.requireWritable()
-            destination.findFinished()?.takeIf { destination.matches(it, sha256) }?.let { return@withContext it }
+            destination.findFinished()?.let {
+                if (destination.matches(it, sha256)) return@withContext it
+                check(selected == null) { "The destination already has a different fixture. Choose another folder." }
+            }
             if (selected != null) {
-                withContext(Dispatchers.Main.immediate) { showProgress("Waiting for ${selected.user} to send the FLAC…") }
-                val staged = SoulseekFixture.fetch(selected, filesDir, sha256)
+                withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = true) }
+                val staged = SoulseekFixture.fetch(selected, filesDir, sha256, ::wifiNetwork) { message, percent ->
+                    withContext(Dispatchers.Main.immediate) { showProgress(message, percent) }
+                }
+                withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = false) }
                 return@withContext runInterruptible {
                     destination.publish(staged, sha256).also { staged.delete() }
                 }
@@ -144,9 +176,18 @@ class PeerTransferService : Service() {
         }
     }
 
+    private fun wifiNetwork(): Network? = connectivity.activeNetwork?.takeIf {
+        connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    }
+
     private fun showProgress(message: String, percent: Int? = null) {
-        state = PeerTransferState(running = true, message = message)
-        notifications.notify(NOTIFICATION_ID, notification(message, percent))
+        val next = state.copy(running = true, message = message)
+        if (state == next) return
+        state = next
+        if (percent == null || percent != notifiedPercent) {
+            notifiedPercent = percent
+            notifications.notify(NOTIFICATION_ID, notification(message, percent))
+        }
     }
 
     private fun notification(message: String, percent: Int? = null): Notification {
@@ -161,6 +202,12 @@ class PeerTransferService : Service() {
             .setOngoing(true)
             .setProgress(100, percent ?: 0, percent == null)
             .apply {
+                if (state.pausable) {
+                    val pause = Intent(this@PeerTransferService, PeerTransferService::class.java).setAction(ACTION_PAUSE)
+                    addAction(Notification.Action.Builder(
+                        null, "Pause", PendingIntent.getService(this@PeerTransferService, 0, pause, PendingIntent.FLAG_IMMUTABLE)
+                    ).build())
+                }
                 if (Build.VERSION.SDK_INT >= 31) {
                     setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
                 }
@@ -187,6 +234,7 @@ class PeerTransferService : Service() {
         private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1_000L
         private const val RECONNECT_WINDOW_MS = 90_000L
         private const val RECONNECT_DELAY_MS = 3_000L
+        private const val ACTION_PAUSE = "com.localmusic.player.peer.PAUSE"
         private const val EXTRA_ADDRESS = "address"
         private const val EXTRA_HASH = "sha256"
         private const val EXTRA_TRACK = "fixture-track"
@@ -194,6 +242,10 @@ class PeerTransferService : Service() {
 
         internal var state by mutableStateOf(PeerTransferState())
             private set
+
+        internal fun pause(context: Context) {
+            if (state.pausable) context.startService(Intent(context, PeerTransferService::class.java).setAction(ACTION_PAUSE))
+        }
 
         internal fun start(context: Context, tree: Uri, address: String, sha256: String, track: FixtureTrack? = null) {
             if (state.running) return

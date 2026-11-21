@@ -68,6 +68,7 @@ class PeerTestActivity : ComponentActivity() {
             MaterialTheme {
                 val transfer = PeerTransferService.state
                 val busy = transfer.running
+                val saved = if (busy) null else PendingFixtureTransfer.read(this)
                 Surface(Modifier.fillMaxSize()) {
                     Column(
                         Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
@@ -88,13 +89,20 @@ class PeerTestActivity : ComponentActivity() {
                         Button(onClick = { folder?.let { download(it) } }, enabled = !busy && folder != null) {
                             Text("Download or retry")
                         }
+                        if (saved != null) {
+                            Text("${saved.track.name} from ${saved.track.user} is waiting for Resume.")
+                            Button(onClick = { startTransfer(saved.tree, saved.sha256, saved.track) }) { Text("Resume") }
+                        }
+                        if (transfer.pausable) {
+                            Button(onClick = { PeerTransferService.pause(this@PeerTestActivity) }) { Text("Pause") }
+                        }
+                        val message = if (busy) transfer.message else status ?: transfer.message
+                        if (message.isNotEmpty()) Text(message)
                         if (SoulseekFixture.available) {
                             FixtureSearch(enabled = !busy, canDownload = folder != null) { track ->
                                 folder?.let { download(it, track) }
                             }
                         }
-                        val message = if (busy) transfer.message else status ?: transfer.message
-                        if (message.isNotEmpty()) Text(message)
                         TextButton(onClick = { startActivity(Intent(this@PeerTestActivity, MainActivity::class.java)) },
                             enabled = !busy) { Text("Open Library") }
                     }
@@ -104,8 +112,11 @@ class PeerTestActivity : ComponentActivity() {
     }
 
     private fun download(tree: Uri, track: FixtureTrack? = null) {
+        startTransfer(tree, hash.trim().lowercase(), track)
+    }
+
+    private fun startTransfer(tree: Uri, sha256: String, track: FixtureTrack?) {
         val address = host.trim()
-        val sha256 = hash.trim().lowercase()
         if (!fixtureHashPattern.matches(sha256)) {
             status = "Enter the 64-character SHA-256 printed by the fixture peer."
             return

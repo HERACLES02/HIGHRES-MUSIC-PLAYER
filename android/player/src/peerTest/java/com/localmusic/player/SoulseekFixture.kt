@@ -1,8 +1,16 @@
 package com.localmusic.player
 
+import android.content.Context
+import android.net.Network
+import android.net.Uri
+import android.os.SystemClock
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,8 +44,15 @@ internal object SoulseekFixture {
         tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)))
     }
 
-    fun fetch(track: FixtureTrack, files: File, sha256: String): File {
+    suspend fun fetch(
+        track: FixtureTrack,
+        files: File,
+        sha256: String,
+        wifi: () -> Network?,
+        progress: suspend (String, Int?) -> Unit,
+    ): File {
         require(fixtureHashPattern.matches(sha256))
+        require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
         val identity = MessageDigest.getInstance("SHA-256").digest(track.encode().toString().toByteArray())
             .joinToString("") { "%02x".format(it) }
         val directory = File(files, "peer-search-$sha256-$identity")
@@ -47,18 +62,84 @@ internal object SoulseekFixture {
             return stage
         }
         check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
-        request(track.encode().put("operation", "download").put("directory", directory.absolutePath))
-        check(stage.isFile && stage.length() == track.size && stage.inputStream().use { it.matchesFixture(sha256) }) {
-            "The selected FLAC failed size or SHA-256 verification."
+        val partial = File(directory, "${track.name}.part")
+        val download = track.encode().put("operation", "download").put("directory", directory.absolutePath)
+        val poll = JSONObject().put("operation", "poll")
+        for (attempt in 0..3) {
+            val waitDeadline = SystemClock.elapsedRealtime() + STALL_MS
+            while (wifi() == null) {
+                progress("Waiting for Wi-Fi. ${partial.length()} bytes saved.", null)
+                check(SystemClock.elapsedRealtime() < waitDeadline) { "Wi-Fi is unavailable. Tap Resume when connected." }
+                delay(POLL_MS)
+            }
+            if (attempt > 1) delay(1_000L * attempt)
+            val network = wifi() ?: continue
+            var keepSession = false
+            var sizeChanged = false
+            try {
+                request(download)
+                var lastBytes = partial.length()
+                var lastMovement = SystemClock.elapsedRealtime()
+                while (wifi() == network) {
+                    val update = request(poll) as JSONObject
+                    val offset = if (update.isNull("offset")) null else update.getLong("offset")
+                    when (update.getString("status")) {
+                        "complete" -> {
+                            keepSession = true
+                            break
+                        }
+                        "sizeChanged" -> {
+                            sizeChanged = true
+                            break
+                        }
+                    }
+                    val received = partial.length()
+                    if (received != lastBytes) {
+                        lastBytes = received
+                        lastMovement = SystemClock.elapsedRealtime()
+                    }
+                    check(SystemClock.elapsedRealtime() - lastMovement < STALL_MS) {
+                        "The uploader stopped responding."
+                    }
+                    if (offset == null) {
+                        progress("Waiting for ${track.user}. $received bytes saved.", null)
+                    } else {
+                        val resumed = if (offset > 0) " (resumed at $offset)" else ""
+                        progress(
+                            "Downloading $received / ${track.size} bytes$resumed",
+                            (received * 100 / track.size).toInt(),
+                        )
+                    }
+                    delay(POLL_MS)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IllegalStateException) {
+                if (attempt == 3) throw e
+            } finally {
+                withContext(NonCancellable) {
+                    request(JSONObject().put("operation", "stop").put("disconnect", !keepSession))
+                }
+            }
+            if (sizeChanged || keepSession || stage.exists()) {
+                if (!sizeChanged && stage.isFile && stage.length() == track.size &&
+                    stage.inputStream().use { it.matchesFixture(sha256) }
+                ) return stage
+                check(!partial.exists() || partial.delete()) { "Could not clear the invalid partial." }
+                check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
+                throw IOException("The selected FLAC failed size or SHA-256 verification.")
+            }
         }
-        return stage
+        error("Connection interrupted. ${partial.length()} bytes saved. Tap Resume.")
     }
+
+    private const val STALL_MS = 90_000L
+    private const val POLL_MS = 250L
 
     private fun tracks(value: Any): List<FixtureTrack> = (value as JSONArray).let { rows ->
         List(rows.length()) { FixtureTrack.decode(rows.getJSONObject(it)) }.distinct()
     }
 
-    @Synchronized
     private fun request(request: JSONObject): Any {
         check(available) { "Build the Peer Test Rust library first." }
         val response = JSONObject(nativeRequest(request.toString()))
@@ -67,4 +148,29 @@ internal object SoulseekFixture {
     }
 
     private external fun nativeRequest(request: String): String
+}
+
+internal data class PendingFixtureTransfer(val tree: Uri, val sha256: String, val track: FixtureTrack) {
+    fun save(context: Context) {
+        val json = JSONObject().put("tree", tree.toString()).put("sha256", sha256).put("track", track.encode())
+        check(settings(context).edit().putString(KEY, json.toString()).commit()) {
+            "Could not save the download for Resume."
+        }
+    }
+
+    companion object {
+        private const val KEY = "pending-rust-transfer"
+
+        private fun settings(context: Context) = context.getSharedPreferences("peer-fixture", Context.MODE_PRIVATE)
+
+        fun read(context: Context): PendingFixtureTransfer? = settings(context).getString(KEY, null)?.let { saved ->
+            val json = JSONObject(saved)
+            PendingFixtureTransfer(Uri.parse(json.getString("tree")), json.getString("sha256"),
+                FixtureTrack.decode(json.getJSONObject("track")))
+        }
+
+        fun clear(context: Context) {
+            check(settings(context).edit().remove(KEY).commit()) { "Could not clear the saved download." }
+        }
+    }
 }
