@@ -249,12 +249,28 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
     var searchBusy by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<RecordingCandidate>>(emptyList()) }
     var searchError by remember { mutableStateOf<String?>(null) }
-    var selectedCandidateId by rememberSaveable(draftKey) { mutableStateOf<String?>(null) }
-    var selectedCandidate by remember { mutableStateOf<RecordingCandidate?>(null) }
-    var stagedCoverPath by rememberSaveable(draftKey) { mutableStateOf<String?>(null) }
-    var stagingArt by remember { mutableStateOf(false) }
-    var applyArtwork by rememberSaveable(draftKey) { mutableStateOf(true) }
+    var selectedCandidate by remember(draftKey) { mutableStateOf<RecordingCandidate?>(null) }
+    val coverUrl = selectedCandidate?.imageUrl
+    var coverResult by remember(selectedCandidate) { mutableStateOf<Result<String>?>(null) }
+    var applyArtwork by remember(selectedCandidate) { mutableStateOf(coverUrl != null) }
+    val stagedCoverPath = coverResult?.getOrNull()
+    val stagingArt = coverUrl != null && coverResult == null
+    val waitingForArtwork = applyArtwork && coverUrl != null && stagedCoverPath == null
+    val artworkSource = selectedCandidate?.source.orEmpty()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(selectedCandidate, store) {
+        if (coverUrl != null) {
+            coverResult = try {
+                val lookup = requireNotNull(store).artistLookup
+                Result.success(lookup.thumbnail(coverUrl) ?: lookup.stageCoverUrl(coverUrl))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
 
     val providers = listOf("All", "iTunes", "Deezer", "MusicBrainz")
     val fields = TagPatch.KEYS.filter { enabled[it] == true }.associateWith { values[it].orEmpty() }
@@ -338,7 +354,7 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     Surface(Modifier.size(60.dp), shape = MaterialTheme.shapes.small) {
                                         if (stagedCoverPath != null) {
-                                            AsyncImage(model = File(stagedCoverPath!!), contentDescription = "Selected cover", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                            AsyncImage(model = File(stagedCoverPath), contentDescription = "Selected cover", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                         } else if (stagingArt) {
                                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
                                         } else {
@@ -349,6 +365,10 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Checkbox(checked = applyArtwork, onCheckedChange = { applyArtwork = it })
                                             Text("Apply artwork to ${countLabel(tracks.size, "song")}", style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        if (coverResult?.isFailure == true) {
+                                            Text("Cover download failed. Uncheck Apply artwork to save only tags.",
+                                                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                                         }
                                         TextButton(onClick = { actions.pickCover(tracks) }) {
                                             Text("Choose a different image…")
@@ -369,10 +389,9 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
                 if (searchResults.isNotEmpty()) {
                     Text(if (selectedCandidate != null) "Other online matches:" else "Matching tracks & artwork:", fontWeight = FontWeight.SemiBold)
                     searchResults.forEach { candidate ->
-                        val isSelected = candidate.id == selectedCandidateId
+                        val isSelected = candidate.id == selectedCandidate?.id
                         Card(
                             onClick = {
-                                selectedCandidateId = candidate.id
                                 selectedCandidate = candidate
                                 values["TITLE"] = candidate.title; enabled["TITLE"] = true
                                 values["ARTIST"] = candidate.artist; enabled["ARTIST"] = true
@@ -380,22 +399,6 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
                                 candidate.trackNumber?.let { values["TRACKNUMBER"] = it; enabled["TRACKNUMBER"] = true }
                                 candidate.date?.let { values["DATE"] = it; enabled["DATE"] = true }
                                 candidate.disambiguation?.let { if (values["GENRE"].isNullOrBlank()) { values["GENRE"] = it; enabled["GENRE"] = true } }
-                                val img = candidate.imageUrl
-                                if (img != null) {
-                                    applyArtwork = true
-                                    scope.launch {
-                                        stagingArt = true
-                                        try {
-                                            stagedCoverPath = store?.artistLookup?.thumbnail(img) ?: store?.artistLookup?.stageCoverUrl(img)
-                                        } catch (_: Exception) {
-                                            stagedCoverPath = null
-                                        } finally {
-                                            stagingArt = false
-                                        }
-                                    }
-                                } else {
-                                    stagedCoverPath = null
-                                }
                             },
                             colors = if (isSelected) CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else CardDefaults.cardColors(),
                             modifier = Modifier.fillMaxWidth()
@@ -439,15 +442,15 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
             if (preview) Text("Use in this app keeps the music file unchanged. Embedding prepares a backed-up file preview before writing.")
         }
     }, confirmButton = {
-        if (!preview) TextButton(enabled = fields.isNotEmpty() && patch.isSuccess, onClick = { preview = true }) { Text("Preview") }
-        else TextButton(onClick = {
+        if (!preview) TextButton(enabled = fields.isNotEmpty() && patch.isSuccess && !waitingForArtwork, onClick = { preview = true }) { Text("Preview") }
+        else TextButton(enabled = !waitingForArtwork, onClick = {
             send(PlaybackService.APP_TAGS, Bundle().apply { putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() })); putString("patch", JSONObject(fields).toString()) })
             if (applyArtwork && stagedCoverPath != null) {
                 send(PlaybackService.APP_ART, Bundle().apply {
                     putStringArrayList("ids", ArrayList(tracks.map { it.id.value.toString() }))
                     putString("uri", Uri.fromFile(File(stagedCoverPath)).toString())
-                    putString("sourceUrl", selectedCandidate?.imageUrl.orEmpty())
-                    putString("credit", selectedCandidate?.source ?: "Online search")
+                    putString("sourceUrl", coverUrl.orEmpty())
+                    putString("credit", artworkSource)
                 })
             }
             dismiss()
@@ -455,7 +458,7 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
     }, dismissButton = {
         Column(horizontalAlignment = Alignment.End) {
             if (preview) {
-                TextButton(enabled = !library.scanning, onClick = {
+                TextButton(enabled = !library.scanning && !waitingForArtwork, onClick = {
                     val batch = UUID.randomUUID().toString()
                     send(PlaybackService.EDIT_PREPARE, Bundle().apply {
                         putString("batch", batch)
