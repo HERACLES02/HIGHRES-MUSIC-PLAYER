@@ -28,11 +28,35 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
     private val seekIndexes = FlacSeekIndexes(context)
     private val processors=java.util.IdentityHashMap<ExoPlayer,MusicAudioProcessor>()
     private val deckTracks=java.util.IdentityHashMap<ExoPlayer,TrackId>()
-    private val outputProviders=java.util.IdentityHashMap<ExoPlayer,LocalAudioTrackProvider>()
+    var routeManager: UsbRouteManager = UsbRouteManager(RealAudioPlatformRouter(context))
+        set(value) {
+            field = value
+            outputProviders.values.forEach { it.routeManager = value }
+        }
+    private val outputProviders=java.util.IdentityHashMap<ExoPlayer,LocalAudioOutputProvider>()
+    var clock: () -> Long = { SystemClock.uptimeMillis() }
+    private var clippingActive = false
+
+    private fun checkClippingState() {
+        val activeProc = processors[engine]
+        val now = clock()
+        val isClipping = activeProc != null && activeProc.lastClipUptimeMs > 0 && (now - activeProc.lastClipUptimeMs) <= 2000L
+        if (clippingActive != isClipping) {
+            clippingActive = isClipping
+            changed()
+        }
+    }
+
     var engine = newEngine(false); private set
     private fun newEngine(attach:Boolean=true):ExoPlayer {
         val processor=MusicAudioProcessor()
-        val output=LocalAudioTrackProvider(context)
+        processor.clock = { clock() }
+        processor.onClippingSummary = { proc, _ ->
+            handler.post {
+                if (!destroyed && processors[engine] === proc) checkClippingState()
+            }
+        }
+        val output=LocalAudioOutputProvider(context, routeManager)
         // Local files need less prefill after a seek than the generic one-second default.
         // Keep steady-state loading and starvation recovery unchanged.
         val loadControl=DefaultLoadControl.Builder().setBufferDurationsMs(
@@ -110,7 +134,10 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             if (devices.any { it.isSink && it.type in setOf(AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET,
                 AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
                 AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO) }) pause("Output disconnected. Reconnect and press Play.")
-            if(audioSettings.preferAndroidUsb&&devices.any{it.isSink&&(it.type==AudioDeviceInfo.TYPE_USB_DEVICE||it.type==AudioDeviceInfo.TYPE_USB_HEADSET)})engine.stop()
+            if(audioSettings.preferAndroidUsb&&devices.any{it.isSink&&(it.type==AudioDeviceInfo.TYPE_USB_DEVICE||it.type==AudioDeviceInfo.TYPE_USB_HEADSET)}){
+                routeManager.clearRouteOwned()
+                engine.stop()
+            }
         }
     }
     private var lastPersistAt = 0L
@@ -121,6 +148,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             if (!ready) { handler.postDelayed(this, 1000); return }
             observePosition(); player.refresh(); changed()
             checkCrossfade()
+            checkClippingState()
             val now = SystemClock.elapsedRealtime()
             // Expiry is discovered by the service-owned tick (also while paused) and only pauses.
             if (sleep.checkExpired(now)) { event("sleep_timer_expired"); pause("Sleep timer finished.") }
@@ -157,6 +185,13 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         })
         target.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (target === engine) {
+                    processors[target]?.resetClipping()
+                    if (clippingActive) {
+                        clippingActive = false
+                        changed()
+                    }
+                }
                 if (!retiringOutput && !direct.selected && target===engine&&(reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT))
                     adoptLookahead(mediaItem)
             }
@@ -262,7 +297,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         event(if (message.isBlank()) "pause" else "interruption_pause")
         persist(); update()
     }
-    fun stop() { if(direct.selected){direct.normal();return};pause(); engine.stop(); event("stop"); update() }
+    fun stop() { if(direct.selected){direct.normal();return};pause(); routeManager.clearRouteOwned(); engine.stop(); event("stop"); update() }
     private var fileClosedForEdit: TrackId? = null
     fun closeForEdit(ids: Set<TrackId>) {
         require(!direct.selected && !retiringOutput){"Switch to Normal output before editing files."}
@@ -500,8 +535,13 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         val routeChanged=value.preferAndroidUsb!=audioSettings.preferAndroidUsb
         val transportChanged=value.crossfadeSeconds!=audioSettings.crossfadeSeconds||routeChanged
         audioSettings=value
+        processors.values.forEach { it.resetClipping() }
+        if (clippingActive) {
+            clippingActive = false
+        }
         if(transportChanged){finishFade();discardStandby();rejectedFade=null}
         outputProviders.values.forEach{it.preferAndroidUsb=value.preferAndroidUsb}
+        if(!value.preferAndroidUsb){routeManager.clearRouteOwned()}
         for((deck,id)in deckTracks)configureDeck(deck,id)
         if(routeChanged&&ready&&fileClosedForEdit==null){
             reconciling=true
@@ -588,6 +628,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             !engine.playWhenReady->"Paused"
             else->"Waiting for playback"
         }
+        val routeInfo = routeManager.audioInfoJson()
         return JSONObject().put("capturedAt",java.time.Instant.now().toString()).put("status",status)
             .put("preferAndroidUsb",audioSettings.preferAndroidUsb).put("eqEnabled",audioSettings.eqEnabled)
             .put("preset",audioSettings.preset.name).put("replayGain",audioSettings.replayGain.name)
@@ -596,6 +637,12 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("processing",pcm?.let{JSONObject().put("sampleRateHz",it.sampleRateHz).put("channelCount",it.channelCount)
                 .put("inputEncoding",it.inputEncoding).put("outputEncoding",it.outputEncoding)}?:JSONObject.NULL)
             .put("client",outputProviders[engine]?.outputJson()?:JSONObject.NULL)
+            .put("route", routeInfo)
+            .put("outputRequested", routeInfo.optString("outputRequested"))
+            .put("androidAccepted", routeInfo.optString("androidAccepted"))
+            .put("fallbackReason", routeInfo.opt("fallbackReason"))
+            .put("routedDevice", routeInfo.optString("routedDevice"))
+            .put("routeStrategy", routeInfo.optString("strategy"))
     }
     fun report(): String {
         observePosition()
@@ -646,6 +693,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("currentId", queue.current?.trackId?.value?.toString().orEmpty())
             .put("collectionLabel", presentation.label)
             .put("collectionNumber", presentation.number ?: 0).put("collectionTotal", presentation.total ?: 0)
+            .put("clipping", clippingActive)
             .put("manual", JSONArray(snapshot.manual.take(60).map { it.trackId.value.toString() }))
             .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)
@@ -661,6 +709,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         pause(); destroyed = true; handler.removeCallbacksAndMessages(null)
         discardStandby();finishFade()
         seekIndexes.close()
+        routeManager.clearRouteOwned()
         context.unregisterReceiver(noisy); audio.unregisterAudioDeviceCallback(removed)
         direct.destroy()
         if(!retiringOutput)releaseDeck(engine)

@@ -57,6 +57,16 @@ class DspKernel {
     private var gain=1.0
     private var targetGain=1.0
     private var smoothing=.001
+    var clippedSamples: Long = 0L
+        internal set
+    var lastSampleClipped: Boolean = false
+        internal set
+
+    fun resetClipping() {
+        clippedSamples = 0L
+        lastSampleClipped = false
+    }
+
     fun configure(sampleRate:Int,channels:Int,configuration:DspConfiguration) {
         require(sampleRate in 8000..768000&&channels in 1..32)
         val settings=configuration.settings
@@ -70,6 +80,7 @@ class DspKernel {
         for((band,filter) in filters.withIndex()){
             filter.biquadCoefficients(sampleRate).copyInto(coefficients,band*5)
         }
+        resetClipping()
     }
     fun sample(value:Double,channel:Int):Double {
         if(!enabled)return value
@@ -81,9 +92,12 @@ class DspKernel {
             history[h+1]=coefficients[c+2]*x-coefficients[c+4]*y;x=y
         }
         if(!x.isFinite()){reset();return 0.0}
+        val isClipped = x < -1.0 || x > 1.0
+        lastSampleClipped = isClipped
+        if (isClipped) clippedSamples++
         return x.coerceIn(-1.0,1.0)
     }
-    fun reset(){history.fill(0.0)}
+    fun reset(){history.fill(0.0);resetClipping()}
 }
 data class FadeWindow(val durationMs:Long) {
     init { require(durationMs>0) }

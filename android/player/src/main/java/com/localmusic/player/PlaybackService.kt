@@ -45,6 +45,7 @@ class PlaybackService : MediaLibraryService() {
         StartupTiming.mark("service_create")
         widgets=WidgetUpdates(this,scope)
         authority = PlaybackAuthority(this, ::publish)
+        activeAuthority = authority
         StartupTiming.mark("engine_created")
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val closeButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
@@ -396,11 +397,15 @@ class PlaybackService : MediaLibraryService() {
         return START_NOT_STICKY
     }
     override fun onDestroy() {
-        if (::authority.isInitialized) authority.release()
+        if (::authority.isInitialized) {
+            if (activeAuthority === authority) activeAuthority = null
+            authority.release()
+        }
         session?.let { removeSession(it); it.release() }; session = null
         scope.cancel(); super.onDestroy()
     }
     companion object {
+        @Volatile internal var activeAuthority: PlaybackAuthority? = null
         const val CLOSE_PLAYER = "com.localmusic.player.CLOSE_PLAYER"
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
         const val AUDIO_INFO="com.localmusic.player.AUDIO_INFO"

@@ -47,35 +47,53 @@ fun AudioInfoPanel(controller:MediaController?,currentId:String) {
         val snapshot=info
         if(snapshot==null)item{Text(failure?:"Reading audio info…")}
         else {
-            item{InfoCard("Selected song") {
+            item{InfoCard("Source") {
                 val source=snapshot.optJSONObject("source")
                 Text(source?.optString("title")?.takeIf{it.isNotBlank()}?:"No song selected",style=MaterialTheme.typography.titleMedium)
                 Text(source?.optString("quality")?.takeIf{it.isNotBlank()}?:"Source format not reported")
                 if(source!=null)Text(channels(source.optInt("channels")))
                 InfoLine("Playback",snapshot.optString("status","Unknown"))
             }}
-            item{InfoCard("Selected output mode") {
-                Text(if(snapshot.optBoolean("preferAndroidUsb"))"Android USB preference · above 48 kHz" else "Normal")
-                Text("This is your setting, not confirmation of the active mixer or DAC format.",style=MaterialTheme.typography.bodySmall)
-            }}
-            item{InfoCard("App processing · last reported") {
+            item{InfoCard("DSP") {
                 val pcm=snapshot.optJSONObject("processing")
                 Text(if(pcm==null)"No decoded PCM reported yet" else
-                    "${encoding(pcm.optInt("inputEncoding"))} → ${encoding(pcm.optInt("outputEncoding"))}\n${rate(pcm.optInt("sampleRateHz"))} · ${channels(pcm.optInt("channelCount"))}")
+                    "${rate(pcm.optInt("sampleRateHz"))} · ${channels(pcm.optInt("channelCount"))}\n${encoding(pcm.optInt("inputEncoding"))} → ${encoding(pcm.optInt("outputEncoding"))}")
                 InfoLine("EQ",if(snapshot.optBoolean("eqEnabled"))"On · ${snapshot.optString("preset")}" else "Off")
                 InfoLine("ReplayGain",snapshot.optString("replayGain","OFF").lowercase().replaceFirstChar{it.uppercase()})
                 Text("EQ and ReplayGain use Double arithmetic. Float PCM has about 24 significant bits of precision.",style=MaterialTheme.typography.bodySmall)
             }}
-            item{InfoCard("Android client · last opened") {
+            item{InfoCard("Output requested") {
+                val outputReq=snapshot.optString("outputRequested").takeIf{it.isNotBlank()}
+                    ?: (snapshot.optJSONObject("processing")?.let{"${rate(it.optInt("sampleRateHz"))} · stereo · float PCM"} ?: "stereo · float PCM")
+                Text(outputReq,style=MaterialTheme.typography.titleMedium)
+                InfoLine("Output mode",if(snapshot.optBoolean("preferAndroidUsb"))"Android USB preference enabled" else "Normal")
+                Text("Upstream precision sink outputs float PCM.",style=MaterialTheme.typography.bodySmall)
+            }}
+            item{InfoCard("Android accepted") {
+                val accepted=snapshot.optString("androidAccepted").takeIf{it.isNotBlank()}
+                    ?: "Standard Android route"
+                Text(accepted,style=MaterialTheme.typography.titleMedium)
+                val strategy=snapshot.optString("routeStrategy").takeIf{it.isNotBlank()}
+                    ?: snapshot.optJSONObject("client")?.optString("strategy")
+                if(strategy!=null)InfoLine("Route strategy",strategy)
+                val fallback=snapshot.optString("fallbackReason").takeIf{it.isNotBlank()&&it!="null"}
+                    ?: snapshot.optJSONObject("client")?.optString("fallbackReason")?.takeIf{it.isNotBlank()&&it!="null"}
+                if(fallback!=null)InfoLine("Fallback reason",fallback)
                 val client=snapshot.optJSONObject("client")
-                Text(if(client==null)"No AudioTrack client reported yet" else
-                    "${rate(client.optInt("audioTrackSampleRateHz"))} · ${channels(client.optInt("channelCount"))} · ${encoding(client.optInt("audioTrackEncoding"))}")
-                if(client!=null)InfoLine("Buffer strategy",client.optString("strategy","Not reported"))
-                InfoLine("Android-reported routed device",client?.optJSONObject("routedDevice")?.optString("product")?.takeIf{it.isNotBlank()}?:"Not reported")
-                Text("Client format can differ from the mixer's output. A route may be unavailable while paused or stopped.",style=MaterialTheme.typography.bodySmall)
+                if(client!=null&&client.optInt("audioTrackSampleRateHz")>0){
+                    InfoLine("AudioTrack client format","${rate(client.optInt("audioTrackSampleRateHz"))} · ${channels(client.optInt("channelCount"))} · ${encoding(client.optInt("audioTrackEncoding"))}")
+                }
+                Text("Client format is what Android AudioTrack accepted. Active mixer output or hardware rate is not directly measured.",style=MaterialTheme.typography.bodySmall)
+            }}
+            item{InfoCard("Routed device") {
+                val routed=snapshot.optString("routedDevice").takeIf{it.isNotBlank()}
+                    ?: snapshot.optJSONObject("client")?.optString("routedDevice")?.takeIf{it.isNotBlank()}
+                    ?: "Waiting for playback"
+                Text(routed,style=MaterialTheme.typography.titleMedium)
+                Text("An accepted mixer configuration and an observed routed device are separate facts. A route may be unavailable while paused or stopped.",style=MaterialTheme.typography.bodySmall)
             }}
             item{InfoCard("What this confirms") {
-                Text("Source metadata, app processing and Android client reports. Processing and client values may describe the previous stream while switching tracks. Refresh after playback starts.")
+                Text("Source metadata, app processing, and Android audio configuration. Processing and route values describe the current or last opened stream. Refresh after playback starts.")
                 InfoLine("Active mixer / HAL format","Not measured here")
                 InfoLine("Physical DAC format / bit-perfect output","Not measured")
                 Text("Snapshot: ${snapshot.optString("capturedAt")}",style=MaterialTheme.typography.bodySmall)

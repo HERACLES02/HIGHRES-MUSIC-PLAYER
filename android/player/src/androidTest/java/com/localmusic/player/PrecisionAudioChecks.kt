@@ -29,7 +29,7 @@ internal object PrecisionAudioChecks {
     }
 
     private fun runOnAudioThread(context: Context): Int {
-        val sink = MusicRenderers(context, MusicAudioProcessor(), LocalAudioTrackProvider()).buildAudioSink(context, false, false)
+        val sink = MusicRenderers(context, MusicAudioProcessor(), LocalAudioTrackProvider(context)).buildAudioSink(context, false, false)
         var initializedEncoding: Int? = null
         sink.setListener(object : AudioSink.Listener {
             override fun onPositionDiscontinuity() {}
