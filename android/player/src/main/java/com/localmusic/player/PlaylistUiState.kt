@@ -29,6 +29,8 @@ class PlaylistUiState : ViewModel() {
     val pendingExport = mutableStateOf<PlaylistExportDocument?>(null)
     val fileBusy = mutableStateOf(false)
     val fileMessage = mutableStateOf("")
+    val smartDetail = mutableStateOf<String?>(null)
+    val smartGenre = mutableStateOf<String?>(null)
 
     fun readPlaylist(app: MusicApplication, uri: Uri) {
         if (fileBusy.value) return

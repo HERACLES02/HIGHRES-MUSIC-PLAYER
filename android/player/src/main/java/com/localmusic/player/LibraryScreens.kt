@@ -255,3 +255,42 @@ fun CollectionCard(title: String, art: String?, count: Int, kind: String, ready:
         }
     }
 }
+
+@Composable
+fun SmartPlaylistCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    open: () -> Unit,
+    play: () -> Unit,
+    shuffle: () -> Unit,
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    var menu by remember(title) { mutableStateOf(false) }
+    Column(modifier.fillMaxWidth().clickable(onClick = open)) {
+        Surface(
+            Modifier.fillMaxWidth().aspectRatio(1f),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, Modifier.size(52.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(top = 8.dp)) {
+                MarqueeText(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for $title") }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Open") }, onClick = { menu = false; open() })
+                    DropdownMenuItem(text = { Text("Play") }, enabled = count > 0, onClick = { menu = false; play() })
+                    DropdownMenuItem(text = { Text("Play shuffled") }, enabled = count > 0, onClick = { menu = false; shuffle() })
+                }
+            }
+        }
+    }
+}
