@@ -1,10 +1,5 @@
 # Silent USB focus test helper
 
-Follow-up: [controlled Direct focus-loss result](../FOCUS_PHONE_RESULTS_2026_11_07.md)
-and the user's no-restart observation are accepted for Probe 0.7.0 on CPH1937.
-The steps below document the method; do not repeat the accepted component check
-by default. They do not establish current Media3/integrated-service acceptance.
-
 Separate app: `com.localmusic.focusprobe`, label **USB Focus Test**. Its button
 requests `AUDIOFOCUS_GAIN_TRANSIENT` while the activity is visible, abandons the
 same request after five seconds, and releases it on leaving the foreground or

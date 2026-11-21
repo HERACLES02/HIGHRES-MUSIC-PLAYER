@@ -22,8 +22,6 @@ hint and client getters do not establish the active USB mixer/HAL format.
 Validation used separate active-phase AudioFlinger/audio-policy snapshots.
 On the tested phone/M2, case 2 opened an Android 96 kHz float DIRECT stream;
 the larger-buffer and low-latency cases used a 48 kHz PCM16 HAL route.
-See [player verification](../player/VERIFICATION_0_12.md) for the subsequent
-integrated-player result and its remaining mixed-rate click.
 
 ## Build
 

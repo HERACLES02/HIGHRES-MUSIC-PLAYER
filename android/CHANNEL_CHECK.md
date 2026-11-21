@@ -3,7 +3,7 @@
 Status: phone comparison received and reviewed on 2 November 2026. The user
 reports low-volume left weakness in both Normal and Direct USB. The Direct
 minute completed without recorded PCM/transfer errors and with restoration.
-Balance remains unresolved; see [CHANNEL_PHONE_RESULTS.md](CHANNEL_PHONE_RESULTS.md).
+Hardware channel balance remains unresolved.
 The steps below document the comparison already performed, not a request to repeat it.
 
 Your follow-up establishes that left is audible at -30/-20 dB and the overlap
@@ -34,7 +34,7 @@ volume increase or firmware write was added. Clocking remains experimental.
 
 ## Short phone comparison
 
-1. Update with [releases/music-usb-probe-0.6.0.apk](releases/music-usb-probe-0.6.0.apk).
+1. Update with `android/releases/music-usb-probe-0.6.0.apk`.
    Use M2's Standard preset, lower Android media volume, and stop other audio apps.
 2. Open **experimental direct USB playback**. Leave **Equal-tone channel
    comparison** selected. Choose **16-bit / 44100 Hz / 1 min** and start cautiously.

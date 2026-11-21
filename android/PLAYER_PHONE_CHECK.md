@@ -4,7 +4,7 @@ This installs the real player alongside the existing probe. No hour-long run is
 requested. It plays your own music in **Normal** mode; Direct USB is still gated.
 
 1. Stop any Direct test in Music USB Probe. Copy/open
-   [local-music-0.1.0.apk](releases/local-music-0.1.0.apk) on the phone and install
+   `android/releases/local-music-0.1.0.apk` on the phone and install
    it. Open **Local Music**, not Music USB Probe. Keep both applications installed.
 2. Tap **Find my music** or **Scan** and allow music-read access. Wait for the scan
    to finish. Check that songs from your internal storage/SD card appear. Search
