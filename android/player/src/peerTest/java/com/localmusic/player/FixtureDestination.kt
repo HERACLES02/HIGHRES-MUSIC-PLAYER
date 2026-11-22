@@ -3,6 +3,7 @@ package com.localmusic.player
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract as Docs
+import android.system.Os
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
@@ -64,29 +65,31 @@ internal class FixtureDestination(
             check(album.mime == Docs.Document.MIME_TYPE_DIR) { "A file occupies the album folder name." }
             album.id
         }
-        val fileName = safeName(track.name.dropLast(5), "Track") + ".flac"
+        val fileName = safeName(track.name.substringBeforeLast('.'), "Track") + "." +
+            checkNotNull(track.format).name.lowercase()
         return FixtureDestination(resolver, tree, fileName, id)
     }
 
     fun publishAlbumTrack(staged: File, sha256: String, separate: Boolean): PublishedFixture? {
         val files = documents()
+        val extension = finishedName.substringAfterLast('.')
         val existing = files.firstOrNull {
-            it.mime != Docs.Document.MIME_TYPE_DIR && it.name.endsWith(".flac", ignoreCase = true) &&
+            it.mime != Docs.Document.MIME_TYPE_DIR && it.name.endsWith(".$extension", ignoreCase = true) &&
                 matches(it.uri(), sha256)
         }
         if (existing != null) return PublishedFixture(existing.uri(), duplicate = true)
         val conflict = files.any { it.name.equals(finishedName, ignoreCase = true) }
         if (conflict && !separate) return null
         val name = if (conflict) {
-            val base = finishedName.dropLast(5)
-            generateSequence(2) { it + 1 }.map { "$base ($it).flac" }
+            val base = finishedName.substringBeforeLast('.')
+            generateSequence(2) { it + 1 }.map { "$base ($it).$extension" }
                 .first { candidate -> files.none { it.name.equals(candidate, ignoreCase = true) } }
         } else finishedName
         return PublishedFixture(publishNew(staged, sha256, name), duplicate = false)
     }
 
     fun matches(uri: Uri, sha256: String): Boolean =
-        resolver.openInputStream(uri)?.use { it.matchesFixture(sha256) } == true
+        resolver.openInputStream(uri)?.use { it.downloadDigest() == sha256 } == true
 
     fun publish(staged: File, sha256: String): Uri {
         requireWritable()
@@ -98,7 +101,7 @@ internal class FixtureDestination(
     }
 
     private fun publishNew(staged: File, sha256: String, name: String): Uri {
-        // The Android scanner ignores .part documents. Expose the .flac name only
+        // The Android scanner ignores .part documents. Expose the audio extension only
         // after the local provider has written and verified every byte.
         val pending = checkNotNull(Docs.createDocument(resolver, root, "application/octet-stream", "peer-${UUID.randomUUID()}.part")) {
             "Could not create a staging document in the destination."
@@ -108,6 +111,10 @@ internal class FixtureDestination(
             check(documentName(pending).endsWith(".part")) { "The destination changed the staging extension." }
             val descriptor = checkNotNull(resolver.openFileDescriptor(pending, "wt")) { "Could not open the staging document." }
             android.os.ParcelFileDescriptor.AutoCloseOutputStream(descriptor).use { output ->
+                val storage = Os.fstatvfs(output.fd)
+                check(storage.f_bavail * storage.f_frsize >= staged.length()) {
+                    "There isn’t enough free space in the download folder. Free space and tap Retry save."
+                }
                 staged.inputStream().use { it.copyTo(output) }
                 output.fd.sync()
             }

@@ -26,7 +26,7 @@ internal data class FixtureAlbumTrack(
 
     companion object {
         fun decode(json: JSONObject) = FixtureAlbumTrack(
-            FixtureTrack.decode(json.getJSONObject("track")), json.optString("sha256").takeIf(String::isNotEmpty),
+            decodeFixtureTrack(json.getJSONObject("track")), json.optString("sha256").takeIf(String::isNotEmpty),
             FixtureSaveStatus.valueOf(json.getString("status")), json.getString("message"),
             json.optString("libraryTrack").takeIf(String::isNotEmpty)?.let { TrackId(UUID.fromString(it)) },
             json.optString("verifiedSha256").takeIf(String::isNotEmpty),

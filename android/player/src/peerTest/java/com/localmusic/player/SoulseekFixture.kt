@@ -5,6 +5,9 @@ import android.net.Network
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import com.localmusic.core.PeerAudioFormat
+import com.localmusic.core.PeerSearchTrack
+import com.localmusic.core.collectPeerSearchTracks
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -16,17 +19,14 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class FixtureTrack(val user: String, val path: String, val size: Long) {
-    val folder: String get() = path.substringBeforeLast('\\', path.substringBeforeLast('/', ""))
-    val name: String get() = path.substringAfterLast('\\').substringAfterLast('/')
+internal typealias FixtureTrack = PeerSearchTrack
 
-    fun encode() = JSONObject().put("user", user).put("path", path).put("size", size)
+internal fun FixtureTrack.encode() = JSONObject().put("user", user).put("path", path).put("size", size)
 
-    companion object {
-        fun decode(value: JSONObject) = FixtureTrack(
-            value.getString("user"), value.getString("path"), value.getLong("size")
-        )
-    }
+internal fun decodeFixtureTrack(value: JSONObject): FixtureTrack {
+    fun attribute(name: String) = value.optLong(name).takeIf { it > 0 }
+    return FixtureTrack(value.getString("user"), value.getString("path"), value.getLong("size"),
+        bitrate = attribute("bitrate"), sampleRate = attribute("sampleRate"), bitDepth = attribute("bitDepth"))
 }
 
 internal object SoulseekFixture {
@@ -54,8 +54,9 @@ internal object SoulseekFixture {
         request(JSONObject().put("operation", "stop").put("disconnect", true).put("endSession", true))
     }
 
-    suspend fun search(query: String, diagnostic: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
-        tracks(request(JSONObject().put("operation", "search").put("query", query).put("diagnostic", diagnostic)))
+    suspend fun search(query: String, diagnostic: Boolean, expanded: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
+        tracks(request(JSONObject().put("operation", "search").put("query", query)
+            .put("diagnostic", diagnostic).put("expanded", expanded)))
     }
 
     suspend fun wishlistPoll(queries: List<String>): Pair<String, List<FixtureTrack>>? =
@@ -64,9 +65,9 @@ internal object SoulseekFixture {
             (result as? JSONObject)?.let { it.getString("query") to tracks(it.getJSONArray("tracks")) }
         }
 
-    suspend fun folder(track: FixtureTrack, diagnostic: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
+    suspend fun folder(track: FixtureTrack, diagnostic: Boolean, expanded: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
         tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)
-            .put("diagnostic", diagnostic)))
+            .put("diagnostic", diagnostic).put("expanded", expanded)))
     }
 
     suspend fun sharePreview(root: File): List<FixtureSharedFile> = withContext(Dispatchers.IO) {
@@ -97,7 +98,7 @@ internal object SoulseekFixture {
 
     fun stagedFile(track: FixtureTrack, files: File, sha256: String?): File {
         require(sha256 == null || fixtureHashPattern.matches(sha256))
-        require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
+        require(track.size > 0 && track.format != null && track.name.none { it == '\u0000' || it == ':' })
         val identity = MessageDigest.getInstance("SHA-256").digest(track.encode().toString().toByteArray())
             .joinToString("") { "%02x".format(it) }
         // Retain the old directory name for downloads queued by earlier builds.
@@ -105,10 +106,12 @@ internal object SoulseekFixture {
         return File(File(files, "peer-search-$key"), track.name)
     }
 
-    fun verifiedCopy(track: FixtureTrack, stage: File, sha256: String?, diagnostic: Boolean = false): Boolean {
+    suspend fun verifiedCopy(track: FixtureTrack, stage: File, sha256: String?, diagnostic: Boolean = false): Boolean {
         if (!stage.isFile || stage.length() != track.size) return false
         if (sha256 != null && !stage.inputStream().use { it.matchesFixture(sha256) }) return false
         if (diagnostic) return sha256 != null
+        if (track.format == PeerAudioFormat.MP3) return verifyPeerMp3(stage)
+        if (track.format != PeerAudioFormat.FLAC) return false
         check(flacAvailable) { "Build the Peer Test FLAC library first." }
         return ParcelFileDescriptor.open(stage, ParcelFileDescriptor.MODE_READ_ONLY).use {
             nativeVerifyFlac(it.fd, track.size)
@@ -131,6 +134,7 @@ internal object SoulseekFixture {
             if (verifiedCopy(track, stage, sha256, diagnostic)) return stage
             clearInvalid(stage, partial)
         }
+        if (partial.length() > track.size) clearInvalid(stage, partial)
         val download = track.encode().put("operation", "download").put("directory", directory.absolutePath)
             .put("diagnostic", diagnostic)
         val poll = JSONObject().put("operation", "poll")
@@ -143,6 +147,9 @@ internal object SoulseekFixture {
             }
             if (attempt > 1) delay(1_000L * attempt)
             val network = wifi() ?: continue
+            check(directory.usableSpace >= track.size - partial.length()) {
+                "There isn’t enough free space to finish this download."
+            }
             var keepSession = false
             var sizeChanged = false
             try {
@@ -179,7 +186,7 @@ internal object SoulseekFixture {
                         val resumed = if (offset > 0) " (resumed at $offset)" else ""
                         progress(
                             "Downloading $received / ${track.size} bytes$resumed",
-                            (received * 100 / track.size).toInt(),
+                            (received.toDouble() / track.size * 100).toInt().coerceIn(0, 100),
                         )
                     }
                     delay(POLL_MS)
@@ -197,7 +204,7 @@ internal object SoulseekFixture {
                 if (!sizeChanged && verifiedCopy(track, stage, sha256, diagnostic)) return stage
                 clearInvalid(stage, partial)
                 throw IOException(if (diagnostic) "The selected FLAC failed size or SHA-256 verification."
-                    else "The download failed FLAC integrity verification. Retry to download a fresh copy.")
+                    else "The download failed ${track.format} verification. Retry to download a fresh copy.")
             }
         }
         error("Connection interrupted. ${partial.length()} bytes saved. Tap Resume.")
@@ -212,7 +219,7 @@ internal object SoulseekFixture {
     private const val POLL_MS = 250L
 
     private fun tracks(value: Any): List<FixtureTrack> = (value as JSONArray).let { rows ->
-        List(rows.length()) { FixtureTrack.decode(rows.getJSONObject(it)) }.distinct()
+        collectPeerSearchTracks(List(rows.length()) { decodeFixtureTrack(rows.getJSONObject(it)) })
     }
 
     private fun request(request: JSONObject): Any {
@@ -248,7 +255,7 @@ internal data class PendingFixtureTransfer(
             settings(context).getString(key(fromSoulseekTab), null)?.let { saved ->
             val json = JSONObject(saved)
             PendingFixtureTransfer(Uri.parse(json.getString("tree")), json.getString("sha256"),
-                FixtureTrack.decode(json.getJSONObject("track")), json.optBoolean("fromSoulseekTab"))
+                decodeFixtureTrack(json.getJSONObject("track")), json.optBoolean("fromSoulseekTab"))
         }
 
         fun clear(context: Context, fromSoulseekTab: Boolean = false) {

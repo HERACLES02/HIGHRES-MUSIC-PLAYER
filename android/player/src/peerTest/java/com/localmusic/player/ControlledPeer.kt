@@ -36,23 +36,22 @@ internal fun privatePeerAddress(value: String): InetAddress {
     return InetAddress.getByAddress(octets.map(Int::toByte).toByteArray())
 }
 
-internal fun InputStream.matchesFixture(sha256: String): Boolean = fixtureDigest() == sha256
-
-internal fun InputStream.fixtureDigest(): String? {
+internal fun InputStream.matchesFixture(sha256: String): Boolean {
     val input = DataInputStream(this)
     val magic = ByteArray(4)
     try { input.readFully(magic) }
-    catch (_: EOFException) { return null }
-    if (!magic.contentEquals("fLaC".toByteArray())) return null
+    catch (_: EOFException) { return false }
+    if (!magic.contentEquals("fLaC".toByteArray())) return false
+    return input.downloadDigest(magic) == sha256
+}
+
+internal fun InputStream.downloadDigest(prefix: ByteArray = byteArrayOf()): String {
     val digest = MessageDigest.getInstance("SHA-256")
-    digest.update(magic)
-    var size = magic.size.toLong()
+    digest.update(prefix)
     val buffer = ByteArray(64 * 1024)
     while (true) {
-        val count = input.read(buffer)
+        val count = read(buffer)
         if (count < 0) break
-        size += count
-        if (size > MAX_FIXTURE_BYTES) return null
         digest.update(buffer, 0, count)
     }
     return digest.digest().joinToString("") { "%02x".format(it) }

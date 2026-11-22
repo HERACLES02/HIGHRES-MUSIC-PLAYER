@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.localmusic.core.PeerSearchOptions
 import com.localmusic.core.TrackId
 import com.localmusic.player.FixtureSaveStatus.*
 import kotlinx.coroutines.CancellationException
@@ -61,6 +62,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private var message by mutableStateOf("")
     private var destination by mutableStateOf(settings.getString("destination", null)?.let(Uri::parse))
     private var chosen by mutableStateOf(emptyList<FixtureTrack>())
+    private var searchOptions by mutableStateOf(PeerSearchOptions())
     private var visible = false
     private val sharing = FixtureSharing(app, connectivity, scope, { online }) {
         if (!visible) setVisible(false)
@@ -90,6 +92,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private fun goOnline(username: String, password: String) = sessionAction("Connecting to the private fixture…") {
         check(connectivity.wifiNetwork() != null) { "Connect to Wi-Fi to go online." }
         SoulseekFixture.connect(username, password)
+        settings.edit().putString("username", username).apply()
         online = true
         sessionWatch = scope.launch {
             while (true) {
@@ -164,9 +167,10 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
 
     @Composable
     override fun Content(downloadsRequest: Int, openInLibrary: (TrackId) -> Unit) {
-        var username by remember { mutableStateOf("") }
+        var username by remember { mutableStateOf(settings.getString("username", "").orEmpty()) }
         var password by remember { mutableStateOf("") }
         val context = LocalContext.current
+        val scroll = rememberScrollState()
         val transfer = PeerTransferService.state
         val saved = remember(transfer.running, transfer.album) {
             transfer.album ?: FixtureAlbumDownload.read(app)
@@ -240,7 +244,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         }
         val canDownload = saved?.tracks?.all { it.status.finished } != false
 
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlayerActions {
                 for (page in listOf("Search", "Downloads", "Sharing", "Chat", "Wishlist")) {
@@ -358,7 +362,9 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                     else -> Text("Choose tracks from Search or Wishlist.")
                 }
             } else if (online) {
-                FixtureSearch(enabled = !working && !transfer.running, canDownload, chooseTracks)
+                FixtureSearch(enabled = !working && !transfer.running, canDownload, chooseTracks,
+                    options = searchOptions, onOptions = { searchOptions = it },
+                    onFolderOpened = { scroll.scrollTo(0) })
             }
         }
     }

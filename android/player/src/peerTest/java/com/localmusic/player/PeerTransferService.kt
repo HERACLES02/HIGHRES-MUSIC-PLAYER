@@ -105,7 +105,7 @@ class PeerTransferService : Service() {
                     return@launch
                 }
                 val fixtureHash = checkNotNull(sha256)
-                val selected = intent.getStringExtra(EXTRA_TRACK)?.let { FixtureTrack.decode(JSONObject(it)) }
+                val selected = intent.getStringExtra(EXTRA_TRACK)?.let { decodeFixtureTrack(JSONObject(it)) }
                 if (selected != null) withContext(Dispatchers.IO) {
                     PendingFixtureTransfer(tree, fixtureHash, selected, fromSoulseekTab).save(this@PeerTransferService)
                 }
@@ -206,7 +206,7 @@ class PeerTransferService : Service() {
                         }
                     }
                     val digest = file.takeIf { it.isFile && it.length() == track.size }
-                        ?.inputStream()?.use { it.fixtureDigest() }
+                        ?.inputStream()?.use { it.downloadDigest() }
                     check(digest != null && (row.verifiedSha256 == null || digest == row.verifiedSha256)) {
                         "The verified private copy is unavailable."
                     }
@@ -323,7 +323,7 @@ class PeerTransferService : Service() {
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Controlled FLAC download")
+            .setContentTitle(if (fromSoulseekTab) "Soulseek download" else "Controlled FLAC download")
             .setContentText(message)
             .setContentIntent(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE))
             .setOnlyAlertOnce(true)
