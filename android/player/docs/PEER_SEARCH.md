@@ -150,6 +150,20 @@ A separate run verified that turning sharing off withdrew the listing, stopped a
 & $adb forward --remove tcp:45417
 ```
 
+## Exchange private and room messages
+
+Build and install the ARM64 Peer Test APK using the commands above. Start a fresh private Soulfind coordinator on port 45415 and use the USB reverse for that port. With Wi-Fi connected on the phone, run the fixture peer from the repository root.
+
+```powershell
+cargo run --locked --manifest-path android/peer-search/Cargo.toml --target-dir android/.tools/peer-test/bridge-target --bin fixture-chat
+```
+
+1. Open **Soulseek**, tap **Go online**, and stay on **Search**. Follow the fixture peer's prompt. **Chat (1 unread)** should appear. Open **Chat → Private**, tap **peer-fixture-chat (1 unread)**, and check that opening it clears the badge. Send `private reply`. The fixture peer checks the sender and text.
+2. Open **Room**, enter `fixture-chat`, and tap **Join room**. When the room appears, switch to **Search** and lock the phone before letting the fixture peer send. Unlock the phone, check the unread badge, open the room, and send `room reply`. The fixture peer checks who sent it. The phone should show its own reply once when the server echoes it.
+3. Tap **Go offline**, restart Peer Test, and reconnect. In **Chat → Private**, reopen **peer-fixture-chat** and check that both messages reappear.
+
+The chat uses the existing Wi-Fi session. It keeps the latest 100 private messages in app-private storage. The public room is joined by name, and its messages are kept for the current session.
+
 ## Before a public login
 
 Soulseek's rules expect third-party clients to implement search, wishlist, downloads, uploads, chat and recognition of privileges. Use the private coordinator for the implemented features until the full-client verification and login version coordination are complete. [Soulseek rules](https://www.slsknet.org/news/node/681)
@@ -159,7 +173,7 @@ Soulseek's rules expect third-party clients to implement search, wishlist, downl
 | Accounts and connection | Secure credential storage and session lifecycle, plus a client minor version reserved with upstream. Test ordinary peer connectivity and server-brokered fallback on mobile networks when authorized. |
 | Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash with an integrity check suitable for public files. |
 | Uploads | Verify direct Wi-Fi listener reachability, brokered fallback and sharing alongside chat and wishlist checks in the same session. |
-| Chat | Expose room and private messages, including reception and acknowledgement across reconnects. |
+| Chat | Repeat private and room exchanges during the combined full-client verification. |
 | Wishlist | Store searches and schedule them using the server-provided interval. |
 | Privileges | Repeat the upload-priority check during the combined full-client verification. |
 

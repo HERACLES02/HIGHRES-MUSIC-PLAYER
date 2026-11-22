@@ -68,6 +68,16 @@ internal object SoulseekFixture {
     private fun shareRequest(operation: String, root: File? = null) =
         request(JSONObject().put("operation", operation).put("root", root?.absolutePath))
 
+    suspend fun chatPoll(): JSONObject? = withContext(Dispatchers.IO) {
+        request(JSONObject().put("operation", "chatPoll")) as? JSONObject
+    }
+
+    suspend fun chatAction(operation: String, generation: Long, name: String, text: String? = null) =
+        withContext(Dispatchers.IO) {
+            request(JSONObject().put("operation", operation).put("generation", generation)
+                .put("name", name).put("text", text))
+        }
+
     fun stagedFile(track: FixtureTrack, files: File, sha256: String): File {
         require(fixtureHashPattern.matches(sha256))
         require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })

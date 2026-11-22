@@ -3,6 +3,7 @@ use jni::objects::{JObject, JString};
 use jni::sys::jstring;
 use serde_json::{Value, json};
 use soulseek_rs::shares::Shares;
+use soulseek_rs::types::RoomEvent;
 use soulseek_rs::{Client, ClientSettings, DownloadStatus, PeerAddress, UploadStatus};
 use std::error::Error;
 use std::fs;
@@ -17,9 +18,11 @@ use std::time::{Duration, Instant};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const FIXTURE_MAX_BYTES: u64 = 32 * 1024 * 1024;
 const FIXTURE_BYTES_PER_SECOND: u64 = 64 * 1024;
+const ACCOUNT: &str = "local-music-fixture";
 
 struct Session {
     client: Option<Client>,
+    generation: u64,
     download: Option<Transfer>,
     share: Option<PathBuf>,
 }
@@ -34,6 +37,7 @@ struct Transfer {
 
 static SESSION: Mutex<Session> = Mutex::new(Session {
     client: None,
+    generation: 0,
     download: None,
     share: None,
 });
@@ -50,8 +54,64 @@ impl Session {
         }
         if self.client.is_none() {
             self.client = Some(connect()?);
+            self.generation += 1;
         }
         Ok(self.client.as_ref().expect("connected fixture client"))
+    }
+
+    fn chat(&self, operation: &str, request: &Value) -> Result<Value> {
+        let client = self
+            .client
+            .as_ref()
+            .filter(|client| client.session_loss().is_none());
+        if operation == "chatPoll" {
+            let Some(client) = client else {
+                return Ok(Value::Null);
+            };
+            let private: Vec<_> = client
+                .take_private_messages()
+                .into_iter()
+                .map(|msg| {
+                    json!({
+                        "id": msg.id(), "timestamp": msg.timestamp(),
+                        "user": msg.username(), "text": msg.message(),
+                    })
+                })
+                .collect();
+            let rooms: Vec<_> = client
+                .take_room_events()
+                .into_iter()
+                .filter_map(|event| match event {
+                    RoomEvent::Joined { room, .. } => Some(json!({"kind": "joined", "room": room})),
+                    RoomEvent::CantCreate { room } => {
+                        Some(json!({"kind": "unavailable", "room": room}))
+                    }
+                    RoomEvent::Message {
+                        room,
+                        username,
+                        message,
+                    } => Some(json!({
+                        "kind": "message", "room": room, "user": username,
+                        "text": message, "outgoing": username == ACCOUNT,
+                    })),
+                    _ => None,
+                })
+                .collect();
+            return Ok(json!({"generation": self.generation, "private": private, "rooms": rooms}));
+        }
+        let client = client.ok_or("The chat connection ended. Go offline and reconnect.")?;
+        if request["generation"].as_u64() != Some(self.generation) {
+            return Err("The chat connection changed. Try again.".into());
+        }
+        let name = field(request, "name")?;
+        match operation {
+            "chatPrivate" => client.send_private_message(name, field(request, "text")?)?,
+            "chatJoin" => client.join_room(name)?,
+            "chatLeave" => client.leave_room(name)?,
+            "chatRoom" => client.say_in_room(name, field(request, "text")?)?,
+            _ => return Err("Unknown chat operation".into()),
+        }
+        Ok(Value::Null)
     }
 
     fn stop(&mut self, disconnect: bool) -> Result<Value> {
@@ -234,7 +294,7 @@ impl Session {
 }
 
 fn connect() -> Result<Client> {
-    let mut settings = ClientSettings::new("local-music-fixture", "local-fixture");
+    let mut settings = ClientSettings::new(ACCOUNT, "local-fixture");
     settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
     settings.listen_port = 45417;
     let mut client = Client::with_settings(settings);
@@ -284,6 +344,9 @@ fn operate(request: Value) -> Result<Value> {
         "shareStatus" => return Ok(session.share_status()),
         "shareOff" => return session.stop_sharing(),
         "shareOn" => return session.start_sharing(field(&request, "root")?.into()),
+        "chatPoll" | "chatPrivate" | "chatJoin" | "chatLeave" | "chatRoom" => {
+            return session.chat(operation, &request);
+        }
         _ => {}
     }
     if session.download.is_some() {

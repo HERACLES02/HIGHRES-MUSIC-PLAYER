@@ -45,6 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -65,6 +66,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private val sharing = FixtureSharing(app, connectivity, scope, { online }) {
         if (!visible) setVisible(false)
     }
+    private val chat = FixtureChat(app, connectivity, scope)
     val ownsSession: Boolean get() = online || working
 
     fun sharingServiceStarted() = sharing.serviceStarted()
@@ -93,10 +95,11 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             while (true) {
                 try {
                     sharing.refresh()
+                    chat.refresh()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    message = e.message ?: "Could not read sharing status."
+                    message = e.message ?: "Could not refresh the private session."
                 }
                 delay(750)
             }
@@ -107,7 +110,8 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         if (!online) return
         online = false
         sessionAction("Disconnecting…") {
-            sessionWatch?.cancel()
+            sessionWatch?.cancelAndJoin()
+            chat.endSession()
             try {
                 sharing.stop()
             } finally {
@@ -230,8 +234,10 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlayerActions {
-                for (page in listOf("Search", "Downloads", "Sharing")) {
-                    FilterChip(section == page, { section = page }, label = { Text(page) })
+                for (page in listOf("Search", "Downloads", "Sharing", "Chat")) {
+                    FilterChip(section == page, { section = page }, label = {
+                        Text(if (page == "Chat") chatLabel(page, chat.privateUnread + chat.roomUnread) else page)
+                    })
                 }
             }
             if (online) {
@@ -241,7 +247,9 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                 Text("Offline. Use Wi-Fi to connect to the private fixtures.")
             }
             if (message.isNotEmpty()) Text(message)
-            if (section == "Sharing") {
+            if (section == "Chat") {
+                FixtureChatPanel(chat, online && !working)
+            } else if (section == "Sharing") {
                 SharingPanel(sharing, online && !working, pickFolder = {
                     try {
                         chooseShare.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
