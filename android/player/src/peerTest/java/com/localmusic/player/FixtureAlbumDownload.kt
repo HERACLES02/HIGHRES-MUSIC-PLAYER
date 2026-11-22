@@ -15,19 +15,21 @@ internal enum class FixtureSaveStatus {
 
 internal data class FixtureAlbumTrack(
     val track: FixtureTrack,
-    val sha256: String,
+    val legacySha256: String? = null,
     val status: FixtureSaveStatus = FixtureSaveStatus.QUEUED,
     val message: String = "",
     val libraryTrack: TrackId? = null,
+    val verifiedSha256: String? = null,
 ) {
-    fun encode() = JSONObject().put("track", track.encode()).put("sha256", sha256)
-        .put("status", status.name).put("message", message).put("libraryTrack", libraryTrack?.value?.toString())
+    fun encode() = JSONObject().put("track", track.encode()).put("sha256", legacySha256)
+        .put("verifiedSha256", verifiedSha256).put("status", status.name).put("message", message).put("libraryTrack", libraryTrack?.value?.toString())
 
     companion object {
         fun decode(json: JSONObject) = FixtureAlbumTrack(
-            FixtureTrack.decode(json.getJSONObject("track")), json.getString("sha256"),
+            FixtureTrack.decode(json.getJSONObject("track")), json.optString("sha256").takeIf(String::isNotEmpty),
             FixtureSaveStatus.valueOf(json.getString("status")), json.getString("message"),
             json.optString("libraryTrack").takeIf(String::isNotEmpty)?.let { TrackId(UUID.fromString(it)) },
+            json.optString("verifiedSha256").takeIf(String::isNotEmpty),
         )
     }
 }
@@ -36,7 +38,8 @@ internal data class FixtureAlbumDownload(val tree: Uri, val tracks: List<Fixture
     init {
         require(tracks.isNotEmpty() && tracks.all {
             it.track.user == tracks.first().track.user && it.track.folder == tracks.first().track.folder &&
-                fixtureHashPattern.matches(it.sha256)
+                (it.legacySha256 == null || fixtureHashPattern.matches(it.legacySha256)) &&
+                (it.verifiedSha256 == null || fixtureHashPattern.matches(it.verifiedSha256))
         })
     }
 

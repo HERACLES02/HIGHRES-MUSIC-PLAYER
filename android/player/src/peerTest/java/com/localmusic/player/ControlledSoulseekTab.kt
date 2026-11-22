@@ -28,7 +28,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,7 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.TrackId
 import com.localmusic.player.FixtureSaveStatus.*
@@ -61,7 +61,6 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private var message by mutableStateOf("")
     private var destination by mutableStateOf(settings.getString("destination", null)?.let(Uri::parse))
     private var chosen by mutableStateOf(emptyList<FixtureTrack>())
-    private val hashes = mutableStateMapOf<FixtureTrack, String>()
     private var visible = false
     private val sharing = FixtureSharing(app, connectivity, scope, { online }) {
         if (!visible) setVisible(false)
@@ -88,9 +87,9 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         }
     }
 
-    private fun goOnline() = sessionAction("Connecting to the private fixture…") {
+    private fun goOnline(username: String, password: String) = sessionAction("Connecting to the private fixture…") {
         check(connectivity.wifiNetwork() != null) { "Connect to Wi-Fi to go online." }
-        SoulseekFixture.connect()
+        SoulseekFixture.connect(username, password)
         online = true
         sessionWatch = scope.launch {
             while (true) {
@@ -165,6 +164,8 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
 
     @Composable
     override fun Content(downloadsRequest: Int, openInLibrary: (TrackId) -> Unit) {
+        var username by remember { mutableStateOf("") }
+        var password by remember { mutableStateOf("") }
         val context = LocalContext.current
         val transfer = PeerTransferService.state
         val saved = remember(transfer.running, transfer.album) {
@@ -213,7 +214,6 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             try {
                 PeerTransferService.startAlbum(context, album, index, action)
                 chosen = emptyList()
-                hashes.clear()
                 message = ""
                 requestNotifications()
             } catch (_: IllegalStateException) {
@@ -236,7 +236,6 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
 
         val chooseTracks: (List<FixtureTrack>) -> Unit = { tracks ->
             chosen = tracks
-            hashes.clear()
             section = "Downloads"
         }
         val canDownload = saved?.tracks?.all { it.status.finished } != false
@@ -253,8 +252,19 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             if (online) {
                 TextButton(enabled = !working, onClick = ::goOffline) { Text("Go offline") }
             } else {
-                Button(enabled = !working && !transfer.running, onClick = { goOnline() }) { Text("Go online") }
                 Text("Offline. Use Wi-Fi to connect to the private fixtures.")
+                OutlinedTextField(username, { username = it }, Modifier.fillMaxWidth(),
+                    enabled = !working, singleLine = true, label = { Text("Username") },
+                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
+                OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(),
+                    enabled = !working, singleLine = true, label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                Button(enabled = !working && !transfer.running && username.isNotBlank() && password.isNotEmpty(),
+                    onClick = {
+                        goOnline(username.trim(), password)
+                        password = ""
+                    }) { Text("Go online") }
             }
             if (message.isNotEmpty()) Text(message)
             if (section == "Chat") {
@@ -284,21 +294,11 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                     chosen.isNotEmpty() -> {
                         Text("${chosen.size} selected ? ${chosen.sumOf { it.size }} bytes")
                         Text("The Library will scan the selected folder and its subfolders.")
-                        chosen.forEach { track ->
-                            OutlinedTextField(hashes[track].orEmpty(), { hashes[track] = it.take(128) },
-                                Modifier.fillMaxWidth(), singleLine = true,
-                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None,
-                                    autoCorrectEnabled = false),
-                                label = { Text("${track.name} SHA-256") })
-                        }
-                        val ready = chosen.all { fixtureHashPattern.matches(hashes[it].orEmpty().trim().lowercase()) }
-                        Button(enabled = online && !working && !transfer.running && tree != null && ready,
+                        Button(enabled = online && !working && !transfer.running && tree != null,
                             onClick = {
-                                if (tree != null) start(FixtureAlbumDownload(tree, chosen.map {
-                                    FixtureAlbumTrack(it, hashes.getValue(it).trim().lowercase())
-                                }))
+                                if (tree != null) start(FixtureAlbumDownload(tree, chosen.map { FixtureAlbumTrack(it) }))
                             }) { Text("Download ${chosen.size} selected") }
-                        TextButton(onClick = { chosen = emptyList(); hashes.clear(); section = "Search" }) {
+                        TextButton(onClick = { chosen = emptyList(); section = "Search" }) {
                             Text("Back to Search")
                         }
                     }

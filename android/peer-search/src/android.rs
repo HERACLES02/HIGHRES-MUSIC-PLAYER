@@ -18,10 +18,11 @@ use std::time::{Duration, Instant};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 const FIXTURE_MAX_BYTES: u64 = 32 * 1024 * 1024;
 const FIXTURE_BYTES_PER_SECOND: u64 = 64 * 1024;
-const ACCOUNT: &str = "local-music-fixture";
+const DIAGNOSTIC_ACCOUNT: &str = "local-music-fixture";
 
 struct Session {
     client: Option<Client>,
+    credentials: Option<(String, String)>,
     generation: u64,
     download: Option<Transfer>,
     share: Option<PathBuf>,
@@ -103,6 +104,7 @@ struct Transfer {
 
 static SESSION: Mutex<Session> = Mutex::new(Session {
     client: None,
+    credentials: None,
     generation: 0,
     download: None,
     share: None,
@@ -110,7 +112,23 @@ static SESSION: Mutex<Session> = Mutex::new(Session {
 });
 
 impl Session {
-    fn client(&mut self) -> Result<&Client> {
+    fn sign_in(&mut self, username: &str, password: &str) -> Result<Value> {
+        if username.trim().is_empty() || password.is_empty() {
+            return Err("Enter the private fixture username and password".into());
+        }
+        self.credentials = None;
+        self.stop(true)?;
+        self.client = Some(connect(username, password)?);
+        self.credentials = Some((username.into(), password.into()));
+        self.generation += 1;
+        self.wishlist = Some(Wishlist::started());
+        Ok(Value::Null)
+    }
+
+    fn client(&mut self, diagnostic: bool) -> Result<&Client> {
+        if !diagnostic && self.credentials.is_none() {
+            return Err("Sign in to the private fixture first".into());
+        }
         if self
             .client
             .as_ref()
@@ -120,7 +138,13 @@ impl Session {
             self.client = None;
         }
         if self.client.is_none() {
-            self.client = Some(connect()?);
+            let (username, password) = self
+                .credentials
+                .as_ref()
+                .map_or((DIAGNOSTIC_ACCOUNT, "local-fixture"), |(user, pass)| {
+                    (user.as_str(), pass.as_str())
+                });
+            self.client = Some(connect(username, password)?);
             self.generation += 1;
             self.wishlist = Some(Wishlist::started());
         }
@@ -180,7 +204,7 @@ impl Session {
                         message,
                     } => Some(json!({
                         "kind": "message", "room": room, "user": username,
-                        "text": message, "outgoing": username == ACCOUNT,
+                        "text": message, "outgoing": username == client.username(),
                     })),
                     _ => None,
                 })
@@ -326,9 +350,9 @@ impl Session {
         if !flac(basename, size) || basename.contains(['\0', ':']) {
             return Err("The selected track has an invalid name or size".into());
         }
-        let (_, events) =
-            self.client()?
-                .download(path.into(), user.into(), size, directory.into())?;
+        let (_, events) = self
+            .client(request["diagnostic"].as_bool().unwrap_or(false))?
+            .download(path.into(), user.into(), size, directory.into())?;
         self.download = Some(Transfer {
             user: user.into(),
             path: path.into(),
@@ -382,8 +406,8 @@ impl Session {
     }
 }
 
-fn connect() -> Result<Client> {
-    let mut settings = ClientSettings::new(ACCOUNT, "local-fixture");
+fn connect(username: &str, password: &str) -> Result<Client> {
+    let mut settings = ClientSettings::new(username, password);
     settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
     settings.listen_port = 45417;
     let mut client = Client::with_settings(settings);
@@ -438,7 +462,19 @@ fn operate(request: Value) -> Result<Value> {
         .lock()
         .map_err(|_| "The fixture session stopped unexpectedly")?;
     match operation {
-        "stop" => return session.stop(request["disconnect"].as_bool().unwrap_or(false)),
+        "stop" => {
+            if request["endSession"].as_bool() == Some(true) {
+                session.credentials = None;
+                let stopped = session.stop(true);
+                session.client = None;
+                session.wishlist = None;
+                return stopped;
+            }
+            return session.stop(request["disconnect"].as_bool().unwrap_or(false));
+        }
+        "connect" => {
+            return session.sign_in(field(&request, "username")?, field(&request, "password")?);
+        }
         "poll" => return session.poll(),
         "shareStatus" => return Ok(session.share_status()),
         "shareOff" => return session.stop_sharing(),
@@ -455,11 +491,10 @@ fn operate(request: Value) -> Result<Value> {
     if operation == "download" {
         return session.start(&request);
     }
-    session.client()?;
+    session.client(request["diagnostic"].as_bool().unwrap_or(false))?;
     let session = &mut *session;
     let client = session.client.as_ref().expect("connected fixture client");
     match operation {
-        "connect" => Ok(Value::Null),
         "search" => {
             let query = field(&request, "query")?;
             if let Some(wishlist) = session.wishlist.as_mut() {

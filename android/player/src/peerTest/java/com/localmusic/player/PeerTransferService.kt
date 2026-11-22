@@ -176,7 +176,7 @@ class PeerTransferService : Service() {
             if (action == FixtureTrackAction.SKIP || action == FixtureTrackAction.DISCARD) {
                 update(position, row.copy(status = SKIPPED, message = "Skipped. Existing files were kept."))
                 withContext(Dispatchers.IO) {
-                    val staged = SoulseekFixture.stagedFile(track, filesDir, row.sha256)
+                    val staged = SoulseekFixture.stagedFile(track, filesDir, row.legacySha256)
                     File(staged.parentFile, "${staged.name}.part").delete()
                     staged.delete()
                     staged.parentFile?.delete()
@@ -187,38 +187,47 @@ class PeerTransferService : Service() {
             var savePhase = action == FixtureTrackAction.RETRY_SAVE || action == FixtureTrackAction.SAVE_SEPARATE
             showProgress("Checking ${track.name}…")
             try {
-                val staged = withContext(Dispatchers.IO) {
-                    if (savePhase) {
-                        val file = SoulseekFixture.stagedFile(track, filesDir, row.sha256)
-                        check(SoulseekFixture.verifiedCopy(track, file, row.sha256)) {
-                            "The verified private copy is unavailable."
+                val (staged, verifiedSha256) = withContext(Dispatchers.IO) {
+                    val file = if (savePhase) {
+                        SoulseekFixture.stagedFile(track, filesDir, row.legacySha256).also { staged ->
+                            if (row.verifiedSha256 == null) {
+                                check(SoulseekFixture.verifiedCopy(track, staged, row.legacySha256)) {
+                                    "The verified private copy is unavailable."
+                                }
+                            }
                         }
-                        file
                     } else {
                         withContext(Dispatchers.Main.immediate) {
                             state = state.copy(pausable = true)
                             showProgress("Waiting to download ${track.name}…")
                         }
-                        SoulseekFixture.fetch(track, filesDir, row.sha256, connectivity::wifiNetwork) { message, percent ->
-                            withContext(Dispatchers.Main.immediate) { showProgress("${track.name}: $message", percent) }
+                        SoulseekFixture.fetch(track, filesDir, row.legacySha256, connectivity::wifiNetwork) { text, percent ->
+                            withContext(Dispatchers.Main.immediate) { showProgress("${track.name}: $text", percent) }
                         }
                     }
+                    val digest = file.takeIf { it.isFile && it.length() == track.size }
+                        ?.inputStream()?.use { it.fixtureDigest() }
+                    check(digest != null && (row.verifiedSha256 == null || digest == row.verifiedSha256)) {
+                        "The verified private copy is unavailable."
+                    }
+                    file to digest
                 }
                 savePhase = true
                 state = state.copy(pausable = false)
-                update(position, row.copy(status = SAVING, message = "Verified. Saving to the download folder…"))
+                val verified = row.copy(verifiedSha256 = verifiedSha256)
+                update(position, verified.copy(status = SAVING, message = "Verified. Saving to the download folder…"))
                 showProgress("Saving ${track.name}…")
                 val published = withContext(Dispatchers.IO) {
                     val destination = FixtureDestination(contentResolver, album.tree).albumTrack(track)
-                    destination.publishAlbumTrack(staged, row.sha256, action == FixtureTrackAction.SAVE_SEPARATE)
+                    destination.publishAlbumTrack(staged, verifiedSha256, action == FixtureTrackAction.SAVE_SEPARATE)
                 }
                 if (published == null) {
-                    update(position, row.copy(status = CONFLICT, message = "A different file has this name."))
+                    update(position, verified.copy(status = CONFLICT, message = "A different file has this name."))
                     continue
                 }
                 showProgress("Scanning ${track.name} into the Library…")
                 val imported = importFixture(album.tree, published.uri)
-                update(position, row.copy(status = if (published.duplicate) DUPLICATE else READY,
+                update(position, verified.copy(status = if (published.duplicate) DUPLICATE else READY,
                     message = if (published.duplicate) "Already in Library. Exact duplicate skipped." else "Ready in Library.",
                     libraryTrack = imported))
                 withContext(Dispatchers.IO) {
@@ -228,7 +237,7 @@ class PeerTransferService : Service() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                update(position, row.copy(status = if (savePhase) SAVE_FAILED else DOWNLOAD_FAILED,
+                update(position, album.tracks[position].copy(status = if (savePhase) SAVE_FAILED else DOWNLOAD_FAILED,
                     message = e.message ?: "Please retry."))
             } finally {
                 state = state.copy(activeTrack = null, pausable = false, percent = null)
@@ -249,7 +258,9 @@ class PeerTransferService : Service() {
             }
             if (selected != null) {
                 withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = true) }
-                val staged = SoulseekFixture.fetch(selected, filesDir, sha256, connectivity::wifiNetwork) { message, percent ->
+                val staged = SoulseekFixture.fetch(
+                    selected, filesDir, sha256, connectivity::wifiNetwork, diagnostic = true,
+                ) { message, percent ->
                     withContext(Dispatchers.Main.immediate) { showProgress(message, percent) }
                 }
                 withContext(Dispatchers.Main.immediate) { state = state.copy(pausable = false) }

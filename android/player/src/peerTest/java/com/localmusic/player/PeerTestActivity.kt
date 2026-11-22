@@ -185,7 +185,7 @@ internal fun FixtureSearch(
             listing = null
             inspected = null
             load("Searching the private fixture…") {
-                results = SoulseekFixture.search(query.trim())
+                results = SoulseekFixture.search(query.trim(), diagnostic = chooseTracks == null)
                 message = if (results.isEmpty()) "No FLAC matches." else "Choose an uploader’s folder."
             }
         }) { Text("Search FLAC") }
@@ -199,7 +199,7 @@ internal fun FixtureSearch(
             TextButton(enabled = canSearch, onClick = {
                 load("Requesting the folder from ${key.first}…") {
                     try {
-                        listing = SoulseekFixture.folder(matches.first()).filter {
+                        listing = SoulseekFixture.folder(matches.first(), diagnostic = chooseTracks == null).filter {
                             it.user == key.first && it.folder == key.second
                         }
                         message = "${key.first} · ${key.second}"

@@ -56,12 +56,20 @@ The SHA-256 field supplies an independent check for the generated fixture. The A
 Use the same ARM64 Peer Test APK, private coordinator, uploader, and ADB forwards above. The launcher entry **Local Music Peer Test** opens the regular player with the controlled Soulseek option. **Peer Transfer Diagnostics** opens the original transfer test screen.
 
 1. In **Settings**, turn off **Rescan chosen folders when music changes** and turn on **Enable Soulseek tab**.
-2. On Wi-Fi, open **Soulseek**, tap **Go online**, and search for `Amber`. Inspect the fixture uploader's folder and confirm it includes `Violet.flac`.
+2. On Wi-Fi, open **Soulseek**, enter a private fixture username and password, tap **Go online**, and search for `Amber`. Inspect the fixture uploader's folder and confirm it includes `Violet.flac`.
 3. The inspected folder opens with zero selected. Choose one track or tap **Select all FLACs** for both. Check the count and total bytes, then tap **Continue to Downloads**.
-4. Choose a fresh writable folder under **Internal storage → Music**, paste each selected fixture's SHA-256, and tap **Download**. Downloads shows progress for each track. Use its Library button as soon as a track is ready. Both files go in one album subfolder. Compare them with their respective fixture hashes.
+4. Choose a fresh writable folder under **Internal storage → Music** and tap **Download**. Downloads shows progress for each track. Use its Library button as soon as a track is ready. Both files go in one album subfolder. Compare them with their respective fixture hashes.
 5. Select **Go offline** from Soulseek when finished. The file remains available to the regular offline player.
 
-This controlled build uses the generated fixture's SHA-256 to verify the private staging file and published copy. The coordinator address and test account are fixed in the engine. The regular daily-use APK has four tabs.
+The tab signs in only to the loopback coordinator. The existing sharing, chat, and wishlist fixtures expect the private test account named in their fixture scripts. Enter the fixture credentials on each new session. **Go offline** ends the session and clears its password. Relaunching starts offline.
+
+The tab checks the advertised byte count, decodes the complete FLAC with libFLAC, and verifies its embedded audio checksum when present. Private staging uses the uploader, exact remote path, and advertised size. The app computes its own SHA-256 to compare the verified copy on **Retry save**, detect exact duplicates, and check the temporary destination copy. For controlled acceptance, compare the published file against the original fixture with an independent SHA-256. **Peer Transfer Diagnostics** still takes a fixture hash as input.
+
+Run the focused verifier checks with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\scripts\test-peer-flac.ps1
+```
 
 ### Exercise save recovery
 
@@ -176,12 +184,12 @@ python android\scripts\test-peer-wishlist.py
 ```
 
 1. Open **Soulseek → Wishlist**. Save `Amber` and `Violet`, then go online with Wi-Fi connected. The fixture announces a five-second interval. Its console shows the two searches alternating, one per interval. The phone shows **View 1 match** for each.
-2. Open the `Amber` match and inspect the uploader's folder. This fixture sends search replies only, so the folder view falls back to the matching file. Select **Download Amber.flac**. The app opens Downloads with the track selected for review. Starting a download still requires the destination, fixture checksum, and explicit confirmation.
+2. Open the `Amber` match and inspect the uploader's folder. This fixture sends search replies only, so the folder view falls back to the matching file. Select **Download Amber.flac**. The app opens Downloads with the track selected for review. Starting a download requires choosing a destination and confirming the selection.
 3. Edit `Amber` to a different term, then remove it. Go offline and restart Peer Test. Only `Violet` should remain. Search requests resume after **Go online**. The fixture console can also verify requests continue while the screen is locked during the active session.
 
 Search terms are saved on the device. Matches are kept in memory for the active session. The fixture checks use USB forwards with Android's Wi-Fi policy enabled.
 
-On the ARM64 OPPO CPH1937, the two terms alternated about 5.3 seconds apart. The coordinator received a request while Android reported the screen asleep and received none during the checked offline interval. Editing and removing one term left only `Violet` after a force-stop. Reconnecting returned its match. Selecting the `Amber` fixture opened Downloads with the checksum field empty and the download button disabled. A folder request waiting for a peer can delay a scheduled wishlist check.
+On the ARM64 OPPO CPH1937, the two terms alternated about 5.3 seconds apart. The coordinator received a request while Android reported the screen asleep and received none during the checked offline interval. Editing and removing one term left only `Violet` after a force-stop. Reconnecting returned its match. In that earlier build, selecting the `Amber` fixture opened Downloads with the checksum field empty and the download button disabled. A folder request waiting for a peer can delay a scheduled wishlist check.
 
 ## Before a public login
 
@@ -198,12 +206,20 @@ The 0.14.2 Peer Test build (version code 50) ran on the ARM64 OPPO CPH1937 with 
 - A separate run checked the upload payload directly over Wi-Fi with the USB file forward removed. The PC accepted the file connection from the phone's Wi-Fi address. The 165,652-byte file matched SHA-256 while Android reported the phone asleep with keyguard showing. Turning sharing off withdrew the fixture listing.
 - A further run left only the USB coordinator forward and advertised both peers' Wi-Fi addresses. Search and folder inspection succeeded, and a repeat download of `Violet.flac` reported **Exact duplicate skipped**. The album still held two files with the original fixture hashes.
 
-Public login remains blocked on the public sign-in and download integrity work, the minor version assignment, and separate authorization for a public compatibility test.
+### Manual sign-in and FLAC integrity follow-up
+
+The signed 0.14.2 Peer Test APK (version code 50) ran on the same ARM64 OPPO CPH1937. The loopback coordinator recorded the manually entered fixture account at `176.1`. The phone rejected an incorrect password, cleared the field on **Go offline**, and stayed offline after a cold relaunch.
+
+- The 4,619,533-byte `Aurora.flac` reached the Library without a hash entry. The published file matched the source SHA-256 independently. The 47,792-byte `Ember.flac` had the advertised size and a deliberately wrong embedded audio checksum. Peer Test rejected it before publication and cleared its private staging file.
+- Force-stopping during a repeat of the valid transfer preserved 229,355 private bytes. The download stayed paused until sign-in and **Resume queued tracks**. Moving the destination produced **Retry save** after verification. Once the destination was restored, **Retry save** after an offline relaunch skipped the exact duplicate, with one matching file and no coordinator login.
+- The focused host checks also accepted a FLAC with no embedded checksum and rejected a bad byte count, corrupt frame, truncated frame, and trailing data. Lint, player-core, Room and schema checks passed.
+
+Public login requires the Local Music minor version, an explicitly configured public endpoint, and separate authorization for a public compatibility test.
 
 | Capability | Remaining Android work |
 | --- | --- |
-| Accounts and connection | Add public sign-in with a session-only password and a separate public endpoint. The fixture logs in as `176.1` over loopback. The Local Music minor version request awaits upstream assignment. Apply the assigned version and check the outgoing login before a public test. [Version request](https://github.com/michel/soulseek-rs/issues/12#issuecomment-7078710733) |
-| Downloads | Replace the fixture's manual trusted hash with public-file validation, including expected size and full FLAC decoding. Verify uploader queue behavior and recovery with public peers when authorized. |
+| Accounts and connection | Manual sign-in with a session-only password is available in Peer Test. Add a separate public endpoint. The fixture logs in as `176.1` over loopback. The Local Music minor version request awaits upstream assignment. Apply the assigned version and check the outgoing login before a public test. [Version request](https://github.com/michel/soulseek-rs/issues/12#issuecomment-7078710733) |
+| Downloads | Peer Test validates expected size, decodes the complete FLAC, and checks its embedded checksum when present. Verify uploader-queue behavior and recovery with public peers when authorized. |
 | Uploads and connectivity | Verify public peer reachability and server-brokered fallback. |
 
 Upstream documents engine support for uploads and priority queues, chat, and wishlist requests. It also documents interoperability gaps for obfuscated connections, locked file listings and firewalled distributed-search children. [Upstream protocol coverage](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/docs/protocol-coverage.md)

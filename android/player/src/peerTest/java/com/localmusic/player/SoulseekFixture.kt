@@ -3,6 +3,7 @@ package com.localmusic.player
 import android.content.Context
 import android.net.Network
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import java.io.File
 import java.io.IOException
@@ -36,16 +37,25 @@ internal object SoulseekFixture {
         false
     }
 
-    suspend fun connect() = withContext(Dispatchers.IO) {
-        request(JSONObject().put("operation", "connect"))
+    private val flacAvailable by lazy {
+        try {
+            System.loadLibrary("localmusic_peer_flac")
+            true
+        } catch (_: UnsatisfiedLinkError) {
+            false
+        }
+    }
+
+    suspend fun connect(username: String, password: String) = withContext(Dispatchers.IO) {
+        request(JSONObject().put("operation", "connect").put("username", username).put("password", password))
     }
 
     suspend fun disconnect() = withContext(Dispatchers.IO) {
-        request(JSONObject().put("operation", "stop").put("disconnect", true))
+        request(JSONObject().put("operation", "stop").put("disconnect", true).put("endSession", true))
     }
 
-    suspend fun search(query: String): List<FixtureTrack> = withContext(Dispatchers.IO) {
-        tracks(request(JSONObject().put("operation", "search").put("query", query)))
+    suspend fun search(query: String, diagnostic: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
+        tracks(request(JSONObject().put("operation", "search").put("query", query).put("diagnostic", diagnostic)))
     }
 
     suspend fun wishlistPoll(queries: List<String>): Pair<String, List<FixtureTrack>>? =
@@ -54,8 +64,9 @@ internal object SoulseekFixture {
             (result as? JSONObject)?.let { it.getString("query") to tracks(it.getJSONArray("tracks")) }
         }
 
-    suspend fun folder(track: FixtureTrack): List<FixtureTrack> = withContext(Dispatchers.IO) {
-        tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)))
+    suspend fun folder(track: FixtureTrack, diagnostic: Boolean): List<FixtureTrack> = withContext(Dispatchers.IO) {
+        tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)
+            .put("diagnostic", diagnostic)))
     }
 
     suspend fun sharePreview(root: File): List<FixtureSharedFile> = withContext(Dispatchers.IO) {
@@ -84,31 +95,44 @@ internal object SoulseekFixture {
                 .put("name", name).put("text", text))
         }
 
-    fun stagedFile(track: FixtureTrack, files: File, sha256: String): File {
-        require(fixtureHashPattern.matches(sha256))
+    fun stagedFile(track: FixtureTrack, files: File, sha256: String?): File {
+        require(sha256 == null || fixtureHashPattern.matches(sha256))
         require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
         val identity = MessageDigest.getInstance("SHA-256").digest(track.encode().toString().toByteArray())
             .joinToString("") { "%02x".format(it) }
-        return File(File(files, "peer-search-$sha256-$identity"), track.name)
+        // Retain the old directory name for downloads queued by earlier builds.
+        val key = if (sha256 == null) identity else "$sha256-$identity"
+        return File(File(files, "peer-search-$key"), track.name)
     }
 
-    fun verifiedCopy(track: FixtureTrack, stage: File, sha256: String): Boolean =
-        stage.isFile && stage.length() == track.size && stage.inputStream().use { it.matchesFixture(sha256) }
+    fun verifiedCopy(track: FixtureTrack, stage: File, sha256: String?, diagnostic: Boolean = false): Boolean {
+        if (!stage.isFile || stage.length() != track.size) return false
+        if (sha256 != null && !stage.inputStream().use { it.matchesFixture(sha256) }) return false
+        if (diagnostic) return sha256 != null
+        check(flacAvailable) { "Build the Peer Test FLAC library first." }
+        return ParcelFileDescriptor.open(stage, ParcelFileDescriptor.MODE_READ_ONLY).use {
+            nativeVerifyFlac(it.fd, track.size)
+        }
+    }
 
     suspend fun fetch(
         track: FixtureTrack,
         files: File,
-        sha256: String,
+        sha256: String?,
         wifi: () -> Network?,
+        diagnostic: Boolean = false,
         progress: suspend (String, Int?) -> Unit,
     ): File {
         val stage = stagedFile(track, files, sha256)
         val directory = stage.parentFile!!
         check(directory.isDirectory || directory.mkdir()) { "Could not create private staging." }
-        if (verifiedCopy(track, stage, sha256)) return stage
-        check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
         val partial = File(directory, "${track.name}.part")
+        if (stage.exists()) {
+            if (verifiedCopy(track, stage, sha256, diagnostic)) return stage
+            clearInvalid(stage, partial)
+        }
         val download = track.encode().put("operation", "download").put("directory", directory.absolutePath)
+            .put("diagnostic", diagnostic)
         val poll = JSONObject().put("operation", "poll")
         for (attempt in 0..3) {
             val waitDeadline = SystemClock.elapsedRealtime() + STALL_MS
@@ -170,13 +194,18 @@ internal object SoulseekFixture {
                 }
             }
             if (sizeChanged || keepSession || stage.exists()) {
-                if (!sizeChanged && verifiedCopy(track, stage, sha256)) return stage
-                check(!partial.exists() || partial.delete()) { "Could not clear the invalid partial." }
-                check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
-                throw IOException("The selected FLAC failed size or SHA-256 verification.")
+                if (!sizeChanged && verifiedCopy(track, stage, sha256, diagnostic)) return stage
+                clearInvalid(stage, partial)
+                throw IOException(if (diagnostic) "The selected FLAC failed size or SHA-256 verification."
+                    else "The download failed FLAC integrity verification. Retry to download a fresh copy.")
             }
         }
         error("Connection interrupted. ${partial.length()} bytes saved. Tap Resume.")
+    }
+
+    private fun clearInvalid(stage: File, partial: File) {
+        check(!partial.exists() || partial.delete()) { "Could not clear the invalid partial." }
+        check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
     }
 
     private const val STALL_MS = 90_000L
@@ -192,6 +221,8 @@ internal object SoulseekFixture {
         check(!response.has("error")) { response.getString("error") }
         return response.get("result")
     }
+
+    private external fun nativeVerifyFlac(fd: Int, expectedBytes: Long): Boolean
 
     private external fun nativeRequest(request: String): String
 }
