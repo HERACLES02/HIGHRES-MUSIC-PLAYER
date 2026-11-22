@@ -119,17 +119,48 @@ On the ARM64 OPPO CPH1937, search, folder inspection and the initial download sh
 
 In the 64 KiB/s build, **Pause** closed the transfer and preserved 4,239,791 bytes. After restarting Wi-Fi, the app automatically resumed at 4,456,040 bytes. A force-stop preserved 4,619,865 bytes and the track waited for **Resume** after relaunch. It resumed at that offset and published one 7,175,535-byte FLAC with the same SHA-256 as the generated fixture. Selecting it again left one file and one matching Library row.
 
+## Check folder sharing and privilege order
+
+Use the private ARM64 Peer Test APK and a disposable folder containing generated FLAC files only. Put at least one file in a subfolder. Copy that folder under **Internal storage → Music** on the phone, keeping the same folder name. The Sharing tab previews the private copy, including nested paths and byte counts. **Enable sharing** publishes that exact copy for the current session. Turning sharing off, going offline, or losing Wi-Fi withdraws it. Pick and preview the folder again before enabling a new share.
+
+Stop the other private coordinator before starting this test. The test runs its own loopback coordinator, which reports one day of privileges for the phone account and grants priority to two fixture peers. With the phone connected over USB for debugging, keep its Wi-Fi on and run the following from the repo root.
+
+```powershell
+$adb = 'D:\music_player\android\.tools\sdk\platform-tools\adb.exe'
+$fixture = 'D:\path\to\disposable-fixture-folder'
+& $adb install -r android\player\build\outputs\apk\peerTest\player-peerTest.apk
+& $adb push $fixture /sdcard/Music/
+& $adb reverse tcp:45415 tcp:45415
+& $adb reverse tcp:45418 tcp:45418
+& $adb forward tcp:45417 tcp:45417
+python android\scripts\test-peer-sharing.py $fixture
+```
+
+Follow the prompts in **Soulseek → Sharing**. The peers check that the initial listing is empty and that the enabled listing matches the preview. They hold one active upload open while two ordinary requests and then two privileged requests arrive. The active upload must finish first. The waiting peers must receive the file in privilege order and in arrival order within each group. The test compares all five downloads with the source SHA-256. It then verifies that disabling sharing withdraws the listing, stops an accepted upload, and denies a new request for the withdrawn file.
+
+The USB forwards allow deterministic protocol checks while Android enforces its Wi-Fi policy. On a private Wi-Fi network where both devices can reach each other, pass `--phone-host <phone-Wi-Fi-IP> --file-host <PC-Wi-Fi-IP>` to send the peer control and file connections directly over Wi-Fi. The coordinator still uses the USB reverse on port 45415.
+
+On the OPPO CPH1937, the Sharing tab showed the nested fixture paths and the coordinator's reported privilege time. Controlled peers over USB forwards received five byte-identical uploads. In a screen-off run, the active transfer finished first, followed by the two privileged peers and then the two ordinary peers, in arrival order within each group.
+
+A separate run verified that turning sharing off withdrew the listing, stopped an accepted upload, and kept a new request out of the queue. Disabling Wi-Fi also withdrew the listing and removed the foreground service and private copy. Restoring Wi-Fi kept sharing off. Force-stopping with sharing enabled left the next launch offline and cleared the leftover copy. The direct Wi-Fi connection attempt timed out on the test LAN.
+
+```powershell
+& $adb reverse --remove tcp:45415
+& $adb reverse --remove tcp:45418
+& $adb forward --remove tcp:45417
+```
+
 ## Before a public login
 
-Soulseek's rules expect third-party clients to implement search, wishlist, downloads, uploads, chat and recognition of privileges. This increment exercises the search and download path on the private coordinator. [Soulseek rules](https://www.slsknet.org/news/node/681)
+Soulseek's rules expect third-party clients to implement search, wishlist, downloads, uploads, chat and recognition of privileges. Use the private coordinator for the implemented features until the full-client verification and login version coordination are complete. [Soulseek rules](https://www.slsknet.org/news/node/681)
 
 | Capability | Remaining Android work |
 | --- | --- |
 | Accounts and connection | Secure credential storage and session lifecycle, plus a client minor version reserved with upstream. Test ordinary peer connectivity and server-brokered fallback on mobile networks when authorized. |
 | Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash with an integrity check suitable for public files. |
-| Uploads | Expose explicitly approved share folders through Android's storage permissions. Keep sharing initially off. Test serving files, the upload queue, and listener reachability. |
+| Uploads | Verify direct Wi-Fi listener reachability, brokered fallback and sharing alongside chat and wishlist checks in the same session. |
 | Chat | Expose room and private messages, including reception and acknowledgement across reconnects. |
 | Wishlist | Store searches and schedule them using the server-provided interval. |
-| Privileges | Verify server-listed priority is applied to the phone's actual upload queue. |
+| Privileges | Repeat the upload-priority check during the combined full-client verification. |
 
 Upstream documents engine support for uploads and priority queues, chat, and wishlist requests. It also documents interoperability gaps for obfuscated connections, locked file listings and firewalled distributed-search children. [Upstream protocol coverage](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/docs/protocol-coverage.md)

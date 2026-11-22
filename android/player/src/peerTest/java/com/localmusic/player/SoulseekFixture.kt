@@ -52,6 +52,22 @@ internal object SoulseekFixture {
         tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)))
     }
 
+    suspend fun sharePreview(root: File): List<FixtureSharedFile> = withContext(Dispatchers.IO) {
+        val rows = shareRequest("sharePreview", root) as JSONArray
+        List(rows.length()) { FixtureSharedFile.decode(rows.getJSONObject(it)) }
+    }
+
+    suspend fun shareOn(root: File) = withContext(Dispatchers.IO) { shareRequest("shareOn", root) }
+
+    suspend fun shareOff() = withContext(Dispatchers.IO) { shareRequest("shareOff") }
+
+    suspend fun shareStatus(): FixtureShareStatus = withContext(Dispatchers.IO) {
+        FixtureShareStatus.decode(shareRequest("shareStatus") as JSONObject)
+    }
+
+    private fun shareRequest(operation: String, root: File? = null) =
+        request(JSONObject().put("operation", operation).put("root", root?.absolutePath))
+
     fun stagedFile(track: FixtureTrack, files: File, sha256: String): File {
         require(fixtureHashPattern.matches(sha256))
         require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
@@ -115,7 +131,10 @@ internal object SoulseekFixture {
                         "The uploader stopped responding."
                     }
                     if (offset == null) {
-                        progress("Waiting for ${track.user}. $received bytes saved.", null)
+                        val position = update.optLong("queuePosition", 0)
+                        val waiting = if (position > 0) "Queued by ${track.user} at position $position."
+                            else "Waiting for ${track.user}."
+                        progress("$waiting $received bytes saved.", null)
                     } else {
                         val resumed = if (offset > 0) " (resumed at $offset)" else ""
                         progress(

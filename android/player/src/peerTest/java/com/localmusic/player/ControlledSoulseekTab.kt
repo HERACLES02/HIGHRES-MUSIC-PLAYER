@@ -13,7 +13,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -55,6 +54,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private val connectivity = app.getSystemService(ConnectivityManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var idle: Job? = null
+    private var sessionWatch: Job? = null
     private var online by mutableStateOf(false)
     private var working by mutableStateOf(false)
     private var message by mutableStateOf("")
@@ -62,7 +62,13 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private var chosen by mutableStateOf(emptyList<FixtureTrack>())
     private val hashes = mutableStateMapOf<FixtureTrack, String>()
     private var visible = false
+    private val sharing = FixtureSharing(app, connectivity, scope, { online }) {
+        if (!visible) setVisible(false)
+    }
     val ownsSession: Boolean get() = online || working
+
+    fun sharingServiceStarted() = sharing.serviceStarted()
+    fun sharingServiceEnded() = sharing.serviceEnded()
 
     override var enabled by mutableStateOf(settings.getBoolean("enabled", false))
         private set
@@ -74,7 +80,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             idle = scope.launch {
                 snapshotFlow { !working && !PeerTransferService.state.running }.first { it }
                 delay(30_000)
-                if (online) goOffline()
+                if (online && !sharing.keepingSession) goOffline()
             }
         }
     }
@@ -83,20 +89,41 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         check(connectivity.wifiNetwork() != null) { "Connect to Wi-Fi to go online." }
         SoulseekFixture.connect()
         online = true
+        sessionWatch = scope.launch {
+            while (true) {
+                try {
+                    sharing.refresh()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    message = e.message ?: "Could not read sharing status."
+                }
+                delay(750)
+            }
+        }
     }
 
     private fun goOffline() {
         if (!online) return
         online = false
         sessionAction("Disconnecting…") {
-            val transfer = snapshotFlow { PeerTransferService.state }
-                .first { !it.running || (it.fromSoulseekTab && it.pausable) }
-            if (transfer.running && transfer.fromSoulseekTab) {
-                PeerTransferService.pause(app)
-                snapshotFlow { PeerTransferService.state.running }.first { !it }
+            sessionWatch?.cancel()
+            try {
+                sharing.stop()
+            } finally {
+                disconnectTransfers()
             }
-            SoulseekFixture.disconnect()
         }
+    }
+
+    private suspend fun disconnectTransfers() {
+        val transfer = snapshotFlow { PeerTransferService.state }
+            .first { !it.running || (it.fromSoulseekTab && it.pausable) }
+        if (transfer.running && transfer.fromSoulseekTab) {
+            PeerTransferService.pause(app)
+            snapshotFlow { PeerTransferService.state.running }.first { !it }
+        }
+        SoulseekFixture.disconnect()
     }
 
     private fun sessionAction(status: String, action: suspend () -> Unit) {
@@ -136,9 +163,11 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         val saved = remember(transfer.running, transfer.album) {
             transfer.album ?: FixtureAlbumDownload.read(app)
         }
-        var downloads by rememberSaveable { mutableStateOf(downloadsRequest != 0 ||
-            saved?.tracks?.any { !it.status.finished } == true) }
-        LaunchedEffect(downloadsRequest) { if (downloadsRequest != 0) downloads = true }
+        var section by rememberSaveable {
+            mutableStateOf(if (downloadsRequest != 0 || saved?.tracks?.any { !it.status.finished } == true)
+                "Downloads" else "Search")
+        }
+        LaunchedEffect(downloadsRequest) { if (downloadsRequest != 0) section = "Downloads" }
         val chooseFolder = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data
             val tree = data?.data
@@ -163,15 +192,23 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             }
         }
         val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+        val chooseShare = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                result.data?.data?.let(sharing::preview)
+            }
+        }
+        fun requestNotifications() {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         fun start(album: FixtureAlbumDownload, index: Int = -1, action: FixtureTrackAction? = null) {
             try {
                 PeerTransferService.startAlbum(context, album, index, action)
                 chosen = emptyList()
                 hashes.clear()
                 message = ""
-                if (Build.VERSION.SDK_INT >= 33 &&
-                    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-                ) notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                requestNotifications()
             } catch (_: IllegalStateException) {
                 message = "Could not start the download. Return to this screen and retry."
             }
@@ -192,9 +229,10 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!downloads, { downloads = false }, label = { Text("Search") })
-                FilterChip(downloads, { downloads = true }, label = { Text("Downloads") })
+            PlayerActions {
+                for (page in listOf("Search", "Downloads", "Sharing")) {
+                    FilterChip(section == page, { section = page }, label = { Text(page) })
+                }
             }
             if (online) {
                 TextButton(enabled = !working, onClick = ::goOffline) { Text("Go offline") }
@@ -203,7 +241,22 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                 Text("Offline. Use Wi-Fi to connect to the private fixtures.")
             }
             if (message.isNotEmpty()) Text(message)
-            if (downloads) {
+            if (section == "Sharing") {
+                SharingPanel(sharing, online && !working, pickFolder = {
+                    try {
+                        chooseShare.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                            .putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(
+                                "com.android.externalstorage.documents", "primary:Music"
+                            ))
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION))
+                    } catch (_: ActivityNotFoundException) {
+                        message = "The folder picker is unavailable."
+                    }
+                }, enable = {
+                    sharing.start()
+                    requestNotifications()
+                })
+            } else if (section == "Downloads") {
                 val tree = destination
                 if (tree != null) Text("Phone / ${DocumentsContract.getTreeDocumentId(tree).substringAfter(':')}")
                 TextButton(enabled = !transfer.running, onClick = ::pickDestination) { Text("Choose download folder") }
@@ -225,7 +278,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                                     FixtureAlbumTrack(it, hashes.getValue(it).trim().lowercase())
                                 }))
                             }) { Text("Download ${chosen.size} selected") }
-                        TextButton(onClick = { chosen = emptyList(); hashes.clear(); downloads = false }) {
+                        TextButton(onClick = { chosen = emptyList(); hashes.clear(); section = "Search" }) {
                             Text("Back to Search")
                         }
                     }
@@ -290,9 +343,43 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                     chooseTracks = { tracks ->
                         chosen = tracks
                         hashes.clear()
-                        downloads = true
+                        section = "Downloads"
                     })
             }
         }
     }
+}
+
+@Composable
+private fun SharingPanel(
+    sharing: FixtureSharing,
+    online: Boolean,
+    pickFolder: () -> Unit,
+    enable: () -> Unit,
+) {
+    val status = sharing.status
+    if (online) Text(when (val seconds = status.privilegeSeconds) {
+        null -> "Waiting for the server's privilege status."
+        0L -> "Account privileges: none."
+        else -> "Account privileges: $seconds seconds remaining."
+    })
+    if (sharing.message.isNotEmpty()) Text(sharing.message)
+    if (status.sharing) {
+        Text("Sharing over Wi-Fi. One upload slot.")
+        Button(enabled = !sharing.busy, onClick = sharing::turnOff) { Text("Turn sharing off") }
+        if (status.uploads.isEmpty()) Text("No uploads in progress.")
+        status.uploads.forEach { upload ->
+            Text("${upload.user}${if (upload.privileged) " (privileged)" else ""}")
+            Text(upload.file.path)
+            Text(upload.position?.let { "Queued at position $it" } ?: "Uploading ${upload.sent} / ${upload.file.size} bytes")
+        }
+    } else {
+        Text("Sharing is off.")
+        TextButton(enabled = !sharing.busy, onClick = pickFolder) { Text("Choose share folder") }
+        if (sharing.files.isNotEmpty()) {
+            Text("Peers will see these ${sharing.files.size} files.")
+            Button(enabled = online && !sharing.busy, onClick = enable) { Text("Enable sharing") }
+        }
+    }
+    sharing.files.forEach { file -> Text("${file.path} • ${file.size} bytes") }
 }

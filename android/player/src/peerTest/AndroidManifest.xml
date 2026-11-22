@@ -2,9 +2,13 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <application android:name=".PeerTestApplication" android:label="Local Music Peer Test"
         tools:replace="android:name,android:label">
         <service android:name=".PeerTransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <service android:name=".PeerSharingService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <activity android:name=".PeerTestActivity" android:exported="true"
