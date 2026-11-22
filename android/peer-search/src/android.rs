@@ -362,9 +362,9 @@ impl Session {
         if !supported_track(basename, size, !diagnostic) || basename.contains(['\0', ':']) {
             return Err("The selected track has an invalid name or size".into());
         }
-        let (_, events) = self
-            .client(diagnostic)?
-            .download(path.into(), user.into(), size, directory.into())?;
+        let (_, events) =
+            self.client(diagnostic)?
+                .download(path.into(), user.into(), size, directory.into())?;
         self.download = Some(Transfer {
             user: user.into(),
             path: path.into(),
@@ -453,14 +453,20 @@ fn supported_track(path: &str, size: u64, expanded: bool) -> bool {
     let extension = path.rsplit_once('.').map(|(_, extension)| extension);
     let flac = extension.is_some_and(|ext| ext.eq_ignore_ascii_case("flac"));
     let mp3 = extension.is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"));
-    size > 0 && if expanded {
-        size <= i64::MAX as u64 && (flac || mp3)
-    } else {
-        size <= FIXTURE_MAX_BYTES && flac
-    }
+    size > 0
+        && if expanded {
+            size <= i64::MAX as u64 && (flac || mp3)
+        } else {
+            size <= FIXTURE_MAX_BYTES && flac
+        }
 }
 
-fn track_details(user: &str, path: &str, size: u64, attribute: impl Fn(u32) -> Option<u32>) -> Value {
+fn track_details(
+    user: &str,
+    path: &str,
+    size: u64,
+    attribute: impl Fn(u32) -> Option<u32>,
+) -> Value {
     let mut track = json!({"user": user, "path": path, "size": size});
     for (key, code) in [("bitrate", 0), ("sampleRate", 4), ("bitDepth", 5)] {
         if let Some(value) = attribute(code).filter(|&value| value > 0) {
@@ -476,9 +482,15 @@ fn search_tracks(results: Vec<SearchResult>, expanded: bool) -> Vec<Value> {
         .flat_map(|result| result.files)
         .filter(|file| supported_track(&file.name, file.size, expanded))
         .take(if expanded { usize::MAX } else { 100 })
-        .map(|file| track_details(&file.username, &file.name, file.size, |code| {
-            if expanded { file.attribs.get(&code).copied() } else { None }
-        }))
+        .map(|file| {
+            track_details(&file.username, &file.name, file.size, |code| {
+                if expanded {
+                    file.attribs.get(&code).copied()
+                } else {
+                    None
+                }
+            })
+        })
         .collect()
 }
 
@@ -551,12 +563,21 @@ fn operate(request: Value) -> Result<Value> {
             let deadline = Instant::now() + Duration::from_secs(12);
             while Instant::now() < deadline {
                 if let Some(dirs) = client.take_folder_contents(user, folder) {
-                    let tracks: Vec<_> = dirs.into_iter().filter(|dir| dir.name == folder)
+                    let tracks: Vec<_> = dirs
+                        .into_iter()
+                        .filter(|dir| dir.name == folder)
                         .flat_map(|dir| dir.files)
-                        .filter(|file| supported_track(&file.name, file.size, expanded) && !file.name.contains(['/', '\\']))
+                        .filter(|file| {
+                            supported_track(&file.name, file.size, expanded)
+                                && !file.name.contains(['/', '\\'])
+                        })
                         .take(if expanded { usize::MAX } else { 100 })
                         .map(|file| {
-                            let path = if folder.is_empty() { file.name.clone() } else { format!("{folder}\\{}", file.name) };
+                            let path = if folder.is_empty() {
+                                file.name.clone()
+                            } else {
+                                format!("{folder}\\{}", file.name)
+                            };
                             track_details(user, &path, file.size, |code| {
                                 if expanded { file.attribute(code) } else { None }
                             })
