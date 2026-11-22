@@ -12,6 +12,7 @@ android {
         minSdk = 30
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
+        buildConfigField("boolean", "PUBLIC_SOULSEEK", "false")
         versionCode = 50
         versionName = if(experimentalDirectUsb)"0.14.2-direct-coverage" else "0.14.2"
         buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
@@ -29,6 +30,23 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
         getByName("debug") { versionNameSuffix = "-debug" }
+        create("peerTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".peertest"
+            versionNameSuffix = "-peer-test"
+            matchingFallbacks += listOf("debug")
+            manifestPlaceholders["peerAppLabel"] = "Local Music Peer Test"
+            manifestPlaceholders["peerDiagnosticsEnabled"] = "true"
+        }
+        create("peerPublicTest") {
+            initWith(getByName("peerTest"))
+            applicationIdSuffix = ".peertest.publictest"
+            versionNameSuffix = "-peer-public-test"
+            matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "PUBLIC_SOULSEEK", "true")
+            manifestPlaceholders["peerAppLabel"] = "Local Music Public Peer Test"
+            manifestPlaceholders["peerDiagnosticsEnabled"] = "false"
+        }
         create("preview") {
             initWith(getByName("release"))
             versionNameSuffix = "-optimized-preview"
@@ -43,9 +61,17 @@ android {
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-tags/notices"))
+    sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/peer-test/jniLibs"))
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
     sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
+    sourceSets.getByName("peerPublicTest") {
+        manifest.srcFile("src/peerTest/AndroidManifest.xml")
+        java.srcDir("src/peerTest/java")
+    }
     signingConfigs.getByName("debug") { storeFile = rootProject.file(".tools/debug.keystore") }
+}
+androidComponents.onVariants(androidComponents.selector().withBuildType("peerPublicTest")) { variant ->
+    variant.packaging.jniLibs.excludes.add("**/armeabi-v7a/**")
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {

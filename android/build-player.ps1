@@ -18,6 +18,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'TagLib source verification failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-tag-evidence.py')
     if ($LASTEXITCODE -ne 0) { throw 'Tag-preservation evidence is missing or stale.' }
+    & (Join-Path $projectRoot 'scripts/build-peer-search.ps1') -NativeOnly
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
     if ($ExperimentalDirectUsb) { $verificationArgs += '-PexperimentalDirectUsb=true' }
