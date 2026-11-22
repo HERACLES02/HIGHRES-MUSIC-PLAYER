@@ -1,0 +1,19 @@
+[package]
+name = "localmusic-peer-search"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soulseek-rs-lib = { git = "https://github.com/michel/soulseek-rs.git", rev = "434dcc0155ed87203cafcd1cf7b1a1073f88a63d" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.21.1", default-features = false }
+serde_json = "1.0"
+
+[profile.release]
+strip = true
