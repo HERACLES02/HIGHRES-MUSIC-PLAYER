@@ -71,13 +71,14 @@ object PlayerGlyph {
 val mainDestinations = listOf("Home", "Library", "Playlists", "Settings")
 
 @Composable
-fun PlayerRail(selected: String, navigate: (String) -> Unit) {
+fun PlayerRail(selected: String, soulseekEnabled: Boolean = false, navigate: (String) -> Unit) {
     NavigationRail {
-        mainDestinations.forEach { destination ->
+        (if (soulseekEnabled) mainDestinations + "Soulseek" else mainDestinations).forEach { destination ->
             NavigationRailItem(selected = selected == destination, onClick = { navigate(destination) },
                 icon = { Icon(when (destination) {
                     "Home" -> PlayerGlyph.Home; "Library" -> PlayerGlyph.Library
-                    "Playlists" -> PlayerGlyph.Playlists; else -> PlayerGlyph.Settings
+                    "Playlists" -> PlayerGlyph.Playlists; "Soulseek" -> PlayerGlyph.Search
+                    else -> PlayerGlyph.Settings
                 }, contentDescription = destination) },
                 label = { Text(destination, maxLines = 1, overflow = TextOverflow.Ellipsis) }, alwaysShowLabel = false)
         }
@@ -85,14 +86,15 @@ fun PlayerRail(selected: String, navigate: (String) -> Unit) {
 }
 
 @Composable
-fun PlayerNavigation(selected: String, navigate: (String) -> Unit) {
+fun PlayerNavigation(selected: String, soulseekEnabled: Boolean = false, navigate: (String) -> Unit) {
     NavigationBar(tonalElevation = 0.dp) {
-        mainDestinations.forEach { destination ->
+        (if (soulseekEnabled) mainDestinations + "Soulseek" else mainDestinations).forEach { destination ->
             NavigationBarItem(selected = selected == destination, onClick = { navigate(destination) },
                 icon = { Icon(when (destination) {
                     "Home" -> PlayerGlyph.Home
                     "Library" -> PlayerGlyph.Library
                     "Playlists" -> PlayerGlyph.Playlists
+                    "Soulseek" -> PlayerGlyph.Search
                     else -> PlayerGlyph.Settings
                 }, contentDescription = null) },
                 label = { Text(destination, maxLines = 1, overflow = TextOverflow.Ellipsis) })

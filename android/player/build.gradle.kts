@@ -29,6 +29,12 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
         getByName("debug") { versionNameSuffix = "-debug" }
+        create("peerTest") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".peertest"
+            versionNameSuffix = "-peer-test"
+            matchingFallbacks += listOf("debug")
+        }
         create("preview") {
             initWith(getByName("release"))
             versionNameSuffix = "-optimized-preview"
@@ -43,6 +49,7 @@ android {
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-tags/notices"))
+    sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/peer-test/jniLibs"))
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
     sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
     signingConfigs.getByName("debug") { storeFile = rootProject.file(".tools/debug.keystore") }

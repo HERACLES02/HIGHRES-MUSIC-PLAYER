@@ -62,6 +62,23 @@ import coil3.compose.AsyncImage
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
+    private var soulseekDownloadsRequest by mutableIntStateOf(0)
+    private var foreground by mutableStateOf(false)
+
+    override fun onStart() {
+        super.onStart()
+        foreground = true
+    }
+
+    override fun onStop() {
+        foreground = false
+        super.onStop()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
+    }
     private val playlistUi by viewModels<PlaylistUiState>()
     private val backupUi by viewModels<BackupUiState>()
     private val listeningUi by viewModels<ListeningToolsUi>()
@@ -276,6 +293,7 @@ class MainActivity : ComponentActivity() {
         setTheme(if(launch.appearance=="AMOLED")R.style.PlayerLaunchBlack
             else if(StartupAppearance.dark(this,launch.appearance))R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
         fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
         savedInstanceState?.getString("writeAction")?.let { action ->
             savedInstanceState.getBundle("writeArguments")?.let { pendingWriteAction = action to it }
@@ -348,7 +366,8 @@ class MainActivity : ComponentActivity() {
                             if (Build.VERSION.SDK_INT >= 33) notificationAccess.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                                 .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
-                        }) }
+                        }, soulseek = (application as MusicApplication).soulseekTab,
+                            soulseekDownloadsRequest = soulseekDownloadsRequest, foreground = foreground) }
                     BackupRestoreDialog(backupUi, restore = {
                         backupCommand(PlaybackService.BACKUP_RESTORE, Bundle().apply { putString("token", backupUi.token) })
                     }, cancel = { backupUi.token = null; backupUi.summary = ""; send(PlaybackService.BACKUP_CANCEL) })
@@ -411,11 +430,32 @@ private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = 
 private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, playlistUi: PlaylistUiState, confirmImport: () -> Unit, pickPlaylist: () -> Unit,
     exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, clock:PlaybackUiState, message: String,
     send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
-    onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit) {
+    onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit,
+    soulseek: SoulseekTab?, soulseekDownloadsRequest: Int, foreground: Boolean) {
     var screen by rememberSaveable { mutableStateOf("Home") }
     var dismissedByDrag by remember { mutableStateOf(false) }
     LaunchedEffect(screen){if(screen=="Playing")dismissedByDrag=false}
     var mainScreen by rememberSaveable { mutableStateOf("Home") }
+    var handledDownloadsRequest by remember { mutableIntStateOf(0) }
+    val soulseekEnabled = soulseek?.enabled == true
+    LaunchedEffect(soulseekEnabled, soulseekDownloadsRequest) {
+        if (handledDownloadsRequest != soulseekDownloadsRequest) {
+            handledDownloadsRequest = soulseekDownloadsRequest
+            if (soulseekEnabled) {
+                mainScreen = "Soulseek"
+                screen = "Soulseek"
+            }
+        }
+        if (!soulseekEnabled && mainScreen == "Soulseek") {
+            mainScreen = "Settings"
+            if (screen == "Soulseek") screen = mainScreen
+        }
+    }
+    val soulseekVisible = soulseekEnabled && screen == "Soulseek" && foreground
+    DisposableEffect(soulseek, soulseekVisible) {
+        if (soulseekVisible) soulseek.setVisible(true)
+        onDispose { if (soulseekVisible) soulseek.setVisible(false) }
+    }
     var toolsReturn by rememberSaveable{mutableStateOf("Settings")}
     var queueFromPlaying by rememberSaveable { mutableStateOf(false) }
     var homeSearch by rememberSaveable { mutableStateOf("") }
@@ -502,7 +542,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         (browseScreen=="Library" && (group!=null || selecting))
     Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
-    if (useRail && !browseSecondary) PlayerRail(browseScreen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
+    if (useRail && !browseSecondary) PlayerRail(browseScreen, soulseekEnabled) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
     Scaffold(modifier = Modifier.weight(1f).imePadding(), topBar = {
         TopAppBar(title = { Text(when (browseScreen) {
             "Home" -> "Local Music"; "Library" -> "Your library"; "Queue" -> "Up next"; else -> browseScreen
@@ -522,7 +562,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                 toggle = { if (playback.optBoolean("playWhenReady")) controller?.pause() else controller?.play() },
                 previous = { controller?.seekToPrevious() },
                 next = { controller?.seekToNext() })
-            if (!browseSecondary && !useRail) PlayerNavigation(browseScreen) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
+            if (!browseSecondary && !useRail) PlayerNavigation(browseScreen, soulseekEnabled) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
         }
     }) { padding ->
         Column(Modifier.padding(padding).consumeWindowInsets(padding).fillMaxSize()) {
@@ -959,12 +999,23 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                 "Audio info"->Box(Modifier.weight(1f)){AudioInfoPanel(controller,currentId)}
                 "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,playback.optBoolean("clipping"),send)}
                 "Playback widget"->Box(Modifier.weight(1f)){WidgetSettingsPanel(preferences.widgets,ready,current,current?.let{store?.artwork(it.id)},send)}
+                "Soulseek" -> if (soulseekEnabled) {
+                    soulseek.Content(soulseekDownloadsRequest) { id ->
+                        library.trackById[id]?.let { track ->
+                            category = "Songs"; group = null; selecting = false; selection = emptySet()
+                            search = track.tags.title
+                            libraryScroll.requestScrollToItem(0)
+                            mainScreen = "Library"; screen = "Library"
+                        }
+                    }
+                }
                 "Settings" -> Box(Modifier.weight(1f)) {
                     SettingsPanel(library, preferences, ready, backupUi, actions, send,
                         audio = { toolsReturn = "Settings"; screen = "Audio controls" },
                         widgets = { toolsReturn = "Settings"; screen = "Playback widget" },
                         scan = onScan, notifications = onNotifications, report = onExport,
-                        licenses = { licenses = true }, openEdit = { nativeBatch = it })
+                        licenses = { licenses = true }, openEdit = { nativeBatch = it },
+                        extraSettings = { soulseek?.Settings() })
                 }
             }
         }
