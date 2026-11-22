@@ -22,12 +22,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.TrackId
+import com.localmusic.player.FixtureSaveStatus.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +59,8 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     private var working by mutableStateOf(false)
     private var message by mutableStateOf("")
     private var destination by mutableStateOf(settings.getString("destination", null)?.let(Uri::parse))
-    private var chosen by mutableStateOf<FixtureTrack?>(null)
+    private var chosen by mutableStateOf(emptyList<FixtureTrack>())
+    private val hashes = mutableStateMapOf<FixtureTrack, String>()
     private var visible = false
     val ownsSession: Boolean get() = online || working
 
@@ -129,12 +133,12 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
     override fun Content(downloadsRequest: Int, openInLibrary: (TrackId) -> Unit) {
         val context = LocalContext.current
         val transfer = PeerTransferService.state
-        val pending = remember(transfer) {
-            if (transfer.running) null else PendingFixtureTransfer.read(app, fromSoulseekTab = true)
+        val saved = remember(transfer.running, transfer.album) {
+            transfer.album ?: FixtureAlbumDownload.read(app)
         }
-        var downloads by rememberSaveable { mutableStateOf(downloadsRequest != 0 || pending != null) }
+        var downloads by rememberSaveable { mutableStateOf(downloadsRequest != 0 ||
+            saved?.tracks?.any { !it.status.finished } == true) }
         LaunchedEffect(downloadsRequest) { if (downloadsRequest != 0) downloads = true }
-        var hash by rememberSaveable { mutableStateOf("") }
         val chooseFolder = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data
             val tree = data?.data
@@ -159,10 +163,11 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             }
         }
         val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-        fun start(tree: Uri, sha256: String, track: FixtureTrack) {
+        fun start(album: FixtureAlbumDownload, index: Int = -1, action: FixtureTrackAction? = null) {
             try {
-                PeerTransferService.start(context, tree, "127.0.0.1", sha256, track, fromSoulseekTab = true)
-                chosen = null
+                PeerTransferService.startAlbum(context, album, index, action)
+                chosen = emptyList()
+                hashes.clear()
                 message = ""
                 if (Build.VERSION.SDK_INT >= 33 &&
                     context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -171,6 +176,20 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                 message = "Could not start the download. Return to this screen and retry."
             }
         }
+
+        fun pickDestination() {
+            try {
+                chooseFolder.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                    .putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(
+                        "com.android.externalstorage.documents", "primary:Music"
+                    ))
+                    .addFlags(PEER_FOLDER_GRANT_FLAGS or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PREFIX_URI_PERMISSION))
+            } catch (_: ActivityNotFoundException) {
+                message = "The folder picker is unavailable."
+            }
+        }
+
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,51 +204,94 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             }
             if (message.isNotEmpty()) Text(message)
             if (downloads) {
-                if (transfer.fromSoulseekTab && transfer.message.isNotEmpty()) Text(transfer.message)
-                transfer.libraryTrack?.let { id ->
-                    TextButton(onClick = { openInLibrary(id) }) { Text("Open in Library") }
-                }
-                if (transfer.fromSoulseekTab && transfer.pausable) {
-                    TextButton(onClick = { PeerTransferService.pause(context) }) { Text("Pause") }
-                }
-                if (pending != null) {
-                    Text("${pending.track.name} from ${pending.track.user} is waiting for Resume.")
-                    Button(enabled = online && !working, onClick = {
-                        start(pending.tree, pending.sha256, pending.track)
-                    }) { Text("Resume") }
-                } else if (!transfer.running) chosen?.let { track ->
-                    Text("${track.name} · ${track.size} bytes")
-                    Text("The Library will scan the selected folder and its subfolders.")
-                    val tree = destination
-                    if (tree != null) Text("Phone / ${DocumentsContract.getTreeDocumentId(tree).substringAfter(':')}")
-                    TextButton(onClick = {
-                        try {
-                            chooseFolder.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                                .putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(
-                                    "com.android.externalstorage.documents", "primary:Music"
-                                ))
-                                .addFlags(PEER_FOLDER_GRANT_FLAGS or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
-                                    Intent.FLAG_GRANT_PREFIX_URI_PERMISSION))
-                        } catch (_: ActivityNotFoundException) {
-                            message = "The folder picker is unavailable."
+                val tree = destination
+                if (tree != null) Text("Phone / ${DocumentsContract.getTreeDocumentId(tree).substringAfter(':')}")
+                TextButton(enabled = !transfer.running, onClick = ::pickDestination) { Text("Choose download folder") }
+                when {
+                    chosen.isNotEmpty() -> {
+                        Text("${chosen.size} selected ? ${chosen.sumOf { it.size }} bytes")
+                        Text("The Library will scan the selected folder and its subfolders.")
+                        chosen.forEach { track ->
+                            OutlinedTextField(hashes[track].orEmpty(), { hashes[track] = it.take(128) },
+                                Modifier.fillMaxWidth(), singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None,
+                                    autoCorrectEnabled = false),
+                                label = { Text("${track.name} SHA-256") })
                         }
-                    }) { Text("Choose download folder") }
-                    OutlinedTextField(hash, { hash = it.take(128) }, Modifier.fillMaxWidth(), singleLine = true,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                        label = { Text("Fixture SHA-256") })
-                    val sha256 = hash.trim().lowercase()
-                    Button(enabled = online && !working && tree != null && fixtureHashPattern.matches(sha256),
-                        onClick = { if (tree != null) start(tree, sha256, track) }) { Text("Download ${track.name}") }
-                } ?: run {
-                    if (!transfer.fromSoulseekTab || transfer.message.isEmpty()) Text("Choose a track from Search.")
+                        val ready = chosen.all { fixtureHashPattern.matches(hashes[it].orEmpty().trim().lowercase()) }
+                        Button(enabled = online && !working && !transfer.running && tree != null && ready,
+                            onClick = {
+                                if (tree != null) start(FixtureAlbumDownload(tree, chosen.map {
+                                    FixtureAlbumTrack(it, hashes.getValue(it).trim().lowercase())
+                                }))
+                            }) { Text("Download ${chosen.size} selected") }
+                        TextButton(onClick = { chosen = emptyList(); hashes.clear(); downloads = false }) {
+                            Text("Back to Search")
+                        }
+                    }
+                    saved != null -> {
+                        val active = transfer.activeTrack
+                        Text("${saved.folder.substringAfterLast('\\').substringAfterLast('/')} ? ${saved.uploader}")
+                        if (active == null && transfer.fromSoulseekTab && transfer.message.isNotEmpty()) {
+                            Text(transfer.message)
+                        }
+                        if (transfer.fromSoulseekTab && transfer.pausable) {
+                            TextButton(onClick = { PeerTransferService.pause(context) }) { Text("Pause") }
+                        }
+                        if (!transfer.running && saved.tracks.any { it.status == QUEUED }) {
+                            Button(enabled = online && !working, onClick = {
+                                start(saved.copy(tree = tree ?: saved.tree))
+                            }) { Text("Resume queued tracks") }
+                        }
+                        saved.tracks.forEachIndexed { index, row ->
+                            val status = if (active == index) transfer.message
+                                else row.message.ifEmpty { "Queued ? ${row.track.size} bytes" }
+                            Text(row.track.name)
+                            Text(status)
+                            if (active == index) transfer.percent?.let { percent ->
+                                LinearProgressIndicator(progress = { percent / 100f }, Modifier.fillMaxWidth())
+                            }
+                            row.libraryTrack?.let { id ->
+                                TextButton(onClick = { openInLibrary(id) }) { Text("Open ${row.track.name} in Library") }
+                            }
+                            if (!transfer.running) {
+                                fun act(action: FixtureTrackAction) =
+                                    start(saved.copy(tree = tree ?: saved.tree), index, action)
+                                when (row.status) {
+                                    CONFLICT -> {
+                                        TextButton(onClick = { act(FixtureTrackAction.SKIP) }) { Text("Skip") }
+                                        TextButton(onClick = { act(FixtureTrackAction.SAVE_SEPARATE) }) {
+                                            Text("Save separate copy")
+                                        }
+                                    }
+                                    SAVING, SAVE_FAILED -> {
+                                        TextButton(onClick = { act(FixtureTrackAction.RETRY_SAVE) }) { Text("Retry save") }
+                                        TextButton(onClick = { act(FixtureTrackAction.DISCARD) }) { Text("Discard download") }
+                                    }
+                                    DOWNLOAD_FAILED -> {
+                                        TextButton(enabled = online && !working, onClick = {
+                                            act(FixtureTrackAction.RETRY_DOWNLOAD)
+                                        }) { Text("Retry download") }
+                                        TextButton(onClick = { act(FixtureTrackAction.DISCARD) }) { Text("Discard download") }
+                                    }
+                                    QUEUED -> TextButton(onClick = { act(FixtureTrackAction.DISCARD) }) {
+                                        Text("Remove from queue")
+                                    }
+                                    else -> Unit
+                                }
+                            }
+                        }
+                    }
+                    else -> Text("Choose tracks from Search.")
                 }
             } else if (online) {
-                FixtureSearch(enabled = !working && !transfer.running, canDownload = pending == null,
-                    chooseTrack = true) { track ->
-                    chosen = track
-                    hash = ""
-                    downloads = true
-                }
+                FixtureSearch(enabled = !working && !transfer.running,
+                    canDownload = saved?.tracks?.all { it.status.finished } != false,
+                    chooseTracks = { tracks ->
+                        chosen = tracks
+                        hashes.clear()
+                        downloads = true
+                    })
             }
         }
     }

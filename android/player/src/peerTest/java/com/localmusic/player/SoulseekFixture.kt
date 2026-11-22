@@ -52,6 +52,17 @@ internal object SoulseekFixture {
         tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)))
     }
 
+    fun stagedFile(track: FixtureTrack, files: File, sha256: String): File {
+        require(fixtureHashPattern.matches(sha256))
+        require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
+        val identity = MessageDigest.getInstance("SHA-256").digest(track.encode().toString().toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(File(files, "peer-search-$sha256-$identity"), track.name)
+    }
+
+    fun verifiedCopy(track: FixtureTrack, stage: File, sha256: String): Boolean =
+        stage.isFile && stage.length() == track.size && stage.inputStream().use { it.matchesFixture(sha256) }
+
     suspend fun fetch(
         track: FixtureTrack,
         files: File,
@@ -59,16 +70,10 @@ internal object SoulseekFixture {
         wifi: () -> Network?,
         progress: suspend (String, Int?) -> Unit,
     ): File {
-        require(fixtureHashPattern.matches(sha256))
-        require(track.name.endsWith(".flac", ignoreCase = true) && track.name.none { it == '\u0000' || it == ':' })
-        val identity = MessageDigest.getInstance("SHA-256").digest(track.encode().toString().toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        val directory = File(files, "peer-search-$sha256-$identity")
+        val stage = stagedFile(track, files, sha256)
+        val directory = stage.parentFile!!
         check(directory.isDirectory || directory.mkdir()) { "Could not create private staging." }
-        val stage = File(directory, track.name)
-        if (stage.isFile && stage.length() == track.size && stage.inputStream().use { it.matchesFixture(sha256) }) {
-            return stage
-        }
+        if (verifiedCopy(track, stage, sha256)) return stage
         check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
         val partial = File(directory, "${track.name}.part")
         val download = track.encode().put("operation", "download").put("directory", directory.absolutePath)
@@ -130,9 +135,7 @@ internal object SoulseekFixture {
                 }
             }
             if (sizeChanged || keepSession || stage.exists()) {
-                if (!sizeChanged && stage.isFile && stage.length() == track.size &&
-                    stage.inputStream().use { it.matchesFixture(sha256) }
-                ) return stage
+                if (!sizeChanged && verifiedCopy(track, stage, sha256)) return stage
                 check(!partial.exists() || partial.delete()) { "Could not clear the invalid partial." }
                 check(!stage.exists() || stage.delete()) { "Could not clear the invalid private copy." }
                 throw IOException("The selected FLAC failed size or SHA-256 verification.")

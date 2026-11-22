@@ -34,6 +34,8 @@ $fixture = 'android\.tools\peer-test\search-share'
 (Get-FileHash -Algorithm SHA256 "$fixture\Amber.flac").Hash
 ```
 
+Soulfind can advertise the PC's LAN address even when the coordinator connection uses USB. Keep the phone and PC reachable on the private test LAN, or use loopback addresses in the coordinator's peer-address replies for the USB-only fixture setup.
+
 1. Open **Peer Transfer Diagnostics**. Paste the hash for `Amber.flac` and choose a fresh disposable folder under **Internal storage → Music**.
 2. Under **Private Soulseek search**, search `Amber`. Confirm the search result gives the uploader and folder. Tap **Inspect peer-fixture-aâ€™s folder** and confirm `Violet.flac` also appears.
 3. Tap **Download Amber.flac** and wait for **Ready in Library**. Confirm the destination contains one `Local Music peer fixture.flac` with the same SHA-256 as `Amber.flac`.
@@ -47,19 +49,34 @@ $fixture = 'android\.tools\peer-test\search-share'
 
 The SHA-256 field supplies an independent check for the generated fixture. The Android service keeps the transfer in its private files until both size and SHA-256 match. The existing publisher copies through a `.part` file, checks the copy and renames it before requesting the existing Library scan. Each selection uses private staging keyed by uploader, remote path, size and fixture hash.
 
-## Download one track from the Soulseek tab
+<a id="download-one-track-from-the-soulseek-tab"></a>
+
+## Download selected tracks from the Soulseek tab
 
 Use the same ARM64 Peer Test APK, private coordinator, uploader, and ADB forwards above. The launcher entry **Local Music Peer Test** opens the regular player with the controlled Soulseek option. **Peer Transfer Diagnostics** opens the original transfer test screen.
 
 1. In **Settings**, turn off **Rescan chosen folders when music changes** and turn on **Enable Soulseek tab**.
 2. On Wi-Fi, open **Soulseek**, tap **Go online**, and search for `Amber`. Inspect the fixture uploader's folder and confirm it includes `Violet.flac`.
-3. Tap **Choose Amber.flac**. In **Downloads**, choose a fresh, writable folder under **Internal storage → Music**. Paste the SHA-256 of the uploader's `Amber.flac`, then tap **Download Amber.flac**.
-4. Wait for **Ready in Library**, then tap **Open in Library**. The regular Songs view opens on the imported track's title. Compare the saved `Amber.flac` with the fixture and confirm the track appears once.
+3. The inspected folder opens with zero selected. Choose one track or tap **Select all FLACs** for both. Check the count and total bytes, then tap **Continue to Downloads**.
+4. Choose a fresh writable folder under **Internal storage → Music**, paste each selected fixture's SHA-256, and tap **Download**. Downloads shows progress for each track. Use its Library button as soon as a track is ready. Both files go in one album subfolder. Compare them with their respective fixture hashes.
 5. Select **Go offline** from Soulseek when finished. The file remains available to the regular offline player.
 
 This controlled build uses the generated fixture's SHA-256 to verify the private staging file and published copy. The coordinator address and test account are fixed in the engine. The regular daily-use APK has four tabs.
 
-On the ARM64 OPPO CPH1937, the tab opened offline after it was enabled. The `Amber` search found the fixture uploader and folder inspection revealed `Violet.flac`. A 165,652-byte `Amber.flac` was published to the selected folder. Its SHA-256 matched the source, and the decoded audio from the pulled file matched the embedded FLAC checksum. **Open in Library** showed one matching song with automatic rescans off.
+### Exercise save recovery
+
+1. In a fresh disposable destination, temporarily rename that destination in the phone's Files app after choosing it. Download the selected fixtures. Wait for a save error and confirm that no partial FLAC appeared in the Library.
+2. Restore the folder, pick it again if Android requires access, and stop both fixture processes. Tap **Go offline**, then **Retry save**. The verified private copy should reach the Library. Compare the saved file with the fixture.
+3. Go online with the fixtures running and repeat the selection in the same destination. Confirm that exact duplicates are skipped and that the file count stays the same.
+4. In a disposable album subfolder, arrange for a different file under each of the two expected names. Repeat the selection. Use **Skip** on one track and **Save separate copy** on the other. Compare the original hashes before and after both choices and compare the suffixed copy with its fixture.
+
+The earlier single-track build was checked on the ARM64 OPPO CPH1937. The `Amber` search found the fixture uploader and folder inspection revealed `Violet.flac`. The saved 165,652-byte `Amber.flac` matched the source SHA-256 and its decoded audio matched the embedded FLAC checksum. **Open in Library** showed one matching song with automatic rescans off.
+
+### Album and save-recovery result
+
+On the ARM64 OPPO CPH1937, an `Amber` search and folder inspection exposed both fixtures. The selection advanced from zero to one to two tracks totaling 894,249 bytes. Both tracks reported transfer progress. Amber reached the Library while Violet was still queued, and both published files matched their source SHA-256 values. Repeating the selection left the same two files in the album.
+
+With different files under both expected names, **Skip** left Amber's existing file in place and **Save separate copy** wrote `Violet (2).flac`. Both original hashes stayed the same. After a separate save failed because the selected folder was unavailable, Amber's private copy still matched its fixture hash. Restoring the folder and reopening the app with both fixture processes stopped allowed **Retry save** to import the verified copy into the Library.
 
 ## Test Rust download recovery
 
@@ -109,7 +126,7 @@ Soulseek's rules expect third-party clients to implement search, wishlist, downl
 | Capability | Remaining Android work |
 | --- | --- |
 | Accounts and connection | Secure credential storage and session lifecycle, plus a client minor version reserved with upstream. Test ordinary peer connectivity and server-brokered fallback on mobile networks when authorized. |
-| Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash and fixed destination name with a public-file integrity and conflict policy. |
+| Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash with an integrity check suitable for public files. |
 | Uploads | Expose explicitly approved share folders through Android's storage permissions. Keep sharing initially off. Test serving files, the upload queue, and listener reachability. |
 | Chat | Expose room and private messages, including reception and acknowledgement across reconnects. |
 | Wishlist | Store searches and schedule them using the server-provided interval. |

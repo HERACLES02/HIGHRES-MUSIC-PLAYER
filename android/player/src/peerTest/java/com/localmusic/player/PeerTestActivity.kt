@@ -147,14 +147,15 @@ class PeerTestActivity : ComponentActivity() {
 internal fun FixtureSearch(
     enabled: Boolean,
     canDownload: Boolean,
-    chooseTrack: Boolean = false,
-    download: (FixtureTrack) -> Unit,
+    chooseTracks: ((List<FixtureTrack>) -> Unit)? = null,
+    download: ((FixtureTrack) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
     var results by remember { mutableStateOf(emptyList<FixtureTrack>()) }
     var listing by remember { mutableStateOf<List<FixtureTrack>?>(null) }
     var inspected by remember { mutableStateOf<List<FixtureTrack>?>(null) }
+    var selected by remember { mutableStateOf(emptySet<FixtureTrack>()) }
     var pending by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     val canSearch = enabled && !pending
@@ -195,7 +196,9 @@ internal fun FixtureSearch(
             TextButton(enabled = canSearch, onClick = {
                 load("Requesting the folder from ${key.first}…") {
                     try {
-                        listing = SoulseekFixture.folder(matches.first())
+                        listing = SoulseekFixture.folder(matches.first()).filter {
+                            it.user == key.first && it.folder == key.second
+                        }
                         message = "${key.first} · ${key.second}"
                     } catch (e: CancellationException) {
                         throw e
@@ -210,14 +213,37 @@ internal fun FixtureSearch(
         TextButton(enabled = canSearch, onClick = {
             listing = null
             inspected = null
+            selected = emptySet()
             message = "Choose an uploader’s folder."
         }) { Text("Back to results") }
         if (tracks.isEmpty()) Text("This folder has no downloadable FLAC tracks.")
+        if (chooseTracks != null && listing != null && tracks.isNotEmpty()) {
+            TextButton(enabled = canSearch && canDownload, onClick = {
+                selected = if (selected.size == tracks.size) emptySet() else tracks.toSet()
+            }) { Text(if (selected.size == tracks.size) "Clear selection" else "Select all FLACs") }
+        }
         tracks.forEach { track ->
-            Text("${track.name} · ${track.size} bytes")
-            Button(enabled = canSearch && canDownload, onClick = { download(track) }) {
-                Text(if (chooseTrack) "Choose ${track.name}" else "Download ${track.name}")
+            if (chooseTracks != null && listing != null) {
+                val checked = track in selected
+                androidx.compose.material3.FilterChip(
+                    selected = checked, enabled = canSearch && canDownload,
+                    onClick = { selected = if (checked) selected - track else selected + track },
+                    label = { Text("${track.name} · ${track.size} bytes") },
+                    leadingIcon = {
+                        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = null)
+                    },
+                )
+            } else {
+                Text("${track.name} · ${track.size} bytes")
+                Button(enabled = canSearch && canDownload, onClick = {
+                    if (chooseTracks != null) chooseTracks(listOf(track)) else download?.invoke(track)
+                }) { Text("Download ${track.name}") }
             }
+        }
+        if (chooseTracks != null && listing != null && tracks.isNotEmpty()) {
+            Text("${selected.size} selected · ${selected.sumOf { it.size }} bytes")
+            Button(enabled = canSearch && canDownload && selected.isNotEmpty(),
+                onClick = { chooseTracks(tracks.filter { it in selected }) }) { Text("Continue to Downloads") }
         }
     }
 }

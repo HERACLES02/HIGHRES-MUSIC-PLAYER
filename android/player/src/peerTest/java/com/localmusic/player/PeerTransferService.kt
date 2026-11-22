@@ -20,11 +20,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.localmusic.core.Availability
 import com.localmusic.core.TrackId
+import com.localmusic.player.FixtureSaveStatus.*
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -47,6 +49,9 @@ internal data class PeerTransferState(
     val pausable: Boolean = false,
     val libraryTrack: TrackId? = null,
     val fromSoulseekTab: Boolean = false,
+    val album: FixtureAlbumDownload? = null,
+    val activeTrack: Int? = null,
+    val percent: Int? = null,
 )
 
 class PeerTransferService : Service() {
@@ -74,9 +79,10 @@ class PeerTransferService : Service() {
         }
         if (transfer != null) return START_NOT_STICKY
         val tree = intent?.data
+        val album = intent?.getStringExtra(EXTRA_ALBUM)?.let { FixtureAlbumDownload.decode(JSONObject(it)) }
         val address = intent?.getStringExtra(EXTRA_ADDRESS)
         val sha256 = intent?.getStringExtra(EXTRA_HASH)
-        if (tree == null || address == null || sha256 == null) {
+        if (tree == null || (album == null && (address == null || sha256 == null))) {
             state = PeerTransferState(message = "The download request was incomplete. Please retry.")
             stopSelf()
             return START_NOT_STICKY
@@ -93,34 +99,30 @@ class PeerTransferService : Service() {
                 .apply { setReferenceCounted(false) }
             try {
                 cpu.acquire(WAKE_LOCK_TIMEOUT_MS)
+                if (album != null) {
+                    val action = intent.getStringExtra(EXTRA_TRACK_ACTION)?.let(FixtureTrackAction::valueOf)
+                    runAlbum(album, intent.getIntExtra(EXTRA_TRACK_INDEX, -1), action)
+                    return@launch
+                }
+                val fixtureHash = checkNotNull(sha256)
                 val selected = intent.getStringExtra(EXTRA_TRACK)?.let { FixtureTrack.decode(JSONObject(it)) }
                 if (selected != null) withContext(Dispatchers.IO) {
-                    PendingFixtureTransfer(tree, sha256, selected, fromSoulseekTab).save(this@PeerTransferService)
+                    PendingFixtureTransfer(tree, fixtureHash, selected, fromSoulseekTab).save(this@PeerTransferService)
                 }
-                val uri = fetchAndPublish(tree, address, sha256, selected)
+                val uri = fetchAndPublish(tree, checkNotNull(address), fixtureHash, selected)
                 showProgress("Verified the FLAC. Scanning the Library…")
-                val store = (application as MusicApplication).storage.await()
-                if (store.state.value.folders.none { it.treeUri == tree.toString() }) {
-                    store.addFolder(tree, PEER_FOLDER_GRANT_FLAGS, scheduleScan = false)
-                }
-                // Wait for any active scan, even with automatic rescans disabled.
-                store.scan()
-                val imported = store.state.value.tracks.singleOrNull { track ->
-                    track.availability == Availability.AVAILABLE && track.sources.any { it.uri == uri.toString() }
-                }
-                checkNotNull(imported) { "The verified file is saved. Retry to finish adding it to the Library." }
+                val imported = importFixture(tree, uri)
                 if (selected != null) withContext(Dispatchers.IO) {
                     PendingFixtureTransfer.clear(this@PeerTransferService, fromSoulseekTab)
                 }
                 state = PeerTransferState(
                     message = "Ready in Library. The FLAC was verified by SHA-256.",
-                    libraryTrack = imported.id.takeIf { fromSoulseekTab },
+                    libraryTrack = imported.takeIf { fromSoulseekTab },
                     fromSoulseekTab = fromSoulseekTab,
                 )
             } catch (e: CancellationException) {
-                if (pausing) state = PeerTransferState(
-                    message = "Download paused. Tap Resume to continue.", fromSoulseekTab = fromSoulseekTab,
-                )
+                if (pausing) state = state.copy(running = false, pausable = false, activeTrack = null,
+                    message = "Download paused. Tap Resume to continue.")
                 throw e
             } catch (e: Exception) {
                 state = PeerTransferState(
@@ -137,6 +139,102 @@ class PeerTransferService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    private suspend fun importFixture(tree: Uri, uri: Uri): TrackId {
+        val store = (application as MusicApplication).storage.await()
+        if (store.state.value.folders.none { it.treeUri == tree.toString() }) {
+            store.addFolder(tree, PEER_FOLDER_GRANT_FLAGS, scheduleScan = false)
+        }
+        // Wait for any active scan, even with automatic rescans disabled.
+        store.scan()
+        val imported = store.state.value.tracks.singleOrNull { track ->
+            track.availability == Availability.AVAILABLE && track.sources.any { it.uri == uri.toString() }
+        }
+        return checkNotNull(imported) { "The file is saved. Retry to finish adding it to the Library." }.id
+    }
+
+    private suspend fun runAlbum(initial: FixtureAlbumDownload, index: Int, action: FixtureTrackAction?) {
+        var album = initial
+        suspend fun checkpoint(updated: FixtureAlbumDownload) = withContext(NonCancellable) {
+            withContext(Dispatchers.IO) { updated.save(this@PeerTransferService) }
+            album = updated
+            state = state.copy(album = updated)
+        }
+        suspend fun update(index: Int, row: FixtureAlbumTrack) {
+            val tracks = album.tracks.toMutableList()
+            tracks[index] = row
+            checkpoint(album.copy(tracks = tracks))
+        }
+
+        checkpoint(album)
+        val indices = if (action == null) album.tracks.indices.filter { album.tracks[it].status == QUEUED }
+            else listOf(index)
+        for (position in indices) {
+            val row = album.tracks[position]
+            val track = row.track
+            if (action == FixtureTrackAction.SKIP || action == FixtureTrackAction.DISCARD) {
+                update(position, row.copy(status = SKIPPED, message = "Skipped. Existing files were kept."))
+                withContext(Dispatchers.IO) {
+                    val staged = SoulseekFixture.stagedFile(track, filesDir, row.sha256)
+                    File(staged.parentFile, "${staged.name}.part").delete()
+                    staged.delete()
+                    staged.parentFile?.delete()
+                }
+                continue
+            }
+            state = state.copy(activeTrack = position, pausable = false, percent = null)
+            var savePhase = action == FixtureTrackAction.RETRY_SAVE || action == FixtureTrackAction.SAVE_SEPARATE
+            showProgress("Checking ${track.name}…")
+            try {
+                val staged = withContext(Dispatchers.IO) {
+                    if (savePhase) {
+                        val file = SoulseekFixture.stagedFile(track, filesDir, row.sha256)
+                        check(SoulseekFixture.verifiedCopy(track, file, row.sha256)) {
+                            "The verified private copy is unavailable."
+                        }
+                        file
+                    } else {
+                        withContext(Dispatchers.Main.immediate) {
+                            state = state.copy(pausable = true)
+                            showProgress("Waiting to download ${track.name}…")
+                        }
+                        SoulseekFixture.fetch(track, filesDir, row.sha256, connectivity::wifiNetwork) { message, percent ->
+                            withContext(Dispatchers.Main.immediate) { showProgress("${track.name}: $message", percent) }
+                        }
+                    }
+                }
+                savePhase = true
+                state = state.copy(pausable = false)
+                update(position, row.copy(status = SAVING, message = "Verified. Saving to the download folder…"))
+                showProgress("Saving ${track.name}…")
+                val published = withContext(Dispatchers.IO) {
+                    val destination = FixtureDestination(contentResolver, album.tree).albumTrack(track)
+                    destination.publishAlbumTrack(staged, row.sha256, action == FixtureTrackAction.SAVE_SEPARATE)
+                }
+                if (published == null) {
+                    update(position, row.copy(status = CONFLICT, message = "A different file has this name."))
+                    continue
+                }
+                showProgress("Scanning ${track.name} into the Library…")
+                val imported = importFixture(album.tree, published.uri)
+                update(position, row.copy(status = if (published.duplicate) DUPLICATE else READY,
+                    message = if (published.duplicate) "Already in Library. Exact duplicate skipped." else "Ready in Library.",
+                    libraryTrack = imported))
+                withContext(Dispatchers.IO) {
+                    staged.delete()
+                    staged.parentFile?.delete()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                update(position, row.copy(status = if (savePhase) SAVE_FAILED else DOWNLOAD_FAILED,
+                    message = e.message ?: "Please retry."))
+            } finally {
+                state = state.copy(activeTrack = null, pausable = false, percent = null)
+            }
+        }
+        state = state.copy(running = false, message = "")
     }
 
     private suspend fun fetchAndPublish(tree: Uri, address: String, sha256: String, selected: FixtureTrack?): Uri =
@@ -199,7 +297,7 @@ class PeerTransferService : Service() {
     }
 
     private fun showProgress(message: String, percent: Int? = null) {
-        val next = state.copy(running = true, message = message)
+        val next = state.copy(running = true, message = message, percent = percent)
         if (state == next) return
         state = next
         if (percent == null || percent != notifiedPercent) {
@@ -260,6 +358,9 @@ class PeerTransferService : Service() {
         private const val EXTRA_HASH = "sha256"
         private const val EXTRA_TRACK = "fixture-track"
         private const val EXTRA_SOULSEEK_TAB = "from-soulseek-tab"
+        private const val EXTRA_ALBUM = "fixture-album"
+        private const val EXTRA_TRACK_INDEX = "track-index"
+        private const val EXTRA_TRACK_ACTION = "track-action"
         private const val CHECKING = "Checking the destination and fixture…"
 
         internal var state by mutableStateOf(PeerTransferState())
@@ -279,6 +380,16 @@ class PeerTransferService : Service() {
                 .putExtra(EXTRA_SOULSEEK_TAB, fromSoulseekTab)
                 .putExtra(EXTRA_TRACK, track?.encode()?.toString()))
             state = PeerTransferState(running = true, message = CHECKING, fromSoulseekTab = fromSoulseekTab)
+        }
+
+        internal fun startAlbum(
+            context: Context, album: FixtureAlbumDownload, index: Int = -1, action: FixtureTrackAction? = null,
+        ) {
+            if (state.running) return
+            context.startForegroundService(Intent(context, PeerTransferService::class.java).setData(album.tree)
+                .putExtra(EXTRA_SOULSEEK_TAB, true).putExtra(EXTRA_ALBUM, album.encode().toString())
+                .putExtra(EXTRA_TRACK_INDEX, index).putExtra(EXTRA_TRACK_ACTION, action?.name))
+            state = PeerTransferState(running = true, message = CHECKING, fromSoulseekTab = true, album = album)
         }
     }
 }
