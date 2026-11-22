@@ -187,13 +187,23 @@ On the ARM64 OPPO CPH1937, the two terms alternated about 5.3 seconds apart. The
 
 Soulseek's rules expect third-party clients to implement search, wishlist, downloads, uploads, chat and recognition of privileges. Use the private coordinator for the implemented features until the full-client verification and login version coordination are complete. [Soulseek rules](https://www.slsknet.org/news/node/681)
 
+### Ticket 14 readiness check
+
+The 0.14.2 Peer Test build (version code 50) ran on the ARM64 OPPO CPH1937 with Android 11. The build used `57b88fa` and the checkout's existing local changes to shared player code. The ARM64 Rust build, APK assembly and signature, Peer Test lint, player-core and Room checks, and frozen Room schema checks passed.
+
+- In one private session with sharing enabled, the coordinator delivered a private message and received the phone's reply. The Wishlist tab showed a match for the saved `Amber` search. The phone answered a browse request directly over the private Wi-Fi network with the two approved fixture paths.
+- The four waiting uploads reported positions `[3, 4, 1, 2]` in arrival order. The active upload finished first, then both privileged peers, then both ordinary peers. All five copies matched SHA-256. Android reported the screen asleep and keyguard showing during the run. The coordinator recorded a wishlist request and forwarded a room message during that interval. After waking the phone, the Room tab showed the unread message and the fixture peer received the reply.
+- In the same session, searching for `Amber` and inspecting the uploader's folder revealed `Violet.flac`. Both tracks downloaded and reached **Retry save** when the disposable destination was moved. The destination stayed empty. After restoring it, going offline and restarting Peer Test, both retries published copies with matching SHA-256 hashes. Each fixture had one Library identity, and **Open Amber.flac in Library** opened the regular Library.
+- Peer browse and upload control connections used the private Wi-Fi network. The coordinator connection, wishlist fixture replies and file payloads used USB forwarding in the combined run.
+- A separate run checked the upload payload directly over Wi-Fi with the USB file forward removed. The PC accepted the file connection from the phone's Wi-Fi address. The 165,652-byte file matched SHA-256 while Android reported the phone asleep with keyguard showing. Turning sharing off withdrew the fixture listing.
+- A further run left only the USB coordinator forward and advertised both peers' Wi-Fi addresses. Search and folder inspection succeeded, and a repeat download of `Violet.flac` reported **Exact duplicate skipped**. The album still held two files with the original fixture hashes.
+
+Public login remains blocked on the public sign-in and download integrity work, the minor version assignment, and separate authorization for a public compatibility test.
+
 | Capability | Remaining Android work |
 | --- | --- |
-| Accounts and connection | Secure credential storage and session lifecycle, plus a client minor version reserved with upstream. Test ordinary peer connectivity and server-brokered fallback on mobile networks when authorized. |
-| Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash with an integrity check suitable for public files. |
-| Uploads | Verify direct Wi-Fi listener reachability, brokered fallback and sharing alongside chat and wishlist checks in the same session. |
-| Chat | Repeat private and room exchanges during the combined full-client verification. |
-| Wishlist | Repeat the scheduled search and manual selection checks during combined full-client verification. |
-| Privileges | Repeat the upload-priority check during the combined full-client verification. |
+| Accounts and connection | Add public sign-in with a session-only password and a separate public endpoint. The fixture logs in as `176.1` over loopback. The Local Music minor version request awaits upstream assignment. Apply the assigned version and check the outgoing login before a public test. [Version request](https://github.com/michel/soulseek-rs/issues/12#issuecomment-7078710733) |
+| Downloads | Replace the fixture's manual trusted hash with public-file validation, including expected size and full FLAC decoding. Verify uploader queue behavior and recovery with public peers when authorized. |
+| Uploads and connectivity | Verify public peer reachability and server-brokered fallback. |
 
 Upstream documents engine support for uploads and priority queues, chat, and wishlist requests. It also documents interoperability gaps for obfuscated connections, locked file listings and firewalled distributed-search children. [Upstream protocol coverage](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/docs/protocol-coverage.md)
