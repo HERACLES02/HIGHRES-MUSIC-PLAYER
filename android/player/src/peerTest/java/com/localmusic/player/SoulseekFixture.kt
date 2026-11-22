@@ -48,6 +48,12 @@ internal object SoulseekFixture {
         tracks(request(JSONObject().put("operation", "search").put("query", query)))
     }
 
+    suspend fun wishlistPoll(queries: List<String>): Pair<String, List<FixtureTrack>>? =
+        withContext(Dispatchers.IO) {
+            val result = request(JSONObject().put("operation", "wishlistPoll").put("queries", JSONArray(queries)))
+            (result as? JSONObject)?.let { it.getString("query") to tracks(it.getJSONArray("tracks")) }
+        }
+
     suspend fun folder(track: FixtureTrack): List<FixtureTrack> = withContext(Dispatchers.IO) {
         tracks(request(track.encode().put("operation", "folder").put("folder", track.folder)))
     }

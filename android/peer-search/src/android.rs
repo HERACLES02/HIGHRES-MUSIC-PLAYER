@@ -3,7 +3,7 @@ use jni::objects::{JObject, JString};
 use jni::sys::jstring;
 use serde_json::{Value, json};
 use soulseek_rs::shares::Shares;
-use soulseek_rs::types::RoomEvent;
+use soulseek_rs::types::{RoomEvent, SearchResult};
 use soulseek_rs::{Client, ClientSettings, DownloadStatus, PeerAddress, UploadStatus};
 use std::error::Error;
 use std::fs;
@@ -25,6 +25,72 @@ struct Session {
     generation: u64,
     download: Option<Transfer>,
     share: Option<PathBuf>,
+    wishlist: Option<Wishlist>,
+}
+
+struct Wishlist {
+    last_request: Instant,
+    last_query: Option<String>,
+    active: Option<String>,
+    interrupted: Option<Value>,
+}
+
+impl Wishlist {
+    fn started() -> Self {
+        Self {
+            last_request: Instant::now(),
+            last_query: None,
+            active: None,
+            interrupted: None,
+        }
+    }
+
+    fn snapshot(client: &Client, query: &str) -> Value {
+        json!({"query": query, "tracks": search_tracks(client.get_search_results(query))})
+    }
+
+    fn stop_collecting(&mut self, client: &Client) {
+        if let Some(query) = self.active.take() {
+            let _ = client.forget_search(&query);
+        }
+    }
+
+    fn before_manual_search(&mut self, client: &Client, query: &str) {
+        // The engine stores one token per query, shared by both search types.
+        if self.active.as_deref() == Some(query) {
+            self.interrupted = Some(Self::snapshot(client, query));
+            self.stop_collecting(client);
+        }
+    }
+
+    fn poll(&mut self, client: &Client, queries: &[&str]) -> Result<Value> {
+        if self
+            .active
+            .as_ref()
+            .is_some_and(|query| !queries.contains(&query.as_str()))
+        {
+            self.stop_collecting(client);
+        }
+        let result = self.interrupted.take().or_else(|| {
+            self.active
+                .as_deref()
+                .map(|query| Self::snapshot(client, query))
+        });
+        let interval = client.wishlist_interval();
+        if !queries.is_empty() && !interval.is_zero() && self.last_request.elapsed() >= interval {
+            let next = queries
+                .iter()
+                .position(|query| Some(*query) == self.last_query.as_deref())
+                .map_or(0, |index| (index + 1) % queries.len());
+            let query = queries[next];
+            self.stop_collecting(client);
+            client.start_wishlist_search(query)?;
+            self.last_request = Instant::now();
+            self.last_query = Some(query.into());
+            self.active = Some(query.into());
+        }
+        Ok(result.unwrap_or(Value::Null))
+    }
 }
 
 struct Transfer {
@@ -40,6 +106,7 @@ static SESSION: Mutex<Session> = Mutex::new(Session {
     generation: 0,
     download: None,
     share: None,
+    wishlist: None,
 });
 
 impl Session {
@@ -55,8 +122,29 @@ impl Session {
         if self.client.is_none() {
             self.client = Some(connect()?);
             self.generation += 1;
+            self.wishlist = Some(Wishlist::started());
         }
         Ok(self.client.as_ref().expect("connected fixture client"))
+    }
+
+    fn wishlist_poll(&mut self, request: &Value) -> Result<Value> {
+        let Some(client) = self
+            .client
+            .as_ref()
+            .filter(|client| client.session_loss().is_none())
+        else {
+            return Ok(Value::Null);
+        };
+        let Some(wishlist) = self.wishlist.as_mut() else {
+            return Ok(Value::Null);
+        };
+        let queries = request["queries"]
+            .as_array()
+            .ok_or("Missing wishlist searches")?
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>();
+        wishlist.poll(client, &queries)
     }
 
     fn chat(&self, operation: &str, request: &Value) -> Result<Value> {
@@ -142,6 +230,7 @@ impl Session {
         }
         if disconnect {
             self.client = None;
+            self.wishlist = None;
         }
         Ok(Value::Null)
     }
@@ -324,6 +413,16 @@ fn flac(path: &str, size: u64) -> bool {
     size > 0 && size <= FIXTURE_MAX_BYTES && path.to_ascii_lowercase().ends_with(".flac")
 }
 
+fn search_tracks(results: Vec<SearchResult>) -> Vec<Value> {
+    results
+        .into_iter()
+        .flat_map(|result| result.files)
+        .filter(|file| flac(&file.name, file.size))
+        .take(100)
+        .map(|file| json!({"user": file.username, "path": file.name, "size": file.size}))
+        .collect()
+}
+
 fn field<'a>(request: &'a Value, key: &str) -> Result<&'a str> {
     request[key]
         .as_str()
@@ -344,6 +443,7 @@ fn operate(request: Value) -> Result<Value> {
         "shareStatus" => return Ok(session.share_status()),
         "shareOff" => return session.stop_sharing(),
         "shareOn" => return session.start_sharing(field(&request, "root")?.into()),
+        "wishlistPoll" => return session.wishlist_poll(&request),
         "chatPoll" | "chatPrivate" | "chatJoin" | "chatLeave" | "chatRoom" => {
             return session.chat(operation, &request);
         }
@@ -355,19 +455,19 @@ fn operate(request: Value) -> Result<Value> {
     if operation == "download" {
         return session.start(&request);
     }
-    let client = session.client()?;
+    session.client()?;
+    let session = &mut *session;
+    let client = session.client.as_ref().expect("connected fixture client");
     match operation {
         "connect" => Ok(Value::Null),
         "search" => {
-            let results = client.search(field(&request, "query")?, Duration::from_secs(4))?;
-            let tracks: Vec<_> = results
-                .into_iter()
-                .flat_map(|result| result.files)
-                .filter(|file| flac(&file.name, file.size))
-                .take(100)
-                .map(|file| json!({"user": file.username, "path": file.name, "size": file.size}))
-                .collect();
-            Ok(json!(tracks))
+            let query = field(&request, "query")?;
+            if let Some(wishlist) = session.wishlist.as_mut() {
+                wishlist.before_manual_search(client, query);
+            }
+            let results = client.search(query, Duration::from_secs(4))?;
+            let _ = client.forget_search(query);
+            Ok(json!(search_tracks(results)))
         }
         "folder" => {
             let user = field(&request, "user")?;

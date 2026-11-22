@@ -67,6 +67,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         if (!visible) setVisible(false)
     }
     private val chat = FixtureChat(app, connectivity, scope)
+    private val wishlist = FixtureWishlist(settings)
     val ownsSession: Boolean get() = online || working
 
     fun sharingServiceStarted() = sharing.serviceStarted()
@@ -96,6 +97,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                 try {
                     sharing.refresh()
                     chat.refresh()
+                    if (connectivity.wifiNetwork() != null) wishlist.refresh()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -112,6 +114,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
         sessionAction("Disconnecting…") {
             sessionWatch?.cancelAndJoin()
             chat.endSession()
+            wishlist.endSession()
             try {
                 sharing.stop()
             } finally {
@@ -231,10 +234,17 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             }
         }
 
+        val chooseTracks: (List<FixtureTrack>) -> Unit = { tracks ->
+            chosen = tracks
+            hashes.clear()
+            section = "Downloads"
+        }
+        val canDownload = saved?.tracks?.all { it.status.finished } != false
+
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlayerActions {
-                for (page in listOf("Search", "Downloads", "Sharing", "Chat")) {
+                for (page in listOf("Search", "Downloads", "Sharing", "Chat", "Wishlist")) {
                     FilterChip(section == page, { section = page }, label = {
                         Text(if (page == "Chat") chatLabel(page, chat.privateUnread + chat.roomUnread) else page)
                     })
@@ -249,6 +259,8 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
             if (message.isNotEmpty()) Text(message)
             if (section == "Chat") {
                 FixtureChatPanel(chat, online && !working)
+            } else if (section == "Wishlist") {
+                FixtureWishlistPanel(wishlist, online && !working && !transfer.running, canDownload, chooseTracks)
             } else if (section == "Sharing") {
                 SharingPanel(sharing, online && !working, pickFolder = {
                     try {
@@ -343,16 +355,10 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                             }
                         }
                     }
-                    else -> Text("Choose tracks from Search.")
+                    else -> Text("Choose tracks from Search or Wishlist.")
                 }
             } else if (online) {
-                FixtureSearch(enabled = !working && !transfer.running,
-                    canDownload = saved?.tracks?.all { it.status.finished } != false,
-                    chooseTracks = { tracks ->
-                        chosen = tracks
-                        hashes.clear()
-                        section = "Downloads"
-                    })
+                FixtureSearch(enabled = !working && !transfer.running, canDownload, chooseTracks)
             }
         }
     }

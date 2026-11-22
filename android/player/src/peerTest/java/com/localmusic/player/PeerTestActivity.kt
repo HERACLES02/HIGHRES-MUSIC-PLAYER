@@ -148,6 +148,7 @@ internal fun FixtureSearch(
     enabled: Boolean,
     canDownload: Boolean,
     chooseTracks: ((List<FixtureTrack>) -> Unit)? = null,
+    wishlistMatches: List<FixtureTrack>? = null,
     download: ((FixtureTrack) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -175,22 +176,24 @@ internal fun FixtureSearch(
         }
     }
 
-    Text("Private Soulseek search", style = MaterialTheme.typography.titleLarge)
-    OutlinedTextField(query, { query = it }, singleLine = true, enabled = canSearch,
-        label = { Text("Artist, album, or song") })
-    Button(enabled = canSearch && query.isNotBlank(), onClick = {
-        results = emptyList()
-        listing = null
-        inspected = null
-        load("Searching the private fixture…") {
-            results = SoulseekFixture.search(query.trim())
-            message = if (results.isEmpty()) "No FLAC matches." else "Choose an uploader’s folder."
-        }
-    }) { Text("Search FLAC") }
+    if (wishlistMatches == null) {
+        Text("Private Soulseek search", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(query, { query = it }, singleLine = true, enabled = canSearch,
+            label = { Text("Artist, album, or song") })
+        Button(enabled = canSearch && query.isNotBlank(), onClick = {
+            results = emptyList()
+            listing = null
+            inspected = null
+            load("Searching the private fixture…") {
+                results = SoulseekFixture.search(query.trim())
+                message = if (results.isEmpty()) "No FLAC matches." else "Choose an uploader’s folder."
+            }
+        }) { Text("Search FLAC") }
+    }
     if (message.isNotEmpty()) Text(message)
     val tracks = listing ?: inspected
     if (tracks == null) {
-        results.groupBy { it.user to it.folder }.forEach { (key, matches) ->
+        (wishlistMatches ?: results).groupBy { it.user to it.folder }.forEach { (key, matches) ->
             Text("${key.first} · ${key.second}")
             matches.forEach { Text("${it.name} · ${it.size} bytes") }
             TextButton(enabled = canSearch, onClick = {

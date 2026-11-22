@@ -164,6 +164,25 @@ cargo run --locked --manifest-path android/peer-search/Cargo.toml --target-dir a
 
 The chat uses the existing Wi-Fi session. It keeps the latest 100 private messages in app-private storage. The public room is joined by name, and its messages are kept for the current session.
 
+## Find a track through the wishlist
+
+Use the ARM64 Peer Test build above. Stop the other private coordinator before starting the wishlist fixture.
+
+```powershell
+$adb = 'android\.tools\sdk\platform-tools\adb.exe'
+& $adb reverse tcp:45415 tcp:45415
+& $adb forward tcp:45417 tcp:45417
+python android\scripts\test-peer-wishlist.py
+```
+
+1. Open **Soulseek → Wishlist**. Save `Amber` and `Violet`, then go online with Wi-Fi connected. The fixture announces a five-second interval. Its console shows the two searches alternating, one per interval. The phone shows **View 1 match** for each.
+2. Open the `Amber` match and inspect the uploader's folder. This fixture sends search replies only, so the folder view falls back to the matching file. Select **Download Amber.flac**. The app opens Downloads with the track selected for review. Starting a download still requires the destination, fixture checksum, and explicit confirmation.
+3. Edit `Amber` to a different term, then remove it. Go offline and restart Peer Test. Only `Violet` should remain. Search requests resume after **Go online**. The fixture console can also verify requests continue while the screen is locked during the active session.
+
+Search terms are saved on the device. Matches are kept in memory for the active session. The fixture checks use USB forwards with Android's Wi-Fi policy enabled.
+
+On the ARM64 OPPO CPH1937, the two terms alternated about 5.3 seconds apart. The coordinator received a request while Android reported the screen asleep and received none during the checked offline interval. Editing and removing one term left only `Violet` after a force-stop. Reconnecting returned its match. Selecting the `Amber` fixture opened Downloads with the checksum field empty and the download button disabled. A folder request waiting for a peer can delay a scheduled wishlist check.
+
 ## Before a public login
 
 Soulseek's rules expect third-party clients to implement search, wishlist, downloads, uploads, chat and recognition of privileges. Use the private coordinator for the implemented features until the full-client verification and login version coordination are complete. [Soulseek rules](https://www.slsknet.org/news/node/681)
@@ -174,7 +193,7 @@ Soulseek's rules expect third-party clients to implement search, wishlist, downl
 | Downloads | Verify uploader queue behavior and recovery with public peers. Replace the fixture's manual trusted hash with an integrity check suitable for public files. |
 | Uploads | Verify direct Wi-Fi listener reachability, brokered fallback and sharing alongside chat and wishlist checks in the same session. |
 | Chat | Repeat private and room exchanges during the combined full-client verification. |
-| Wishlist | Store searches and schedule them using the server-provided interval. |
+| Wishlist | Repeat the scheduled search and manual selection checks during combined full-client verification. |
 | Privileges | Repeat the upload-priority check during the combined full-client verification. |
 
 Upstream documents engine support for uploads and priority queues, chat, and wishlist requests. It also documents interoperability gaps for obfuscated connections, locked file listings and firewalled distributed-search children. [Upstream protocol coverage](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/docs/protocol-coverage.md)
