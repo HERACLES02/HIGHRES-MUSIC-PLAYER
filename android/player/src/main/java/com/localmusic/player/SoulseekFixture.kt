@@ -47,7 +47,8 @@ internal object SoulseekFixture {
     }
 
     suspend fun connect(username: String, password: String) = withContext(Dispatchers.IO) {
-        request(JSONObject().put("operation", "connect").put("username", username).put("password", password))
+        request(JSONObject().put("operation", "connect").put("username", username).put("password", password)
+            .put("publicServer", BuildConfig.PUBLIC_SOULSEEK))
     }
 
     suspend fun disconnect() = withContext(Dispatchers.IO) {

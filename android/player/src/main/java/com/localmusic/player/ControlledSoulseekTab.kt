@@ -52,7 +52,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
-    private val serverName = "the private fixture"
+    private val serverName = if (BuildConfig.PUBLIC_SOULSEEK) "public Soulseek" else "the private fixture"
     private val settings = app.getSharedPreferences("controlled-soulseek", Context.MODE_PRIVATE)
     private val connectivity = app.getSystemService(ConnectivityManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -255,6 +255,7 @@ internal class ControlledSoulseekTab(private val app: Context) : SoulseekTab {
                 }
             }
             if (online) {
+                if (BuildConfig.PUBLIC_SOULSEEK) Text("Connected to public Soulseek.")
                 TextButton(enabled = !working, onClick = ::goOffline) { Text("Go offline") }
             } else {
                 Text("Offline. Use Wi-Fi to connect to $serverName.")

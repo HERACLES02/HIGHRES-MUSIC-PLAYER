@@ -22,11 +22,17 @@ const DIAGNOSTIC_ACCOUNT: &str = "local-music-fixture";
 
 struct Session {
     client: Option<Client>,
-    credentials: Option<(String, String)>,
+    credentials: Option<Credentials>,
     generation: u64,
     download: Option<Transfer>,
     share: Option<PathBuf>,
     wishlist: Option<Wishlist>,
+}
+
+struct Credentials {
+    username: String,
+    password: String,
+    public_server: bool,
 }
 
 struct Wishlist {
@@ -112,14 +118,18 @@ static SESSION: Mutex<Session> = Mutex::new(Session {
 });
 
 impl Session {
-    fn sign_in(&mut self, username: &str, password: &str) -> Result<Value> {
+    fn sign_in(&mut self, username: &str, password: &str, public_server: bool) -> Result<Value> {
         if username.trim().is_empty() || password.is_empty() {
-            return Err("Enter the private fixture username and password".into());
+            return Err("Enter the Soulseek username and password".into());
         }
         self.credentials = None;
         self.stop(true)?;
-        self.client = Some(connect(username, password)?);
-        self.credentials = Some((username.into(), password.into()));
+        self.client = Some(connect(username, password, public_server)?);
+        self.credentials = Some(Credentials {
+            username: username.into(),
+            password: password.into(),
+            public_server,
+        });
         self.generation += 1;
         self.wishlist = Some(Wishlist::started());
         Ok(Value::Null)
@@ -127,7 +137,7 @@ impl Session {
 
     fn client(&mut self, diagnostic: bool) -> Result<&Client> {
         if !diagnostic && self.credentials.is_none() {
-            return Err("Sign in to the private fixture first".into());
+            return Err("Sign in to Soulseek first".into());
         }
         if self
             .client
@@ -138,13 +148,14 @@ impl Session {
             self.client = None;
         }
         if self.client.is_none() {
-            let (username, password) = self
-                .credentials
-                .as_ref()
-                .map_or((DIAGNOSTIC_ACCOUNT, "local-fixture"), |(user, pass)| {
-                    (user.as_str(), pass.as_str())
-                });
-            self.client = Some(connect(username, password)?);
+            self.client = Some(match self.credentials.as_ref() {
+                Some(credentials) => connect(
+                    &credentials.username,
+                    &credentials.password,
+                    credentials.public_server,
+                )?,
+                None => connect(DIAGNOSTIC_ACCOUNT, "local-fixture", false)?,
+            });
             self.generation += 1;
             self.wishlist = Some(Wishlist::started());
         }
@@ -407,17 +418,21 @@ impl Session {
     }
 }
 
-fn connect(username: &str, password: &str) -> Result<Client> {
+fn connect(username: &str, password: &str, public_server: bool) -> Result<Client> {
     let mut settings = ClientSettings::new(username, password);
-    settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
-    settings.listen_port = 45417;
+    if !public_server {
+        settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
+        settings.listen_port = 45417;
+    }
     let mut client = Client::with_settings(settings);
     client.set_upload_slots(1);
     client.connect()?;
     if !client.login()? {
-        return Err("Private fixture login was declined".into());
+        return Err("Soulseek login was declined".into());
     }
-    client.set_download_speed_limit(FIXTURE_BYTES_PER_SECOND);
+    if !public_server {
+        client.set_download_speed_limit(FIXTURE_BYTES_PER_SECOND);
+    }
     client.check_privileges()?;
     Ok(client)
 }
@@ -493,7 +508,11 @@ fn operate(request: Value) -> Result<Value> {
             return session.stop(request["disconnect"].as_bool().unwrap_or(false));
         }
         "connect" => {
-            return session.sign_in(field(&request, "username")?, field(&request, "password")?);
+            return session.sign_in(
+                field(&request, "username")?,
+                field(&request, "password")?,
+                request["publicServer"].as_bool().unwrap_or(false),
+            );
         }
         "poll" => return session.poll(),
         "shareStatus" => return Ok(session.share_status()),

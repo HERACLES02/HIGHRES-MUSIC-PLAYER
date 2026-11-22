@@ -1,4 +1,4 @@
-param([switch]$NativeOnly)
+param([switch]$PublicTest, [switch]$NativeOnly)
 
 $ErrorActionPreference = 'Stop'
 $android = Split-Path -Parent $PSScriptRoot
@@ -37,6 +37,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Private fixture seeder build failed.' }
 $env:ANDROID_USER_HOME = Join-Path $tools 'android-user'
 Push-Location -LiteralPath $android
 try {
-    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') --offline --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') :player:assemblePeerTest
+    $assembleTask = if ($PublicTest) { ':player:assemblePeerPublicTest' } else { ':player:assemblePeerTest' }
+    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') --offline --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') $assembleTask
     if ($LASTEXITCODE -ne 0) { throw 'Peer Test APK build failed.' }
 } finally { Pop-Location }
