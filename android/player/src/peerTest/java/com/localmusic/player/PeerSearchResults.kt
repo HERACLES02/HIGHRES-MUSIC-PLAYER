@@ -117,8 +117,8 @@ private fun PeerFilters(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
     }
     if (options.invalidSizeRange) Text("Enter a valid size range.", color = MaterialTheme.colorScheme.error)
-    OutlinedTextField(options.hideName, { onOptions(options.copy(hideName = it)) }, Modifier.fillMaxWidth(),
-        label = { Text("Hide names containing") }, singleLine = true)
+    OutlinedTextField(options.nameContains, { onOptions(options.copy(nameContains = it)) }, Modifier.fillMaxWidth(),
+        label = { Text("Show only names containing") }, singleLine = true)
     TextButton(onClick = { onOptions(PeerSearchOptions(sort = options.sort)) }) { Text("Clear filters") }
 }
 

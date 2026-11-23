@@ -6,8 +6,8 @@ fun peerSearchChecks() {
     val known = PeerSearchTrack("other", "Album\\Z.mp3", 8_200_000, bitrate = 320)
     val unknown = known.copy(user = "another", bitrate = null)
     val otherSize = unknown.copy(size = 8_300_000)
-    val hidden = known.copy(path = "Album\\Z LIVE.mp3")
-    val collected = collectPeerSearchTracks(crowd + listOf(flac, known.copy(bitrate = null), known, unknown, otherSize, hidden))
+    val live = known.copy(path = "Album\\Z LIVE.mp3")
+    val collected = collectPeerSearchTracks(crowd + listOf(flac, known.copy(bitrate = null), known, unknown, otherSize, live))
     check(collected.size == 120 && known in collected) {
         "A repeat can supply quality. Different uploaders and sizes survive."
     }
@@ -18,7 +18,12 @@ fun peerSearchChecks() {
     check(first.size == 30 && matches.size == 120 && flac in first)
     check(more.size == 60 && more.take(30) == first)
     check(unknown in matches) { "Unknown quality is visible by default." }
-    val mp3 = options.copy(format = PeerAudioFormat.MP3, hideName = "live", minMb = "8.2", maxMb = "8.2",
+    check(options.copy(nameContains = "live  z").matching(collected) == listOf(live)) {
+        "Every typed word must appear in the file name, in any order and any case."
+    }
+    check(options.copy(nameContains = "album").matching(collected).isEmpty()) { "Only the file name is searched." }
+    check(options.copy(nameContains = "  ").matching(collected).size == 120) { "A blank box keeps every result." }
+    val mp3 = options.copy(format = PeerAudioFormat.MP3, nameContains = "z.mp3", minMb = "8.2", maxMb = "8.2",
         quality = "320 kbps", includeUnknown = true, sort = PeerSearchSort.SIZE_ASC)
     check(mp3.matching(collected).take(30) == listOf(known, unknown)) {
         "Filters search beyond the first page and include Unknown only when requested."
