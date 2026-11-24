@@ -67,6 +67,7 @@ class DirectTestActivity: ComponentActivity() {
                     var rate by rememberSaveable { mutableStateOf(44100) }
                     var kind by rememberSaveable { mutableStateOf("wav") }
                     var channelCheck by rememberSaveable { mutableStateOf(true) }
+                    var finite by rememberSaveable { mutableStateOf(false) }
                     var duration by rememberSaveable { mutableStateOf(12) }
                     var notes by rememberSaveable { mutableStateOf("") }
                     var confirm by remember { mutableStateOf(false) }
@@ -76,9 +77,12 @@ class DirectTestActivity: ComponentActivity() {
                     val phase=stats.optInt("phase")
                     val currentRate=state.fixture.substringAfterLast('-').substringBefore('.').toIntOrNull() ?: rate
                     val busy=state.busy
-                    val filename=if(channelCheck) "channels-$bits-$rate.wav" else "stereo-$bits-$rate.$kind"
+                    val finiteSelection=if(busy) state.finite else finite
+                    val selectedSeconds=if(finiteSelection) 6 else duration
+                    val controlsEnabled=busy && !state.finite
+                    val filename=if(finite) "stereo-$bits-$rate.flac" else if(channelCheck) "channels-$bits-$rate.wav" else "stereo-$bits-$rate.$kind"
                     if(confirm) AlertDialog(onDismissRequest={ confirm=false },title={ Text("Start experimental USB audio?") },
-                        text={ Text("Select Standard on M2, stop other audio apps, lower media volume, and keep earphones out initially. This plays the quiet six-second fixture repeatedly at low hardware volume. Android volume may not control it. The asynchronous clocking arrangement is unvalidated: this nominal-rate transport may drift or glitch. No microphone timing is used. Stop if playback is wrong; save the report. Driver ownership may interrupt cable microphone/buttons. No automatic restart after detach or calls.") },
+                        text={ Text("Select Standard on M2, stop other audio apps, lower media volume, and keep earphones out initially. This plays ${if(finite) "one quiet six-second FLAC pass" else "the quiet six-second fixture repeatedly"} at low hardware volume. Android volume may not control it. The asynchronous clocking arrangement is unvalidated: this nominal-rate transport may drift or glitch. No microphone timing is used. Stop if playback is wrong; save the report. Driver ownership may interrupt cable microphone/buttons. No automatic restart after detach or calls.") },
                         confirmButton={ Button(onClick={
                             confirm=false
                             val usb=getSystemService(UsbManager::class.java)
@@ -86,7 +90,7 @@ class DirectTestActivity: ComponentActivity() {
                             if(device==null || !usb.hasPermission(device)) message="Return to Inspect cable to grant M2 USB permission first."
                             else ContextCompat.startForegroundService(this@DirectTestActivity,UsbStreamService.internalIntent(this@DirectTestActivity,UsbStreamService.START)
                                 .putExtra("confirmed",true).putExtra("fixture",filename)
-                                .putExtra("device",device.deviceName).putExtra("seconds",duration))
+                                .putExtra("device",device.deviceName).putExtra("seconds",selectedSeconds).putExtra("finiteStreaming",finite))
                         }) { Text("Start experimental audio") } },
                         dismissButton={ OutlinedButton(onClick={ confirm=false }) { Text("Cancel") } })
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -108,18 +112,23 @@ class DirectTestActivity: ComponentActivity() {
                             prepareExport("m2-notification-diagnosis.json",evidence.toString(2))
                         } }) { Text("Save notification diagnosis") }
                         Row {
-                            Checkbox(checked=channelCheck,enabled=!busy,onCheckedChange={ channelCheck=it })
+                            Checkbox(checked=finiteSelection,enabled=!busy,onCheckedChange={ finite=it })
+                            Text("Stream FLAC once (6 seconds, Stop only)")
+                        }
+                        Row {
+                            Checkbox(checked=channelCheck && !finiteSelection,enabled=!busy && !finite,onCheckedChange={ channelCheck=it })
                             Text("Equal-tone channel comparison (440 Hz, silent gaps, WAV)")
                         }
-                        Text(DiagnosticFixture.pattern(if(busy) state.fixture else filename))
-                        Text("Source peak −42 dBFS; native decoding must match the pinned PCM hash before audio starts. The comparison signal is identical on each active channel.")
+                        Text(DiagnosticFixture.pattern(if(busy) state.fixture else filename,if(busy) state.finite else finite))
+                        if(finiteSelection) Text("Bundled FLAC checksum, bounded quiet-level scan and whole-stream MD5 are required before streaming. No ordinary music files.")
+                        else Text("Source peak −42 dBFS; native decoding must match the pinned PCM hash before audio starts. The comparison signal is identical on each active channel.")
                         Row { for(b in listOf(16,24)) OutlinedButton(enabled=!busy,onClick={ bits=b }) { Text("$b-bit") } }
                         for(row in listOf(44100,48000,88200,96000).chunked(2)) Row {
                             for(hz in row) OutlinedButton(enabled=!busy,onClick={ rate=hz }) { Text("$hz Hz") }
                         }
-                        if(!channelCheck) Row { for(format in listOf("wav","flac")) OutlinedButton(enabled=!busy,onClick={ kind=format }) { Text(format.uppercase()) } }
-                        Row { for(seconds in listOf(12,60,3660)) OutlinedButton(enabled=!busy,onClick={ duration=seconds }) { Text(when(seconds) {12->"12 sec"; 60->"1 min"; else->"61 min"}) } }
-                        Text("Selected: $filename · $duration seconds of transport. Use the 12-second test first.")
+                        if(!channelCheck && !finite) Row { for(format in listOf("wav","flac")) OutlinedButton(enabled=!busy,onClick={ kind=format }) { Text(format.uppercase()) } }
+                        if(!finite) Row { for(seconds in listOf(12,60,3660)) OutlinedButton(enabled=!busy,onClick={ duration=seconds }) { Text(when(seconds) {12->"12 sec"; 60->"1 min"; else->"61 min"}) } }
+                        Text("Selected: $filename - $selectedSeconds seconds of transport.")
                         Row { Checkbox(checked=acknowledged,enabled=!busy,onCheckedChange={ acknowledged=it }); Text("I understand the clocking is experimental and have lowered volume / selected Standard.") }
                         Button(enabled=!busy && acknowledged,onClick={ confirm=true }) { Text("Play selected USB fixture") }
                         Text(state.message)
@@ -137,16 +146,17 @@ class DirectTestActivity: ComponentActivity() {
                         if(phase in listOf(2,3)) Text("Last verified hardware levels: ${stats.optInt("hardwareLevelRaw1")/256.0} / ${stats.optInt("hardwareLevelRaw2")/256.0} dB")
                         Text("Transfer errors ${stats.optLong("transferErrors")} · packet errors ${stats.optLong("packetErrors")} · PCM mismatches ${stats.optLong("pcmMismatches")} · pending ${stats.optInt("pendingTransfers")}")
                         Row {
-                            OutlinedButton(enabled=busy,onClick={ UsbStreamService.command(1,1) }) { Text("Pause") }
-                            OutlinedButton(enabled=busy,onClick={ UsbStreamService.command(1,0) }) { Text("Resume") }
+                            OutlinedButton(enabled=controlsEnabled,onClick={ UsbStreamService.command(1,1) }) { Text("Pause") }
+                            OutlinedButton(enabled=controlsEnabled,onClick={ UsbStreamService.command(1,0) }) { Text("Resume") }
                             Button(enabled=busy,onClick={ UsbStreamService.command(0) }) { Text("Stop / release") }
                         }
                         Row {
-                            OutlinedButton(enabled=busy,onClick={ UsbStreamService.command(2,0) }) { Text("Seek 0s") }
-                            OutlinedButton(enabled=busy,onClick={ UsbStreamService.command(2,currentRate*3) }) { Text("Seek 3s") }
+                            OutlinedButton(enabled=controlsEnabled,onClick={ UsbStreamService.command(2,0) }) { Text("Seek 0s") }
+                            OutlinedButton(enabled=controlsEnabled,onClick={ UsbStreamService.command(2,currentRate*3) }) { Text("Seek 3s") }
                         }
-                        Text("Hardware volume only. Start low; increase only if needed after checking the quiet signal. Paused changes apply on Resume.")
-                        Row { for(level in listOf(-40,-30,-20)) OutlinedButton(enabled=busy && phase in listOf(2,3),onClick={ UsbStreamService.command(3,level) }) { Text("$level dB") } }
+                        if(state.finite && busy) Text("This finite streaming run supports Stop only. Position counts fully completed frames, not DAC render time.")
+                        else Text("Hardware volume only. Start low; increase only if needed after checking the quiet signal. Paused changes apply on Resume.")
+                        Row { for(level in listOf(-40,-30,-20)) OutlinedButton(enabled=controlsEnabled && phase in listOf(2,3),onClick={ UsbStreamService.command(3,level) }) { Text("$level dB") } }
                         OutlinedTextField(value=notes,onValueChange={ notes=it.take(3000) },label={ Text("Heard correct speed/channels? Glitches, screen-off, pause/seek, reconnect notes") })
                         Text("After an unexpected stop, save background-stop diagnosis first. It includes the latest checkpoint, the last final report (which may be older), and available Android process-exit records.")
                         Button(onClick={ lifecycleScope.launch {

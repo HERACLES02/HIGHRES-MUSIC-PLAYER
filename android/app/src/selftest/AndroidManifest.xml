@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application android:allowBackup="false" android:label="Local Music silent service selftest"
+        android:icon="@drawable/ic_local_music" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <!-- No activity, USB host feature or exported entry point. Test-only APK. -->
+        <service android:name=".SourceSessionService" android:exported="false" />
+        <provider android:name=".SourceFixtureProvider" android:authorities="${applicationId}.fixtures" android:exported="false" />
+        <service android:name=".UsbStreamService" android:exported="false" android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

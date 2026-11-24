@@ -22,7 +22,7 @@ data class AppBackup(val tracks: List<Track> = emptyList(), val playlists: List<
     val lyrics: List<SavedLyrics> = emptyList(), val selections: Map<TrackId, UUID> = emptyMap(),
     val extras: Map<TrackId, LibraryExtras> = emptyMap(), val resumes: List<ResumeRow> = emptyList(),
     val folders: List<FolderGrant> = emptyList(), val session: QueueSnapshot? = null,
-    val preferences: BackupPreferences = BackupPreferences())
+    val preferences: BackupPreferences = BackupPreferences(), val version: Int = 3)
 data class BackupBundle(val state: AppBackup, val assets: Map<String, ByteArray> = emptyMap())
 
 object BackupArchive {
@@ -38,12 +38,16 @@ object BackupArchive {
     private fun JsonObject.array(key:String,limit:Int)=getValue(key).jsonArray.also{require(it.size<=limit){"Too many $key"}}
     private fun localUri(value:String){require(value.length<=8192&&(value.startsWith("content://")||value.startsWith("file://"))){"Unsupported saved file location"}}
     private fun assetName(name:String)=name.matches(Regex("art/[a-f0-9]{64}\\.img"))
-    fun artworkReferences(state:AppBackup):Set<String> = (state.extras.values.mapNotNull{it.artworkOverride?.takeIf(String::isNotEmpty)}+
-        state.preferences.artists.values.mapNotNull{it.imagePath}).toSet()
+    fun artworkReferences(state:AppBackup):Set<String> = (
+        state.extras.values.mapNotNull{it.artworkOverride?.takeIf(String::isNotEmpty)} +
+        state.preferences.artists.values.mapNotNull{it.imagePath} +
+        state.playlists.mapNotNull{it.playlist.artwork?.takeIf(String::isNotEmpty)}
+    ).toSet()
     fun validate(state:AppBackup){
         require(state.preferences.appearance in setOf("System","Light","Dark","AMOLED")){"Unknown appearance"}
         PreferenceCodec.decode(PreferenceCodec.encode(state.preferences))
         require(state.preferences.artists.values.all{p->p.imagePath?.let(::assetName)?:true}){"Unsafe artist artwork reference"}
+        require(state.playlists.all{p->p.playlist.artwork?.let(::assetName)?:true}){"Unsafe playlist artwork reference"}
         require(state.tracks.size<=100000&&state.playlists.size<=5000&&state.lyrics.size<=100000)
         val ids=state.tracks.map{it.id}.toSet();require(ids.size==state.tracks.size){"Duplicate track IDs"}
         val uris=mutableSetOf<String>()
@@ -82,7 +86,7 @@ object BackupArchive {
     private fun encode(state:AppBackup):ByteArray {
         validate(state)
         val root=buildJsonObject {
-            put("version",2)
+            put("version",3)
             put("tracks",JsonArray(state.tracks.map{t->buildJsonObject{
                 put("id",t.id.value.toString());put("tags",Json.parseToJsonElement(ModelCodec.tags(t.tags)));put("audio",Json.parseToJsonElement(ModelCodec.audio(t.audio)))
                 put("availability",t.availability.name);put("addedAt",t.addedAtMs);put("favorite",t.favorite)
@@ -90,6 +94,8 @@ object BackupArchive {
             }}))
             put("playlists",JsonArray(state.playlists.map{p->buildJsonObject{
                 put("id",p.playlist.id.value.toString());put("name",p.playlist.name)
+                p.playlist.description?.let{put("description",it)}
+                p.playlist.artwork?.let{put("artwork",it)}
                 put("entries",JsonArray(p.entries.map{v->buildJsonObject{put("id",v.id.value.toString());put("track",v.trackId.value.toString());put("rank",v.rank)}}))
             }}))
             put("lyrics",JsonArray(state.lyrics.map{v->buildJsonObject{put("id",v.id.toString());put("track",v.trackId.value.toString());put("text",v.originalText);put("origin",v.origin.name);put("adjustment",v.timingAdjustmentMs);put("provider",v.providerId);put("url",v.sourceUrl);put("instrumental",v.instrumental)}}))
@@ -112,21 +118,23 @@ object BackupArchive {
         return Json.parseToJsonElement(text).jsonObject
     }
     private fun decode(bytes:ByteArray):AppBackup {
-        val r=json(bytes);require(r.num("version") in 1L..2L){"Unsupported backup version"}
-        val tracks=r.array("tracks",100000).map{v->val o=v.jsonObject
+        val r=json(bytes);val v=r.num("version");require(v in 1L..3L){"Unsupported backup version"}
+        val tracks=r.array("tracks",100000).map{vItem->val o=vItem.jsonObject
             Track(TrackId(uuid(o.str("id"))),ModelCodec.tags(o.getValue("tags").toString()),ModelCodec.audio(o.getValue("audio").toString()),
                 o.array("sources",100).map{source->val s=source.jsonObject;TrackSource(s.str("uri"),SourceKind.valueOf(s.str("kind")),ContentStamp(s.num("size"),s["modified"]?.takeUnless{it==JsonNull}?.jsonPrimitive?.long,s.opt("sha")),s.opt("folder")?.let(::uuid))},
                 Availability.valueOf(o.str("availability")),o.num("addedAt"),o.flag("favorite"))
         }
-        val playlists=r.array("playlists",5000).map{v->val o=v.jsonObject;val id=PlaylistId(uuid(o.str("id")))
-            BackupPlaylist(Playlist(id,o.str("name")),o.array("entries",Playlists.MAX_ENTRIES).map{entry->val e=entry.jsonObject;PlaylistEntry(EntryId(uuid(e.str("id"))),id,TrackId(uuid(e.str("track"))),e.num("rank"))})}
-        val lyrics=r.array("lyrics",100000).map{v->val o=v.jsonObject;SavedLyrics(uuid(o.str("id")),TrackId(uuid(o.str("track"))),o.str("text"),LyricsOrigin.valueOf(o.str("origin")),o.num("adjustment"),o.opt("provider"),o.opt("url"),o.flag("instrumental"))}
+        val playlists=r.array("playlists",5000).map{vItem->val o=vItem.jsonObject;val id=PlaylistId(uuid(o.str("id")))
+            val desc = if (v >= 3L) o.opt("description") else null
+            val art = if (v >= 3L) o.opt("artwork") else null
+            BackupPlaylist(Playlist(id,o.str("name"),artwork=art,description=desc),o.array("entries",Playlists.MAX_ENTRIES).map{entry->val e=entry.jsonObject;PlaylistEntry(EntryId(uuid(e.str("id"))),id,TrackId(uuid(e.str("track"))),e.num("rank"))})}
+        val lyrics=r.array("lyrics",100000).map{vItem->val o=vItem.jsonObject;SavedLyrics(uuid(o.str("id")),TrackId(uuid(o.str("track"))),o.str("text"),LyricsOrigin.valueOf(o.str("origin")),o.num("adjustment"),o.opt("provider"),o.opt("url"),o.flag("instrumental"))}
         val selections=r.getValue("selections").jsonObject.map{TrackId(uuid(it.key)) to uuid(it.value.jsonPrimitive.content)}.toMap()
         val extras=r.getValue("extras").jsonObject.map{TrackId(uuid(it.key)) to LibraryExtras.decode(it.value.toString())}.toMap()
-        val resumes=r.array("resumes",100000).map{v->val o=v.jsonObject;ResumeRow(o.str("track"),o.num("position"),o.flag("completed"),o.num("updated"))}
-        val folders=r.array("folders",10000).map{v->val o=v.jsonObject;FolderGrant(uuid(o.str("id")),o.str("uri"),o.num("flags").toInt(),o.num("granted"))}
+        val resumes=r.array("resumes",100000).map{vItem->val o=vItem.jsonObject;ResumeRow(o.str("track"),o.num("position"),o.flag("completed"),o.num("updated"))}
+        val folders=r.array("folders",10000).map{vItem->val o=vItem.jsonObject;FolderGrant(uuid(o.str("id")),o.str("uri"),o.num("flags").toInt(),o.num("granted"))}
         val p=r.getValue("preferences").jsonObject
-        return AppBackup(tracks,playlists,lyrics,selections,extras,resumes,folders,r["session"]?.takeUnless{it==JsonNull}?.let{SessionCodec.decode(it.toString())},PreferenceCodec.decode(p.toString())).also(::validate)
+        return AppBackup(tracks,playlists,lyrics,selections,extras,resumes,folders,r["session"]?.takeUnless{it==JsonNull}?.let{SessionCodec.decode(it.toString())},PreferenceCodec.decode(p.toString()),version=v.toInt()).also(::validate)
     }
 
     fun write(bundle: BackupBundle, output: OutputStream) {
@@ -135,7 +143,7 @@ object BackupArchive {
         for((name,bytes) in bundle.assets){require(assetName(name)&&bytes.size<=MAX_ASSET&&name=="art/${sha(bytes)}.img"){"Invalid artwork asset"};files[name]=bytes;total+=bytes.size;require(total<=MAX_TOTAL){"Backup exceeds 32 MiB"}}
         val references=artworkReferences(bundle.state)
         require(references==bundle.assets.keys){"Artwork assets do not match saved overrides"}
-        val manifest=buildJsonObject{put("format","local-music-backup");put("version",2);put("entries",JsonArray(files.map{(name,bytes)->buildJsonObject{put("name",name);put("length",bytes.size);put("sha256",sha(bytes))}}))}.toString().toByteArray(Charsets.UTF_8)
+        val manifest=buildJsonObject{put("format","local-music-backup");put("version",3);put("entries",JsonArray(files.map{(name,bytes)->buildJsonObject{put("name",name);put("length",bytes.size);put("sha256",sha(bytes))}}))}.toString().toByteArray(Charsets.UTF_8)
         ZipOutputStream(output).use{zip->for((name,bytes) in linkedMapOf("manifest.json" to manifest)+files){zip.putNextEntry(ZipEntry(name));zip.write(bytes);zip.closeEntry()}}
     }
     private fun limited(input:InputStream,max:Int):ByteArray {
@@ -166,7 +174,7 @@ object BackupArchive {
         require(files.size==u16(10)){"Archive entry count mismatch"}
         val manifest=json(requireNotNull(files.remove("manifest.json")){"Backup manifest missing"})
         require(files.values.sumOf { it.size.toLong() } <= MAX_TOTAL) { "Backup payload exceeds 32 MiB" }
-        require(manifest.str("format")=="local-music-backup"&&manifest.num("version") in 1L..2L){"Unsupported backup format/version"}
+        require(manifest.str("format")=="local-music-backup"&&manifest.num("version") in 1L..3L){"Unsupported backup format/version"}
         val listed=manifest.array("entries",2001).map{it.jsonObject};require(listed.map{it.str("name")}.toSet()==files.keys&&listed.size==files.size){"Manifest entry mismatch"}
         listed.forEach{entry->val bytes=files.getValue(entry.str("name"));require(entry.num("length")==bytes.size.toLong()&&entry.str("sha256")==sha(bytes)){"Backup checksum mismatch"}}
         val data=requireNotNull(files.remove("data.json")){"Backup data missing"}

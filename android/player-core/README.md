@@ -6,9 +6,6 @@ The diagnostic app remains independent. Statements below describing these as
 future work record this module's original boundary; use the data-module README
 for the current persistence scope and its differences from the proposed SQL.
 
-Latest local evidence: [VERIFICATION.md](VERIFICATION.md) records 8,681 Kotlin
-assertions, four SQLite schema tests, existing parser regressions and Android lint.
-
 Pure Kotlin/JVM module for the future `com.localmusic.player` application. The
 diagnostic `:app` does **not** depend on it. Nothing here replaces the installed
 APK, creates an audio engine, contacts a provider, requests storage access or

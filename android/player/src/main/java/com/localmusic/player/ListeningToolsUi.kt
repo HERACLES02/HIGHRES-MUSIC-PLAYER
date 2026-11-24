@@ -112,7 +112,7 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
 }
 
 @Composable
-fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send:(String,Bundle)->Unit){
+fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,clipping:Boolean=false,send:(String,Bundle)->Unit){
     var deletingPreset by remember { mutableStateOf<EqPreset?>(null) }
     val context=LocalContext.current
     var draft by remember(settings.preset){mutableStateOf(settings.preset)}
@@ -124,6 +124,18 @@ fun EqualizerPanel(ui:ListeningToolsUi,settings:AudioSettings,ready:Boolean,send
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){
         item{Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Your EQ, your preset.",style=MaterialTheme.typography.headlineSmall);Text(draft.name,color=MaterialTheme.colorScheme.primary)}
             Switch(settings.eqEnabled,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(eqEnabled=it,preset=draft)))},enabled=ready, modifier=Modifier.semantics { contentDescription="Equalizer enabled" })}}
+        if(clipping){
+            item{
+                Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.errorContainer),
+                    modifier=Modifier.fillMaxWidth().semantics{contentDescription="Clipping detected — lower preamp"}){
+                    Row(modifier=Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+                        Icon(PlayerGlyph.Warning,contentDescription=null,tint=MaterialTheme.colorScheme.onErrorContainer,modifier=Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Clipping detected — lower preamp",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onErrorContainer)
+                    }
+                }
+            }
+        }
         item{Text("Each filter controls its shape, center frequency, Q and gain.",style=MaterialTheme.typography.bodySmall)}
         item{EqResponseCard(draft,settings.eqEnabled,ready){preamp->
             val next=draft.copy(name="Custom",preampDb=preamp);draft=next;apply(next)

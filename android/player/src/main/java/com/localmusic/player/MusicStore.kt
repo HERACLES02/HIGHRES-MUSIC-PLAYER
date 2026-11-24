@@ -42,8 +42,10 @@ data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Ma
     val trackById: Map<TrackId, Track> = emptyMap(), val artworkPaths: Map<TrackId, String> = emptyMap(),
     val removedTracks: List<Track> = emptyList())
 
-open class MusicApplication : Application() {
-    internal open val soulseekTab: SoulseekTab? = null
+class MusicApplication : Application() {
+    internal val soulseekTab: ControlledSoulseekTab? by lazy {
+        if (SoulseekFixture.available) ControlledSoulseekTab(this) else null
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val storage by lazy { scope.async { MusicStore(this@MusicApplication, scope).also { it.initialize() } } }
     override fun onCreate() {

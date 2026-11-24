@@ -7,7 +7,10 @@ object DiagnosticFixture {
     fun supported(name: String)=classic.matches(name) || separated.matches(name)
     fun channelCheck(name: String)=separated.matches(name)
     fun manifest(name: String)=if(channelCheck(name)) "channel-fixtures-manifest.json" else "fixtures-manifest.json"
-    fun pattern(name: String)=if(channelCheck(name))
+    fun pattern(name: String,finite: Boolean=false): String {
+        val text=if(channelCheck(name))
         "0-2s left 440 Hz; 2-3s silence; 3-5s right 440 Hz; 5-6s silence. Repeats; no both-channel section."
         else "0-2s left 440 Hz; 2-4s right 660 Hz; 4-6s BOTH channels. Repeats; overlap is intentional in the final section."
+        return if(finite) text.replace("Repeats;","Single pass;") else text
+    }
 }

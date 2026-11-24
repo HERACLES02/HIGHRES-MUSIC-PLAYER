@@ -52,6 +52,50 @@ suspend fun backupRepositoryChecks(path: Path) {
         verify(repo.extra(a).artworkCredit=="Test provider credit"&&repo.extra(b).artworkOverride=="/private/chosen.jpg","album artwork and provenance saved for all chosen identities")
         rejects{repo.saveAppArtwork(listOf(a,TrackId.new()),"/private/wrong.jpg","https://musicbrainz.org/release/test","New credit")}
         verify(repo.extra(a).artworkOverride=="/private/chosen.jpg","missing album identity prevents partial artwork changes")
+
+        // V3 playlist metadata & cover preservation check
+        val artBytes = byteArrayOf(10, 20, 30, 40)
+        val artHash = BackupArchive.sha(artBytes)
+        val artAsset = "art/$artHash.img"
+        val playlistWithMeta = Playlist(PlaylistId.new(), "V3 Playlist", artwork = artAsset, description = "Playlist description here")
+        val duplicateEntries = listOf(
+            PlaylistEntry(EntryId.new(), playlistWithMeta.id, a, 0),
+            PlaylistEntry(EntryId.new(), playlistWithMeta.id, a, 1)
+        )
+        val v3State = backup.copy(
+            playlists = listOf(BackupPlaylist(playlistWithMeta, duplicateEntries)),
+            version = 3
+        )
+        val stagedArtPath = "/private/restored/playlist-$artHash.jpg"
+        repo.restoreBackup(v3State, mapOf(artAsset to stagedArtPath), "v3-receipt")
+        val restoredPlaylist = repo.playlist(playlistWithMeta.id)
+        verify(restoredPlaylist != null, "v3 playlist restored")
+        verify(restoredPlaylist!!.first.description == "Playlist description here", "v3 playlist description restored")
+        verify(restoredPlaylist.first.artwork == stagedArtPath, "v3 playlist artwork mapped to staged path")
+        verify(restoredPlaylist.second == duplicateEntries, "v3 duplicate entries and rank order preserved")
+
+        // Test legacy v1/v2 restore over playlist with local metadata preserves local cover and description
+        val v2LegacyState = backup.copy(
+            playlists = listOf(BackupPlaylist(Playlist(playlistWithMeta.id, "V3 Playlist Renamed"), duplicateEntries)),
+            version = 2
+        )
+        repo.restoreBackup(v2LegacyState, emptyMap(), "v2-receipt")
+        val afterV2 = repo.playlist(playlistWithMeta.id)!!.first
+        verify(afterV2.description == "Playlist description here", "v2 restore over existing playlist preserves local description")
+        verify(afterV2.artwork == stagedArtPath, "v2 restore over existing playlist preserves local artwork")
+        verify(afterV2.name == "V3 Playlist Renamed", "v2 restore updates name")
+
+        // Fresh install restore with legacy v2 defaults cover and description to null
+        val freshPid = PlaylistId.new()
+        val freshEntries = listOf(PlaylistEntry(EntryId.new(), freshPid, a, 0))
+        val freshV2State = backup.copy(
+            playlists = listOf(BackupPlaylist(Playlist(freshPid, "Fresh Legacy"), freshEntries)),
+            version = 2
+        )
+        repo.restoreBackup(freshV2State, emptyMap(), "fresh-v2")
+        val freshRestored = repo.playlist(freshPid)!!.first
+        verify(freshRestored.description == null && freshRestored.artwork == null, "legacy restore on fresh install defaults to null description and artwork")
+
         println("Backup repository checks passed: $n assertions.")
     } finally { db.close() }
 }

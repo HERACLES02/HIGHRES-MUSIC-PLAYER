@@ -1,10 +1,13 @@
-param([switch]$UpdateDependencyVerification, [switch]$OptimizedPreview)
+param([switch]$UpdateDependencyVerification, [switch]$OptimizedPreview, [switch]$ExperimentalDirectUsb, [switch]$Beta)
 $ErrorActionPreference = 'Stop'
 $projectRoot = $PSScriptRoot
 $tools = Join-Path $projectRoot '.tools'
+if ($Beta -and ($OptimizedPreview -or $ExperimentalDirectUsb -or $UpdateDependencyVerification)) {
+    throw 'Build the beta with -Beta alone.'
+}
 if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'local.properties')) -or
-    -not (Test-Path -LiteralPath (Join-Path $tools 'debug.keystore'))) {
-    throw 'Run android\build.ps1 first to prepare the existing local SDK and diagnostic signing key.'
+    (-not $Beta -and -not (Test-Path -LiteralPath (Join-Path $tools 'debug.keystore')))) {
+    throw 'Run android\build.ps1 first to prepare the local Android tools.'
 }
 $env:ANDROID_USER_HOME = Join-Path $tools 'android-user'
 Push-Location -LiteralPath $projectRoot
@@ -15,17 +18,28 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'TagLib source verification failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-tag-evidence.py')
     if ($LASTEXITCODE -ne 0) { throw 'Tag-preservation evidence is missing or stale.' }
+    & (Join-Path $projectRoot 'scripts/build-peer-search.ps1') -NativeOnly
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
-    $variantTask = if ($OptimizedPreview) { 'Preview' } else { 'Debug' }
+    if ($ExperimentalDirectUsb) { $verificationArgs += '-PexperimentalDirectUsb=true' }
+    if ($Beta) { $verificationArgs += '-PexperimentalDirectUsb=false' }
+    $variantTask = if ($Beta) { 'Release' } elseif ($OptimizedPreview) { 'Preview' } else { 'Debug' }
     $variantName = $variantTask.ToLowerInvariant()
     $buildTasks = @(':player-core:selfTest', ':player-data:selfTest', ":player:assemble$variantTask", ":player:lint$variantTask")
-    if (-not $OptimizedPreview) { $buildTasks += ':player:assembleDebugAndroidTest' }
+    if ($variantTask -eq 'Debug') { $buildTasks += ':player:assembleDebugAndroidTest' }
     & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') @verificationArgs --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') @buildTasks
     if ($LASTEXITCODE -ne 0) { throw 'Player build or checks failed.' }
     & python (Join-Path $projectRoot 'scripts/verify-player-data.py')
     if ($LASTEXITCODE -ne 0) { throw 'Frozen Room schemas changed.' }
-    $apkName = if ($OptimizedPreview) { 'local-music-0.14.1-optimized-preview.apk' } else { 'local-music-0.14.1-debug.apk' }
+    New-Item -ItemType Directory -Path (Join-Path $projectRoot 'releases') -Force | Out-Null
+    if ($Beta) {
+        $apk = Join-Path $projectRoot 'releases/local-music-0.14.2-beta1-unsigned.apk'
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'player/build/outputs/apk/release/player-release-unsigned.apk') -Destination $apk -Force
+        Write-Host "Unsigned beta APK: $apk"
+        return
+    }
+    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.4-direct-coverage' } else { 'local-music-0.14.4' }
+    $apkName = if ($OptimizedPreview) { "$releaseName-optimized-preview.apk" } else { "$releaseName-debug.apk" }
     $apk = Join-Path $projectRoot "releases/$apkName"
     Copy-Item -LiteralPath (Join-Path $projectRoot "player/build/outputs/apk/$variantName/player-$variantName.apk") -Destination $apk -Force
     if ($OptimizedPreview) {

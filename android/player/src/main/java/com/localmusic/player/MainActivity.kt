@@ -22,6 +22,7 @@ import androidx.compose.foundation.*
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -111,7 +112,11 @@ class MainActivity : ComponentActivity() {
                 if (result.resultCode != androidx.media3.session.SessionResult.RESULT_SUCCESS) {
                     backupUi.message = result.extras.getString("message") ?: "Backup operation failed. Check Settings before trying again."
                 } else when (action) {
-                    PlaybackService.BACKUP_EXPORT -> backupUi.message = "Backup saved and read back successfully. Playback remains paused."
+                    PlaybackService.BACKUP_EXPORT -> {
+                        val missing=result.extras.getInt("missingArtwork",0)
+                        backupUi.message = if(missing==0) "Backup saved and read back successfully. Playback remains paused."
+                            else "Backup saved and verified. $missing missing artwork file(s) could not be included. Other app data was saved. Playback remains paused."
+                    }
                     PlaybackService.BACKUP_PREVIEW -> {
                         backupUi.token = result.extras.getString("token"); backupUi.summary = result.extras.getString("summary").orEmpty()
                         backupUi.message = "Backup validated. Review the restore preview."
@@ -477,6 +482,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     var selection by remember { mutableStateOf(emptySet<TrackId>()) }
     var licenses by remember { mutableStateOf(false) }
     var playlistDetail by playlistUi.detail
+    var smartPlaylistDetail by playlistUi.smartDetail
+    var smartPlaylistGenre by playlistUi.smartGenre
     var playlistDetailLoad by remember { mutableStateOf<Pair<PlaylistId, List<PlaylistEntry>>?>(null) }
     var playlistPicker by playlistUi.picker
     var playlistPickerName by playlistUi.pickerName
@@ -502,13 +509,16 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     // Keep Library's list cached across tabs, but do not prepare it for Home.
     val browse = remember(library.tracks, library.details) { LibraryBrowse(library.tracks) { library.details[it]?.folders?.values?.firstOrNull() } }
     val filtered by remember(browse, search, newest) { lazy { browse.search(search, if (newest) BrowseOrder.NEWEST else BrowseOrder.TITLE) } }
-    fun start(tracks: List<Track>, index: Int, resume: Boolean = false, origin: String = "Library · All songs") {
-        send(PlaybackService.START, collectionBundle(tracks, index, resume).apply { putString("origin", origin.take(200)) })
+    fun start(tracks: List<Track>, index: Int, resume: Boolean = false, shuffle: Boolean? = null, origin: String = "Library · All songs") {
+        send(PlaybackService.START, collectionBundle(tracks, index, resume).apply {
+            if (shuffle != null) putBoolean("shuffle", shuffle)
+            putString("origin", origin.take(200))
+        })
         keyboard?.hide(); screen = "Playing"
     }
     fun playPlaylist(args: Bundle) { send(PlaybackService.PLAYLIST_START, args); keyboard?.hide(); screen = "Playing" }
     val secondary = screen in setOf("Playing","Queue","Audio controls","Audio info","Equalizer","Playback widget")
-    val nested = secondary || (screen == "Playlists" && playlistDetail != null) || (screen == "Library" && (group != null || selecting))
+    val nested = secondary || (screen == "Playlists" && (playlistDetail != null || smartPlaylistDetail != null)) || (screen == "Library" && (group != null || selecting))
     fun back() {
         when {
             screen=="Equalizer"->screen="Audio controls"
@@ -516,7 +526,10 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             screen=="Audio controls"||screen=="Playback widget"->screen=toolsReturn
             screen == "Queue" && queueFromPlaying -> screen = "Playing"
             secondary -> screen = mainScreen
-            screen == "Playlists" -> { playlistDetail = null; playlistDetailLoad = null }
+            screen == "Playlists" -> {
+                if (smartPlaylistDetail != null) smartPlaylistDetail = null
+                else { playlistDetail = null; playlistDetailLoad = null }
+            }
             selecting -> { selecting = false; selection = emptySet() }
             else -> group = null
         }
@@ -529,7 +542,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     val useRail = configuration.screenWidthDp >= 600 && configuration.screenWidthDp > configuration.screenHeightDp
     val browseScreen=if(screen=="Playing")mainScreen else screen
     val browseSecondary=browseScreen in setOf("Queue","Audio controls","Audio info","Equalizer","Playback widget")
-    val browseNested=browseSecondary || (browseScreen=="Playlists" && playlistDetail!=null) ||
+    val browseNested=browseSecondary || (browseScreen=="Playlists" && (playlistDetail!=null || smartPlaylistDetail!=null)) ||
         (browseScreen=="Library" && (group!=null || selecting))
     Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
@@ -569,14 +582,14 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                 "Home" -> Box(Modifier.weight(1f)) {
                     HomeLibraryScreen(library, browse, store, preferences.homeGrid, homeSearch, ready,
                         onSearch = { homeSearch = it }, changeGrid = { grid -> send(PlaybackService.HOME_VIEW, Bundle().apply { putBoolean("grid", grid) }) },
-                        scan = onScan, play = { tracks, index, resume, origin -> start(tracks, index, resume, origin) }, send = send,
+                        scan = onScan, play = { tracks, index, resume, origin -> start(tracks, index, resume, origin = origin) }, send = send,
                         addToPlaylist = { openPlaylistPicker(listOf(it.id)) }, details = { details = it },
                         playlistCard = { playlist, count -> PlaylistCard(playlist, count, store, library.revision,
-                            { playlistDetail = playlist; mainScreen = "Playlists"; screen = "Playlists" },
+                            { smartPlaylistDetail = null; playlistDetail = playlist; mainScreen = "Playlists"; screen = "Playlists" },
                             { playPlaylist(playlistArgs(playlist.id)) }, { playPlaylist(playlistArgs(playlist.id, shuffle = true)) },
                             { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name; playlistNamingDescription = playlist.description ?: "" },
                             { playlistDeleting = playlist }, { actions.pickPlaylistCover(playlist) }) },
-                        allPlaylists = { playlistDetail = null; mainScreen = "Playlists"; screen = "Playlists" },
+                        allPlaylists = { playlistDetail = null; smartPlaylistDetail = null; mainScreen = "Playlists"; screen = "Playlists" },
                         allSongs = { category = "Songs"; group = null; newest = true; mainScreen = "Library"; screen = "Library" },
                         editTags = { editingIds = listOf(it.id.value.toString()) })
                 }
@@ -717,14 +730,196 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                     openPlaying={screen="Playing"},clear={queueClearing=true},modifier=Modifier.weight(1f))
                 "Playlists" -> {
                     val transferBusy = playlistUi.fileBusy.value || playlistUi.pendingExport.value != null
+                    val smart = smartPlaylistDetail
                     val detail = playlistDetail
-                    if (detail == null) LazyVerticalGrid(columns = GridCells.Adaptive(tileMin), modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        item(span = { GridItemSpan(maxLineSpan) }) { PlayerActions {
-                            FilledTonalButton(enabled = ready, onClick = { playlistNamingText = ""; playlistNamingDescription = ""; playlistCreating = true }) { Text("New playlist") }
-                            OutlinedButton(enabled = ready && !transferBusy && playlistUi.importPreview.value == null, onClick = pickPlaylist) { Text("Import file") }
-                        } }
-                        if (playlistUi.fileMessage.value.isNotBlank()) item(span = { GridItemSpan(maxLineSpan) }) { Text(playlistUi.fileMessage.value) }
+                    if (smart != null) {
+                        val title = when (smart) {
+                            "recently-added" -> "Recently added"
+                            "hi-res" -> "Hi-res tracks"
+                            else -> "Favorites by genre"
+                        }
+                        val genres = remember(library.tracks) { SmartPlaylists.availableGenres(library.tracks) }
+                        val activeGenre = smartPlaylistGenre?.takeIf { g -> genres.any { it.equals(g, ignoreCase = true) } } ?: genres.firstOrNull().orEmpty()
+                        val tracks = when (smart) {
+                            "recently-added" -> SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                            "hi-res" -> SmartPlaylists.hiRes(library.tracks)
+                            else -> if (activeGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, activeGenre) else emptyList()
+                        }
+                        val desc = when (smart) {
+                            "recently-added" -> "Tracks added to your library in the past 30 days."
+                            "hi-res" -> "Tracks with sample rate greater than 48 kHz."
+                            else -> if (activeGenre.isNotBlank()) "Favorite tracks in genre $activeGenre." else "Choose a genre from your favorite tracks."
+                        }
+                        val icon = when (smart) {
+                            "recently-added" -> PlayerGlyph.Timer
+                            "hi-res" -> PlayerGlyph.Music
+                            else -> PlayerGlyph.Heart
+                        }
+                        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            item { TextButton(onClick = { smartPlaylistDetail = null }) { Text("All playlists") } }
+                            item {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(Modifier.size(88.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Icon(icon, contentDescription = null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                        }
+                                    }
+                                    Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                                        Text("SMART PLAYLIST", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                        MarqueeText(title, style = MaterialTheme.typography.headlineSmall)
+                                        Text(desc, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(countLabel(tracks.size, "song"), style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
+                            if (smart == "genre-favorites") {
+                                if (genres.isNotEmpty()) {
+                                    item {
+                                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            genres.forEach { g ->
+                                                FilterChip(
+                                                    selected = g.equals(activeGenre, ignoreCase = true),
+                                                    onClick = { smartPlaylistGenre = g },
+                                                    label = { Text(g) }
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    item {
+                                        Text("No genres found among your favorite tracks.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            item {
+                                PlayerActions {
+                                    Button(enabled = ready && tracks.isNotEmpty(), onClick = {
+                                        val live = when (smart) {
+                                            "recently-added" -> SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                                            "hi-res" -> SmartPlaylists.hiRes(library.tracks)
+                                            else -> if (activeGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, activeGenre) else emptyList()
+                                        }
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = false, origin = "Smart playlist · $title")
+                                    }) {
+                                        Icon(PlayerGlyph.Play, null); Spacer(Modifier.width(6.dp)); Text("Play")
+                                    }
+                                    FilledTonalButton(enabled = ready && tracks.isNotEmpty(), onClick = {
+                                        val live = when (smart) {
+                                            "recently-added" -> SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                                            "hi-res" -> SmartPlaylists.hiRes(library.tracks)
+                                            else -> if (activeGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, activeGenre) else emptyList()
+                                        }
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = true, origin = "Smart playlist · $title")
+                                    }) {
+                                        Icon(PlayerGlyph.Shuffle, null); Spacer(Modifier.width(6.dp)); Text("Shuffle")
+                                    }
+                                }
+                            }
+                            if (tracks.isEmpty()) {
+                                item {
+                                    EmptyMusicState("No songs found", "This smart playlist is currently empty.")
+                                }
+                            } else {
+                                items(tracks, key = { it.id.value.toString() }) { track ->
+                                    SongRow(
+                                        track = track,
+                                        ready = ready,
+                                        art = store?.artwork(track.id),
+                                        send = send,
+                                        play = {
+                                            val live = when (smart) {
+                                                "recently-added" -> SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                                                "hi-res" -> SmartPlaylists.hiRes(library.tracks)
+                                                else -> if (activeGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, activeGenre) else emptyList()
+                                            }
+                                            val idx = live.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                                            start(live, idx, shuffle = false, origin = "Smart playlist · $title")
+                                        },
+                                        addToPlaylist = { openPlaylistPicker(listOf(track.id)) },
+                                        details = { details = track },
+                                        editTags = { editingIds = listOf(track.id.value.toString()) }
+                                    )
+                                }
+                            }
+                        }
+                    } else if (detail == null) {
+                        val recentTracks = remember(library.tracks) { SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis()) }
+                        val hiResTracks = remember(library.tracks) { SmartPlaylists.hiRes(library.tracks) }
+                        val availableGenres = remember(library.tracks) { SmartPlaylists.availableGenres(library.tracks) }
+                        val selectedGenre = smartPlaylistGenre?.takeIf { g -> availableGenres.any { it.equals(g, ignoreCase = true) } } ?: availableGenres.firstOrNull().orEmpty()
+                        val genreFavoritesTracks = remember(library.tracks, selectedGenre) {
+                            if (selectedGenre.isBlank()) emptyList() else SmartPlaylists.genreFavorites(library.tracks, selectedGenre)
+                        }
+                        LazyVerticalGrid(columns = GridCells.Adaptive(tileMin), modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            item(span = { GridItemSpan(maxLineSpan) }) { PlayerActions {
+                                FilledTonalButton(enabled = ready, onClick = { playlistNamingText = ""; playlistNamingDescription = ""; playlistCreating = true }) { Text("New playlist") }
+                                OutlinedButton(enabled = ready && !transferBusy && playlistUi.importPreview.value == null, onClick = pickPlaylist) { Text("Import file") }
+                            } }
+                            if (playlistUi.fileMessage.value.isNotBlank()) item(span = { GridItemSpan(maxLineSpan) }) { Text(playlistUi.fileMessage.value) }
+
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text("Smart playlists", style = MaterialTheme.typography.titleLarge)
+                            }
+
+                            item {
+                                SmartPlaylistCard(
+                                    title = "Recently added",
+                                    subtitle = "${countLabel(recentTracks.size, "song")} · past 30 days",
+                                    icon = PlayerGlyph.Timer,
+                                    open = { smartPlaylistDetail = "recently-added" },
+                                    play = {
+                                        val live = SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = false, origin = "Smart playlist · Recently added")
+                                    },
+                                    shuffle = {
+                                        val live = SmartPlaylists.recentlyAdded(library.tracks, System.currentTimeMillis())
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = true, origin = "Smart playlist · Recently added")
+                                    },
+                                    count = recentTracks.size
+                                )
+                            }
+
+                            item {
+                                SmartPlaylistCard(
+                                    title = "Hi-res tracks",
+                                    subtitle = "${countLabel(hiResTracks.size, "song")} · > 48 kHz",
+                                    icon = PlayerGlyph.Music,
+                                    open = { smartPlaylistDetail = "hi-res" },
+                                    play = {
+                                        val live = SmartPlaylists.hiRes(library.tracks)
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = false, origin = "Smart playlist · Hi-res tracks")
+                                    },
+                                    shuffle = {
+                                        val live = SmartPlaylists.hiRes(library.tracks)
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = true, origin = "Smart playlist · Hi-res tracks")
+                                    },
+                                    count = hiResTracks.size
+                                )
+                            }
+
+                            item {
+                                SmartPlaylistCard(
+                                    title = "Favorites by genre",
+                                    subtitle = if (selectedGenre.isNotBlank()) "${countLabel(genreFavoritesTracks.size, "song")} · $selectedGenre" else "No genre favorites yet",
+                                    icon = PlayerGlyph.Heart,
+                                    open = { smartPlaylistDetail = "genre-favorites" },
+                                    play = {
+                                        val live = if (selectedGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, selectedGenre) else emptyList()
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = false, origin = "Smart playlist · $selectedGenre favorites")
+                                    },
+                                    shuffle = {
+                                        val live = if (selectedGenre.isNotBlank()) SmartPlaylists.genreFavorites(library.tracks, selectedGenre) else emptyList()
+                                        if (live.isNotEmpty()) start(live, 0, shuffle = true, origin = "Smart playlist · $selectedGenre favorites")
+                                    },
+                                    count = genreFavoritesTracks.size
+                                )
+                            }
+
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text("Saved playlists", style = MaterialTheme.typography.titleLarge)
+                            }
+
                         if (library.playlists.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                             EmptyMusicState("Your playlists start here", "Create a playlist or import one. Add songs from their options menu.")
                         }
@@ -733,7 +928,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                 { playPlaylist(playlistArgs(playlist.id)) }, { playPlaylist(playlistArgs(playlist.id, shuffle = true)) },
                                 { playlistNaming = playlist; playlistCreating = false; playlistNamingText = playlist.name; playlistNamingDescription = playlist.description ?: "" }, { playlistDeleting = playlist }, { actions.pickPlaylistCover(playlist) })
                         }
-                    } else {
+                    } } else {
                         val stored = library.playlists.firstOrNull { it.first.id == detail.id }?.first ?: detail
                         LaunchedEffect(stored.id, library.revision, store) {
                             val repository = store?.repository() ?: return@LaunchedEffect
@@ -800,7 +995,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                 }
                 "Audio controls"->Box(Modifier.weight(1f)){AudioControls(preferences.audio,ready,store,current,send,{screen="Equalizer"},{screen="Audio info"})}
                 "Audio info"->Box(Modifier.weight(1f)){AudioInfoPanel(controller,currentId)}
-                "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,send)}
+                "Equalizer"->Box(Modifier.weight(1f)){EqualizerPanel(listeningUi,preferences.audio,ready,playback.clipping,send)}
                 "Playback widget"->Box(Modifier.weight(1f)){WidgetSettingsPanel(preferences.widgets,ready,current,current?.let{store?.artwork(it.id)},send)}
                 "Soulseek" -> if (soulseekEnabled) {
                     soulseek.Content(soulseekDownloadsRequest) { id ->
@@ -832,7 +1027,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             Scaffold(modifier=Modifier.fillMaxSize().imePadding(),topBar={
                 Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal=8.dp),
                     horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-                    Spacer(Modifier.size(48.dp))
+                    IconButton(onClick={back()}){Icon(PlayerGlyph.Back,"Back")}
                     Text("NOW PLAYING",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.size(48.dp))
                 }

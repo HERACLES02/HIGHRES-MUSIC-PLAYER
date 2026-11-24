@@ -25,19 +25,50 @@ class MusicAudioProcessor:BaseAudioProcessor(){
     private var applied:DspConfiguration?=null
     private var format:AudioProcessor.AudioFormat?=null
     private val kernel=DspKernel()
+    var clock: () -> Long = { android.os.SystemClock.uptimeMillis() }
+    @Volatile var lastClipUptimeMs: Long = 0L
+        internal set
+    @Volatile var totalClippedSamples: Long = 0L
+        internal set
+    var onClippingSummary: ((processor: MusicAudioProcessor, totalClipped: Long) -> Unit)? = null
+    private var lastPublishedClipUptimeMs: Long = 0L
+
+    fun resetClipping() {
+        kernel.resetClipping()
+        totalClippedSamples = 0L
+        lastClipUptimeMs = 0L
+        lastPublishedClipUptimeMs = 0L
+    }
+
     override fun onConfigure(input:AudioProcessor.AudioFormat):AudioProcessor.AudioFormat {
         val supported=if(outputAsFloat)PrecisionAudioSink.PCM_ENCODINGS else setOf(C.ENCODING_PCM_16BIT,C.ENCODING_PCM_24BIT,C.ENCODING_PCM_32BIT,C.ENCODING_PCM_FLOAT)
         if(input.encoding !in supported)throw AudioProcessor.UnhandledAudioFormatException(input)
         return if(outputAsFloat)AudioProcessor.AudioFormat(input.sampleRate,input.channelCount,C.ENCODING_PCM_FLOAT)else input
     }
-    override fun onFlush(){kernel.reset();applied=null;format=null;lastPcm=null}
+    override fun onFlush(){
+        kernel.reset()
+        applied=null
+        format=null
+        lastPcm=null
+        totalClippedSamples = 0L
+        lastClipUptimeMs = 0L
+        lastPublishedClipUptimeMs = 0L
+    }
     override fun queueInput(input:ByteBuffer){
         // Media3 can pass its shared EMPTY_BUFFER while draining the pipeline.
         // Do not copy it into itself or replace PCM still waiting for the sink.
         if(!input.hasRemaining())return
         val current=configuration
-        if(current!=applied||format!=inputAudioFormat){kernel.configure(inputAudioFormat.sampleRate,inputAudioFormat.channelCount,current);kernel.reset();applied=current;format=inputAudioFormat
-            lastPcm=Pcm(inputAudioFormat.sampleRate,inputAudioFormat.channelCount,inputAudioFormat.encoding,if(outputAsFloat)C.ENCODING_PCM_FLOAT else inputAudioFormat.encoding)}
+        if(current!=applied||format!=inputAudioFormat){
+            kernel.configure(inputAudioFormat.sampleRate,inputAudioFormat.channelCount,current)
+            kernel.reset()
+            applied=current
+            format=inputAudioFormat
+            lastPcm=Pcm(inputAudioFormat.sampleRate,inputAudioFormat.channelCount,inputAudioFormat.encoding,if(outputAsFloat)C.ENCODING_PCM_FLOAT else inputAudioFormat.encoding)
+            totalClippedSamples = 0L
+            lastClipUptimeMs = 0L
+            lastPublishedClipUptimeMs = 0L
+        }
         val encoding=inputAudioFormat.encoding;val bytes=when(encoding){
             C.ENCODING_PCM_8BIT->1
             C.ENCODING_PCM_16BIT,C.ENCODING_PCM_16BIT_BIG_ENDIAN->2
@@ -51,6 +82,7 @@ class MusicAudioProcessor:BaseAudioProcessor(){
         val bigEndian=encoding==C.ENCODING_PCM_16BIT_BIG_ENDIAN||encoding==C.ENCODING_PCM_24BIT_BIG_ENDIAN||encoding==C.ENCODING_PCM_32BIT_BIG_ENDIAN
         input.order(if(bigEndian)ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
         var channel=0
+        val clippedBefore = kernel.clippedSamples
         while(input.hasRemaining()){
             val sample=when(encoding){
                 C.ENCODING_PCM_8BIT->((input.get().toInt()and 255)-128)/128.0
@@ -71,15 +103,26 @@ class MusicAudioProcessor:BaseAudioProcessor(){
             }
             channel++;if(channel==channels)channel=0
         }
+        val clippedAfter = kernel.clippedSamples
+        val bufferClips = clippedAfter - clippedBefore
+        if (bufferClips > 0) {
+            totalClippedSamples += bufferClips
+            val now = clock()
+            lastClipUptimeMs = now
+            if (now - lastPublishedClipUptimeMs >= 100L) {
+                lastPublishedClipUptimeMs = now
+                onClippingSummary?.invoke(this, totalClippedSamples)
+            }
+        }
         output.flip()
     }
 }
 
 class MusicRenderers(context:Context,private val processor:MusicAudioProcessor,
-    private val output:LocalAudioTrackProvider=LocalAudioTrackProvider()):DefaultRenderersFactory(context){
+    private val output:LocalAudioOutputProvider=LocalAudioOutputProvider(context)):DefaultRenderersFactory(context){
     public override fun buildAudioSink(context:Context,enableFloatOutput:Boolean,enableAudioTrackPlaybackParams:Boolean):AudioSink {
-        val sink=DefaultAudioSink.Builder(context).setEnableFloatOutput(true).setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-            .setAudioTrackProvider(output).setAudioTrackBufferSizeProvider(output.bufferSizeProvider).build()
+        val sink=DefaultAudioSink.Builder(context).setEnableFloatOutput(true)
+            .setAudioOutputProvider(output).build()
         return PrecisionAudioSink(sink,processor)
     }
 }
