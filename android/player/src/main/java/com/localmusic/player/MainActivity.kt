@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
     private val sessionState get()=playbackUi.snapshot
     private var connectionError by mutableStateOf("")
     private var permissionMessage by mutableStateOf("")
+    private var infoMessage by mutableStateOf("")
     private val pendingCommands = ArrayDeque<Pair<String, Bundle>>()
     private lateinit var future: ListenableFuture<MediaController>
     private val exportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -219,7 +220,7 @@ class MainActivity : ComponentActivity() {
     private val lyricExport = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         val text = pendingLyricExport; pendingLyricExport = null
         if (uri != null && text != null) exportScope.launch {
-            try { withContext(Dispatchers.IO) { requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(text.toByteArray(Charsets.UTF_8)) } }; permissionMessage = "Original lyric text exported; the app timing adjustment stays separate." }
+            try { withContext(Dispatchers.IO) { requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(text.toByteArray(Charsets.UTF_8)) } }; infoMessage = "Original lyric text exported; the app timing adjustment stays separate." }
             catch (e: CancellationException) { throw e } catch (e: Exception) { permissionMessage = "Export failed: ${e.message}" }
         }
     }
@@ -253,7 +254,7 @@ class MainActivity : ComponentActivity() {
         if (uri != null && report != null) exportScope.launch {
             try {
                 withContext(Dispatchers.IO) { requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { it.write(report.toByteArray(Charsets.UTF_8)) } }
-                permissionMessage = "Playback report saved."
+                infoMessage = "Playback report saved."
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { permissionMessage = "Could not save report: ${e.message}" }
         }
@@ -271,7 +272,8 @@ class MainActivity : ComponentActivity() {
         if (granted) send(PlaybackService.SCAN) else permissionMessage = "Music access was denied. You can allow it and scan again."
     }
     private val notificationAccess = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        permissionMessage = if (granted) "Playback notifications allowed." else "Notifications are blocked. Allow them in Android settings for playback controls."
+        if (granted) infoMessage = "Playback notifications allowed."
+        else permissionMessage = "Notifications are blocked. Allow them in Android settings for playback controls."
     }
     private fun send(action: String, args: Bundle = Bundle.EMPTY) {
         val connected = controller
@@ -342,7 +344,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                     if(showLaunch)PlayerLaunchScreen() else SongRemovalHost(songRemovalUi,controller) { MusicScreen(listeningUi, backupUi, playlistUi, ::confirmPlaylistImport, { playlistFilePicker.launch(arrayOf("*/*")) }, ::exportPlaylist, library, controller, sessionState,playbackUi,
-                        listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"),
+                        listOf(connectionError, openError, permissionMessage).filter { it.isNotBlank() }.joinToString("\n"), infoMessage,
                         ::send, store, preferences, FeatureActions(
                             pickFolder = { folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)) },
                             pickCover = { targets -> coverTargets = targets.map { it.id.value.toString() }; playlistCoverTarget = null; coverPicker.launch(arrayOf("image/*")) },
@@ -354,7 +356,7 @@ class MainActivity : ComponentActivity() {
                                 catch(e: Exception) { backupUi.busy = false; backupUi.message = "Could not open the save picker: ${e.message}" } },
                             restoreBackup = { try { backupUi.busy = true; backupOpenPicker.launch(arrayOf("*/*")) }
                                 catch(e: Exception) { backupUi.busy = false; backupUi.message = "Could not open the file picker: ${e.message}" } }, backupBusy = backupUi.busy), onScan = {
-                            permissionMessage = ""
+                            permissionMessage = ""; infoMessage = ""
                             if (library.folders.isNotEmpty()) send(PlaybackService.SCAN)
                             else folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION))
                         }, onExport = ::saveReport, onNotifications = {
@@ -386,7 +388,7 @@ class MainActivity : ComponentActivity() {
                             dismissButton = { Column { if (playlistCoverTarget == null) TextButton(enabled = !library.scanning, onClick = {
                                 val batch = UUID.randomUUID().toString()
                                 send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", ArrayList(coverTargets)); putString("patch", "{}"); putInt("coverMode", 1); putString("coverUri", uri.toString()); putBoolean("crop", crop) })
-                                pickedCover = null; permissionMessage = "Cover preview is being prepared. Open Settings → Edits and recovery to review it before writing."
+                                pickedCover = null; infoMessage = "Cover preview is being prepared. Open Settings → Edits and recovery to review it before writing."
                             }) { Text("Embed…") }; TextButton(onClick = { pickedCover = null }) { Text("Cancel") } } })
                     }
                     confirmRestore?.let { (row, hash) -> AlertDialog(onDismissRequest = { confirmRestore = null }, title = { Text("Restore original ${row.displayName}?") },
@@ -423,7 +425,7 @@ private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = 
 
 @Composable
 private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, playlistUi: PlaylistUiState, confirmImport: () -> Unit, pickPlaylist: () -> Unit,
-    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, clock:PlaybackUiState, message: String,
+    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, clock:PlaybackUiState, message: String, info: String,
     send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
     onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit,
     soulseek: SoulseekTab?, soulseekDownloadsRequest: Int, foreground: Boolean) {
@@ -553,6 +555,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
         Column(Modifier.padding(padding).consumeWindowInsets(padding).fillMaxSize()) {
             if (!ready && message.isBlank()) Text("Opening your library…", Modifier.padding(horizontal = 20.dp))
             if (message.isNotBlank()) PlayerMessage(message)
+            if (info.isNotBlank()) PlayerMessage(info, info = true)
             if (library.error.isNotBlank()) PlayerMessage(library.error) { send(PlaybackService.CLEAR_ERROR, Bundle.EMPTY) }
             if (playback.optString("error").isNotBlank()) PlayerMessage(playback.optString("error"))
             AnimatedContent(targetState=browseScreen,modifier=Modifier.weight(1f),label="Screen transition",
