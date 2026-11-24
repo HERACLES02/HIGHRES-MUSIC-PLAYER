@@ -38,8 +38,10 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
                 DropdownMenuItem(text = { Text("Edit tags") }, onClick = { open = false; editTags() })
             }
             DropdownMenuItem(text = { Text("Details") }, onClick = { open = false; details() })
-            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) })
-            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) })
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            val destructive = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error)
+            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) }, colors = destructive)
+            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) }, colors = destructive)
         }
     }
 }
@@ -54,9 +56,8 @@ fun HomeLibraryScreen(library: LibraryState, browse: LibraryBrowse, store: Music
     val continues = remember(tracks, library.continues) { tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE } }
     LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
+        item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Make time for a good song.", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             MusicSearchField(search,onSearch,"Search your music")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(countLabel(tracks.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
