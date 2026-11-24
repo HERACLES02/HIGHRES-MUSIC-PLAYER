@@ -24,8 +24,11 @@ fun themeStyleChecks() {
         verify(nightRide.font == ThemeFont.RAJDHANI, "Night Ride uses Rajdhani (system dark=$systemDark)")
         verify(redline.font == ThemeFont.SHARE_TECH_MONO, "Redline uses Share Tech Mono (system dark=$systemDark)")
         verify(hazard.font == ThemeFont.CHAKRA_PETCH, "Hazard uses Chakra Petch (system dark=$systemDark)")
-        for (style in listOf(neon, nightRide, redline, hazard))
-            verify(style.accent == accent && style.corners == ThemeCorners.ROUNDED, "${style.cyber} keeps the normal accent and rounded corners for now")
+        for (style in listOf(neon, nightRide, redline, hazard)) verify(style.accent == accent, "${style.cyber} keeps the normal accent")
+        verify(neon.corners == ThemeCorners.CUT, "Neon Static has cut corners (system dark=$systemDark)")
+        verify(nightRide.corners == ThemeCorners.ROUNDED, "Night Ride keeps rounded corners (system dark=$systemDark)")
+        verify(redline.corners == ThemeCorners.CUT, "Redline has cut corners (system dark=$systemDark)")
+        verify(hazard.corners == ThemeCorners.CUT, "Hazard has cut corners (system dark=$systemDark)")
     }
     verify(CyberAccent.entries.map { it.label } == listOf("Neon Static", "Night Ride", "Redline", "Hazard"), "Cyberpunk offers Neon Static, Night Ride, Redline and Hazard")
     for (appearance in ThemeStyles.appearances - "Cyberpunk") for (systemDark in listOf(true, false)) for (chosen in ThemeAccent.entries) {

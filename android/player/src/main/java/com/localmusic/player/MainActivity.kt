@@ -335,6 +335,7 @@ class MainActivity : ComponentActivity() {
             val dark = style.dark
             val colors = remember(style) { playerColorScheme(style) }
             val typography = remember(style.font) { playerTypography(style.font) }
+            val shapes = remember(style.corners) { playerShapes(style.corners) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}
@@ -342,7 +343,7 @@ class MainActivity : ComponentActivity() {
             // The logo is only the first frame. Report usable content separately.
             ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
-            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors, typography = typography) {
+            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors, typography = typography, shapes = shapes) {
                 // Exposes test tags to the baseline-profile generator's UiAutomator.
                 Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                     val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()

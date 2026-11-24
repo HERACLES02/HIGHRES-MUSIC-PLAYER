@@ -5,8 +5,6 @@ package com.localmusic.player
 import android.os.Bundle
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -124,7 +122,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
                         enabled = ready,
                         onDragStopped = { velocity -> scope.launch { settle(velocity) } }
                     )
-                    .shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)))
+                    .shadow(12.dp, cornerShape(24.dp)).clip(cornerShape(24.dp)))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         MarqueeText(track.tags.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold,textAlign=TextAlign.Center),autoScroll=true)
@@ -235,7 +233,7 @@ private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boo
         Slider(value = dragged ?: if (duration > 0) position.coerceAtMost(duration).toFloat() / duration else 0f,
             onValueChange = { dragged = it }, enabled = ready && duration > 0,
             onValueChangeFinished = { dragged?.let { seek((it * duration).toLong()) }; dragged = null },
-            thumb={Box(Modifier.size(16.dp).background(active,CircleShape))},
+            thumb={Box(Modifier.size(16.dp).background(active,handleShape()))},
             track={state->Canvas(Modifier.fillMaxWidth().height(4.dp)){
                 val start=Offset(if(rtl)size.width else 0f,center.y)
                 val end=Offset(if(rtl)0f else size.width,center.y)
