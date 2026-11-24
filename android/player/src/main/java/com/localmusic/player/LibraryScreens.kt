@@ -44,14 +44,12 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
 }
 
 @Composable
-fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
+fun HomeLibraryScreen(library: LibraryState, browse: LibraryBrowse, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
     onSearch: (String) -> Unit, changeGrid: (Boolean) -> Unit, scan: () -> Unit,
     play: (List<Track>, Int, Boolean, String) -> Unit, send: (String, Bundle) -> Unit,
     addToPlaylist: (Track) -> Unit, details: (Track) -> Unit, playlistCard: @Composable (Playlist, Int) -> Unit, allPlaylists: () -> Unit, allSongs: () -> Unit,
     editTags: ((Track) -> Unit)? = null) {
-    val tracks = remember(library.tracks, search) { library.tracks.filter {
-        (it.tags.title + " " + it.tags.artists.joinToString(" ") + " " + it.tags.album.orEmpty()).contains(search, true)
-    }.sortedByDescending { it.addedAtMs } }
+    val tracks = remember(browse, search) { browse.search(search, BrowseOrder.NEWEST) }
     val continues = remember(tracks, library.continues) { tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE } }
     LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -494,10 +494,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     }
     val removeSong=LocalSongRemoval.current
     // Keep Library's list cached across tabs, but do not prepare it for Home.
-    val filtered by remember(library.tracks, search, newest) { lazy {
-        val found = library.tracks.filter { (it.tags.title + " " + artist(it) + " " + it.tags.album.orEmpty()).contains(search, true) }
-        if (newest) found.sortedByDescending { it.addedAtMs } else found.sortedWith(compareBy<Track> { it.tags.title.lowercase() }.thenBy { it.id.value.toString() })
-    } }
+    val browse = remember(library.tracks, library.details) { LibraryBrowse(library.tracks) { library.details[it]?.folders?.values?.firstOrNull() } }
+    val filtered by remember(browse, search, newest) { lazy { browse.search(search, if (newest) BrowseOrder.NEWEST else BrowseOrder.TITLE) } }
     fun start(tracks: List<Track>, index: Int, resume: Boolean = false, origin: String = "Library · All songs") {
         send(PlaybackService.START, collectionBundle(tracks, index, resume).apply { putString("origin", origin.take(200)) })
         keyboard?.hide(); screen = "Playing"
@@ -562,7 +560,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             Column(Modifier.fillMaxSize()) {
             when (displayedScreen) {
                 "Home" -> Box(Modifier.weight(1f)) {
-                    HomeLibraryScreen(library, store, preferences.homeGrid, homeSearch, ready,
+                    HomeLibraryScreen(library, browse, store, preferences.homeGrid, homeSearch, ready,
                         onSearch = { homeSearch = it }, changeGrid = { grid -> send(PlaybackService.HOME_VIEW, Bundle().apply { putBoolean("grid", grid) }) },
                         scan = onScan, play = { tracks, index, resume, origin -> start(tracks, index, resume, origin) }, send = send,
                         addToPlaylist = { openPlaylistPicker(listOf(it.id)) }, details = { details = it },
@@ -576,35 +574,12 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         editTags = { editingIds = listOf(it.id.value.toString()) })
                 }
                 "Library" -> {
-                    fun groupName(track: Track): String = when (category) {
-                        "Albums" -> "${track.tags.album ?: "Unknown album"} · ${track.tags.albumArtist ?: artist(track)}"
-                        "Artists" -> artist(track)
-                        "Folders" -> library.details[track.id]?.folders?.values?.firstOrNull() ?: "Folder information needs a rescan"
-                        else -> ""
-                    }
-                    val groups = remember(filtered, category, library.details) {
-                        if (category == "Songs") emptyMap<String, List<Track>>()
-                        else if (category == "Folders") {
-                            filtered.groupBy(::groupName).mapValues { (_, tracks) ->
-                                tracks.sortedWith(
-                                    compareBy<Track> { it.tags.trackNumber ?: Int.MAX_VALUE }
-                                        .thenBy { it.sources.firstOrNull()?.uri ?: "" }
-                                )
-                            }.toSortedMap()
-                        } else filtered.groupBy(::groupName).toSortedMap()
-                    }
-                    val shown = remember(filtered, category, group, library.details) {
-                        if (category == "Songs") filtered
-                        else if (category == "Folders" && group != null) {
-                            filtered.filter { groupName(it) == group }.sortedWith(
-                                compareBy<Track> { it.tags.trackNumber ?: Int.MAX_VALUE }
-                                    .thenBy { it.sources.firstOrNull()?.uri ?: "" }
-                            )
-                        } else filtered.filter { groupName(it) == group }
+                    val groups = remember(browse, filtered, category) { browse.groups(filtered, BrowseCategory.valueOf(category.uppercase())) }
+                    val shown = remember(filtered, groups, category, group) {
+                        if (category == "Songs") filtered else groups.firstOrNull { it.key == group }?.tracks.orEmpty()
                     }
                     if (category == "Artists" && group != null && !selecting) {
-                        val artistTracks = remember(filtered, group) { filtered.filter { groupName(it) == group } }
-                        Box(Modifier.weight(1f)) { ArtistPage(group.orEmpty(), artistTracks, preferences.artists[ArtistProfile.key(group.orEmpty())], store, ready, listeningUi, send,
+                        Box(Modifier.weight(1f)) { ArtistPage(group.orEmpty(), shown, preferences.artists[ArtistProfile.key(group.orEmpty())], store, ready, listeningUi, send,
                             play = { items, index, shuffle ->
                                 val chosen = items.getOrNull(index)?.id; val playable = items.filter { it.availability == Availability.AVAILABLE }
                                 if (playable.isNotEmpty()) { send(PlaybackService.START, collectionBundle(playable, playable.indexOfFirst { it.id == chosen }.coerceAtLeast(0)).apply {
@@ -612,7 +587,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                 }); screen = "Playing" }
                             }, details = { details = it }, addToPlaylist = { openPlaylistPicker(listOf(it.id)) },
                             addCollectionToPlaylist = { openPlaylistPicker(it.map { track -> track.id }) },
-                            album = { track -> category = "Albums"; group = "${track.tags.album ?: "Unknown album"} · ${track.tags.albumArtist ?: artist(track)}" },
+                            album = { track -> category = "Albums"; group = LibraryBrowse.albumKey(track) },
                             editTags = { editingIds = listOf(it.id.value.toString()) }) }
                     } else LazyColumn(Modifier.weight(1f), state = libraryScroll, contentPadding = PaddingValues(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -634,15 +609,14 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                             TextButton(onClick = { newest = !newest }) { Text(if (newest) "Newest first" else "Title A–Z") }
                         } }
                         if (category != "Songs" && group == null) {
-                            val keysList = groups.keys.toList()
                             if (libraryGrid) {
-                                items(keysList.chunked(2), key = { "grid-row-${it.joinToString()}" }) { rowKeys ->
+                                items(groups.chunked(2), key = { row -> "grid-row-${row.joinToString { it.key }}" }) { rowGroups ->
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        for (key in rowKeys) {
+                                        for (entry in rowGroups) {
                                             Box(Modifier.weight(1f)) {
-                                                val first = groups[key]?.firstOrNull()
-                                                val collection = groups.getValue(key)
-                                                val playable = collection.filter { it.availability == Availability.AVAILABLE }
+                                                val key = entry.key
+                                                val collection = entry.tracks
+                                                val first = collection.firstOrNull()
                                                 val kind = category.removeSuffix("s")
                                                 val extras = when (category) {
                                                     "Albums" -> buildList<Pair<String, () -> Unit>> {
@@ -653,22 +627,22 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                                     else -> emptyList()
                                                 }
                                                 CollectionCard(if(category=="Folders")folderDisplayPath(key)else key, if (category == "Artists") preferences.artists[ArtistProfile.key(key)]?.imagePath else first?.let { store?.artwork(it.id) },
-                                                    collection.size, kind, ready && playable.isNotEmpty(), open = { group = key },
-                                                    play = { if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
-                                                    shuffle = { if (playable.isNotEmpty()) {
+                                                    collection.size, kind, ready && entry.availableCount > 0, open = { group = key },
+                                                    play = { val playable = collection.filter { it.availability == Availability.AVAILABLE }; if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
+                                                    shuffle = { val playable = collection.filter { it.availability == Availability.AVAILABLE }; if (playable.isNotEmpty()) {
                                                         send(PlaybackService.START, collectionBundle(playable, 0).apply { putBoolean("shuffle", true); putString("origin", "$kind: $key".take(200)) })
                                                         keyboard?.hide(); screen = "Playing"
                                                     } }, addToPlaylist = { openPlaylistPicker(collection.map { it.id }) }, extraActions = extras)
                                             }
                                         }
-                                        if (rowKeys.size == 1) Spacer(Modifier.weight(1f))
+                                        if (rowGroups.size == 1) Spacer(Modifier.weight(1f))
                                     }
                                 }
                             } else {
-                                items(keysList, key = { "group-$it" }) { key ->
-                                    val first = groups[key]?.firstOrNull()
-                                    val collection = groups.getValue(key)
-                                    val playable = collection.filter { it.availability == Availability.AVAILABLE }
+                                items(groups, key = { "group-${it.key}" }) { entry ->
+                                    val key = entry.key
+                                    val collection = entry.tracks
+                                    val first = collection.firstOrNull()
                                     val kind = category.removeSuffix("s")
                                     val extras = when (category) {
                                         "Albums" -> buildList<Pair<String, () -> Unit>> {
@@ -679,9 +653,9 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                         else -> emptyList()
                                     }
                                     CollectionRow(if(category=="Folders")folderDisplayPath(key)else key, if (category == "Artists") preferences.artists[ArtistProfile.key(key)]?.imagePath else first?.let { store?.artwork(it.id) },
-                                        collection.size, kind, ready && playable.isNotEmpty(), open = { group = key },
-                                        play = { if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
-                                        shuffle = { if (playable.isNotEmpty()) {
+                                        collection.size, kind, ready && entry.availableCount > 0, open = { group = key },
+                                        play = { val playable = collection.filter { it.availability == Availability.AVAILABLE }; if (playable.isNotEmpty()) start(playable, 0, origin = "$kind: $key") },
+                                        shuffle = { val playable = collection.filter { it.availability == Availability.AVAILABLE }; if (playable.isNotEmpty()) {
                                             send(PlaybackService.START, collectionBundle(playable, 0).apply { putBoolean("shuffle", true); putString("origin", "$kind: $key".take(200)) })
                                             keyboard?.hide(); screen = "Playing"
                                         } }, addToPlaylist = { openPlaylistPicker(collection.map { it.id }) }, extraActions = extras)
