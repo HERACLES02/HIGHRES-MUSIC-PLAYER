@@ -14,8 +14,16 @@ fun themeStyleChecks() {
         verify(ThemeStyles.resolve("AMOLED", accent, cyber, systemDark).let { it.dark && it.trueBlack }, "AMOLED is dark and true black (system dark=$systemDark)")
         val neon = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.NEON_STATIC, systemDark)
         verify(neon.cyber == CyberAccent.NEON_STATIC && neon.dark && !neon.trueBlack, "Cyberpunk + Neon Static is dark, not true black (system dark=$systemDark)")
-        verify(neon.font == ThemeFont.DEFAULT && neon.corners == ThemeCorners.ROUNDED, "Neon Static keeps the default font and rounded corners for now")
+        val nightRide = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.NIGHT_RIDE, systemDark)
+        verify(nightRide.cyber == CyberAccent.NIGHT_RIDE && nightRide.dark && !nightRide.trueBlack, "Cyberpunk + Night Ride is dark, not true black (system dark=$systemDark)")
+        val redline = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.REDLINE, systemDark)
+        verify(redline.cyber == CyberAccent.REDLINE && redline.dark && redline.trueBlack, "Cyberpunk + Redline is dark and true black (system dark=$systemDark)")
+        val hazard = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.HAZARD, systemDark)
+        verify(hazard.cyber == CyberAccent.HAZARD && !hazard.dark && !hazard.trueBlack, "Cyberpunk + Hazard is light (system dark=$systemDark)")
+        for (style in listOf(neon, nightRide, redline, hazard))
+            verify(style.accent == accent && style.font == ThemeFont.DEFAULT && style.corners == ThemeCorners.ROUNDED, "${style.cyber} keeps the normal accent, default font and rounded corners for now")
     }
+    verify(CyberAccent.entries.map { it.label } == listOf("Neon Static", "Night Ride", "Redline", "Hazard"), "Cyberpunk offers Neon Static, Night Ride, Redline and Hazard")
     for (appearance in ThemeStyles.appearances - "Cyberpunk") for (systemDark in listOf(true, false)) for (chosen in ThemeAccent.entries) {
         val style = ThemeStyles.resolve(appearance, chosen, cyber, systemDark)
         verify(style.accent == chosen && style.cyber == null, "$appearance uses the chosen normal accent $chosen")

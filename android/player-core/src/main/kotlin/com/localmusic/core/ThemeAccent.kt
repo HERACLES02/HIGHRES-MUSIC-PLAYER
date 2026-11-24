@@ -6,5 +6,5 @@ enum class ThemeAccent(val label:String) {
 
 /** Saved separately from [ThemeAccent] so each is remembered while the other appearance is in use. */
 enum class CyberAccent(val label:String) {
-    NEON_STATIC("Neon Static")
+    NEON_STATIC("Neon Static"), NIGHT_RIDE("Night Ride"), REDLINE("Redline"), HAZARD("Hazard")
 }

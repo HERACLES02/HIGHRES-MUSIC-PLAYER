@@ -291,7 +291,10 @@ class MainActivity : ComponentActivity() {
         StartupTiming.mark("activity_create")
         val launch=StartupAppearance.read(this)
         val launchStyle=StartupAppearance.style(this,launch)
+        // Redline reuses the true-black launch style.
         setTheme(when{launchStyle.cyber==CyberAccent.NEON_STATIC->R.style.PlayerLaunchNeonStatic
+            launchStyle.cyber==CyberAccent.NIGHT_RIDE->R.style.PlayerLaunchNightRide
+            launchStyle.cyber==CyberAccent.HAZARD->R.style.PlayerLaunchHazard
             launchStyle.trueBlack->R.style.PlayerLaunchBlack
             launchStyle.dark->R.style.PlayerLaunchDark else->R.style.PlayerLaunchLight})
         super.onCreate(savedInstanceState)

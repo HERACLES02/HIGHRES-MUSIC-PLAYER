@@ -27,9 +27,9 @@ fun backupArchiveChecks() {
         val preference=BackupPreferences(appearance="Cyberpunk",accent=ThemeAccent.OCEAN,cyberAccent=cyber)
         verify(PreferenceCodec.decode(PreferenceCodec.encode(preference))==preference,"Cyberpunk keeps both accents through persistence: $cyber")
     }
-    val bothAccents=BackupPreferences(appearance="Dark",accent=ThemeAccent.ROSE,cyberAccent=CyberAccent.NEON_STATIC)
-    PreferenceCodec.mergeRestore(BackupPreferences(appearance="Cyberpunk",accent=ThemeAccent.AMBER),bothAccents).let{
-        verify(it.appearance=="Dark"&&it.accent==ThemeAccent.ROSE&&it.cyberAccent==CyberAccent.NEON_STATIC,"restore merge takes the backup's normal and Cyberpunk accents independently")}
+    val bothAccents=BackupPreferences(appearance="Dark",accent=ThemeAccent.ROSE,cyberAccent=CyberAccent.HAZARD)
+    PreferenceCodec.mergeRestore(BackupPreferences(appearance="Cyberpunk",accent=ThemeAccent.AMBER,cyberAccent=CyberAccent.NIGHT_RIDE),bothAccents).let{
+        verify(it.appearance=="Dark"&&it.accent==ThemeAccent.ROSE&&it.cyberAccent==CyberAccent.HAZARD,"restore merge takes the backup's normal and Cyberpunk accents independently")}
     rejects("unknown Cyberpunk accent rejected"){PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"cyberAccent\":\"UNKNOWN\"}")}
     rejects("non-text Cyberpunk accent rejected"){PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"cyberAccent\":1}")}
     BackupArchive.validate(AppBackup(preferences=BackupPreferences(appearance="Cyberpunk")))

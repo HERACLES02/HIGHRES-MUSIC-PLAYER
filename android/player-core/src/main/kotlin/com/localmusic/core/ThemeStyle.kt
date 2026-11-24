@@ -11,9 +11,9 @@ object ThemeStyles {
     val appearances=listOf("System","Light","Dark","AMOLED","Cyberpunk")
     /** Unknown names fall back to System, as the app always did. Cyberpunk ignores the phone's dark mode. */
     fun resolve(appearance:String,accent:ThemeAccent,cyberAccent:CyberAccent,systemDark:Boolean)=
-        if(appearance=="Cyberpunk")when(cyberAccent){
-            CyberAccent.NEON_STATIC->ThemeStyle(accent,cyberAccent,dark=true,trueBlack=false,font=ThemeFont.DEFAULT,corners=ThemeCorners.ROUNDED)
-        }else ThemeStyle(accent,null,
+        if(appearance=="Cyberpunk")ThemeStyle(accent,cyberAccent,dark=cyberAccent!=CyberAccent.HAZARD,
+            trueBlack=cyberAccent==CyberAccent.REDLINE,font=ThemeFont.DEFAULT,corners=ThemeCorners.ROUNDED)
+        else ThemeStyle(accent,null,
             dark=when(appearance){"Light"->false;"Dark","AMOLED"->true;else->systemDark},
             trueBlack=appearance=="AMOLED",font=ThemeFont.DEFAULT,corners=ThemeCorners.ROUNDED)
 }
