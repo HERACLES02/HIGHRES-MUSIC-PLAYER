@@ -213,7 +213,12 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }
     suspend fun favorite(id: TrackId) {
         val repo = repository(); val track = repo.track(id) ?: return
-        repo.setFavorite(id, !track.favorite); refresh()
+        val favorite = !track.favorite
+        repo.setFavorite(id, favorite)
+        // Only the flag changed, so skip the full refresh (track re-read and artwork file checks).
+        mutable.update { it.copy(tracks = LibraryFavorites.apply(it.tracks, id, favorite),
+            trackById = LibraryFavorites.apply(it.trackById, id, favorite),
+            removedTracks = LibraryFavorites.apply(it.removedTracks, id, favorite), revision = it.revision + 1) }
     }
 
     /** Playlist edits touch only playlist tables; skipping the full track refresh keeps reorders responsive. */
