@@ -23,6 +23,11 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
         getByName("debug") { versionNameSuffix = "-debug" }
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-preview.pro")
+        }
         create("peerTest") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".peertest"
