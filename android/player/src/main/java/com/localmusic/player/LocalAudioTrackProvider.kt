@@ -61,6 +61,7 @@ class LocalAudioOutputProvider(
     private fun rememberTrack(track: AudioTrack) {
         if (BuildConfig.DIRECT_USB_ENABLED) retirement.remember { track.state == AudioTrack.STATE_UNINITIALIZED }
     }
+    private val pcmConverter = PcmOutputConverter()
 
     data class Startup(
         val sampleRate: Int,
@@ -227,7 +228,7 @@ class LocalAudioOutputProvider(
         return when {
             openedConfig.encoding != outputConfig.encoding -> ConvertingAudioOutput(
                 delegate = baseOutput,
-                session = PcmOutputSession(PcmOutputConverter(), channelCount = 2, targetEncoding = targetEncoding),
+                session = PcmOutputSession(pcmConverter, channelCount = 2, targetEncoding = targetEncoding),
                 onRelease = { manager.releaseOutput(token) }
             )
             manager.activeDecision.isUsbActive -> object : ForwardingAudioOutput(baseOutput) {

@@ -113,9 +113,9 @@ class MainActivity : ComponentActivity() {
                     backupUi.message = result.extras.getString("message") ?: "Backup operation failed. Check Settings before trying again."
                 } else when (action) {
                     PlaybackService.BACKUP_EXPORT -> {
-                        val missing=result.extras.getInt("missingArtwork",0)
-                        backupUi.message = if(missing==0) "Backup saved and read back successfully. Playback remains paused."
-                            else "Backup saved and verified. $missing missing artwork file(s) could not be included. Other app data was saved. Playback remains paused."
+                        val missing = result.extras.getInt("missingArtwork", 0)
+                        backupUi.message = if (missing == 0) "Backup saved and read back successfully. Playback remains paused."
+                            else "Backup saved with missing artwork ($missing). Other app data was saved. Playback remains paused."
                     }
                     PlaybackService.BACKUP_PREVIEW -> {
                         backupUi.token = result.extras.getString("token"); backupUi.summary = result.extras.getString("summary").orEmpty()
@@ -1027,7 +1027,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             Scaffold(modifier=Modifier.fillMaxSize().imePadding(),topBar={
                 Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal=8.dp),
                     horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-                    IconButton(onClick={back()}){Icon(PlayerGlyph.Back,"Back")}
+                    Spacer(Modifier.size(48.dp))
                     Text("NOW PLAYING",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.size(48.dp))
                 }

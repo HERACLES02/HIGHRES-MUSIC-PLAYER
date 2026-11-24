@@ -53,7 +53,7 @@ If it stops with "Library list not found" or "Mini player not found", repeat the
 
 ## 5. Build, sign, install, and measure "after"
 
-Ask the agent to build the unsigned release APK, which now carries the profile. Then sign it:
+Build the unsigned release APK (`:player:assembleRelease`), which now carries the profile. Then sign it:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File D:\music_player\android\scripts\sign-phone-apk.ps1

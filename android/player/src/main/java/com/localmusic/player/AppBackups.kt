@@ -23,7 +23,7 @@ class AppBackups(private val context: Context, private val store: MusicStore) {
         store.restorePreferences(prefs(record.getJSONObject(if (committed) "target" else "original")))
         pending.delete()
     }
-    suspend fun export(uri: Uri) = withContext(Dispatchers.IO) {
+    suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val state = store.repository().captureBackup(store.backupPreferences())
         val captured = BackupArtwork.capture(state, context.filesDir)
         val bundle = captured.bundle
@@ -31,7 +31,19 @@ class AppBackups(private val context: Context, private val store: MusicStore) {
         BackupArchive.read(bytes.inputStream())
         requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "Cannot open backup destination." }.use { it.write(bytes) }
         val saved = requireNotNull(context.contentResolver.openInputStream(uri)) { "Cannot verify saved backup." }.use { BackupArchive.read(it) }
-        check(saved.state == bundle.state && saved.assets.keys == bundle.assets.keys) { "Saved backup verification failed." }
+        check(saved.state == bundle.state && saved.assets.keys == bundle.assets.keys) {
+            "Saved backup verification failed: " +
+            "tracks: ${saved.state.tracks == bundle.state.tracks}, " +
+            "playlists: ${saved.state.playlists == bundle.state.playlists}, " +
+            "lyrics: ${saved.state.lyrics == bundle.state.lyrics}, " +
+            "selections: ${saved.state.selections == bundle.state.selections}, " +
+            "extras: ${saved.state.extras == bundle.state.extras}, " +
+            "resumes: ${saved.state.resumes == bundle.state.resumes}, " +
+            "folders: ${saved.state.folders == bundle.state.folders}, " +
+            "session: ${saved.state.session == bundle.state.session}, " +
+            "preferences: ${saved.state.preferences == bundle.state.preferences}, " +
+            "assets: ${saved.assets.keys == bundle.assets.keys}"
+        }
         captured.missingFiles
     }
     suspend fun preview(uri: Uri): BackupBundle = withContext(Dispatchers.IO) {

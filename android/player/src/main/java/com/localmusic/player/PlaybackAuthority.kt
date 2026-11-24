@@ -52,11 +52,16 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         val processor=MusicAudioProcessor()
         processor.clock = { clock() }
         processor.onClippingSummary = { proc, _ ->
-            handler.post {
-                if (!destroyed && processors[engine] === proc) checkClippingState()
+            if (!destroyed && processors[engine] === proc) {
+                handler.post {
+                    if (!destroyed && processors[engine] === proc) {
+                        checkClippingState()
+                    }
+                }
             }
         }
         val output=LocalAudioOutputProvider(context, routeManager)
+        output.sourceBitDepthProvider = { current?.audio?.meaningfulBits }
         // Local files need less prefill after a seek than the generic one-second default.
         // Keep steady-state loading and starvation recovery unchanged.
         val loadControl=DefaultLoadControl.Builder().setBufferDurationsMs(
