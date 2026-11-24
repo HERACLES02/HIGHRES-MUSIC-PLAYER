@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.appwidget.*
 import android.content.*
 import android.content.res.Configuration
+import com.localmusic.core.ThemeStyles
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
@@ -40,7 +41,7 @@ class WidgetUpdates(private val context:Context,scope:CoroutineScope){
         }.getOrDefault(WidgetSnapshot())
         suspend fun refresh(context:Context,snapshot:WidgetSnapshot=active?:cached(context)){
             val prefs=(context.applicationContext as MusicApplication).storage.await().backupPreferences()
-            val dark=when(prefs.widgets.theme){"Light"->false;"Dark"->true;else->when(prefs.appearance){"Light"->false;"Dark","AMOLED"->true;else->context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES}}
+            val dark=when(prefs.widgets.theme){"Light"->false;"Dark"->true;else->ThemeStyles.resolve(prefs.appearance,prefs.accent,context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES).dark}
             val color=Color.parseColor(if(dark)"#f0f1e9" else "#242d24")
             val art=if(prefs.widgets.artwork)snapshot.artwork?.let{path->runCatching{
                 val options=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(path,options)

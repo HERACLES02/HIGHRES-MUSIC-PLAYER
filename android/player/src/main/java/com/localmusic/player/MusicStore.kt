@@ -110,7 +110,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }.stateIn(scope, SharingStarted.Eagerly, StartupAppearance.read(context))
     suspend fun setPreferences(appearance: String, autoScan: Boolean) {
         AppBackups(context,this).recoverPreferences()
-        require(appearance in setOf("System", "Light", "Dark", "AMOLED"))
+        require(appearance in ThemeStyles.appearances)
         context.musicPreferences.edit { it[stringPreferencesKey("appearance")] = appearance; it[booleanPreferencesKey("autoScan")] = autoScan }
     }
     suspend fun setHomeGrid(grid:Boolean){AppBackups(context,this).recoverPreferences();context.musicPreferences.edit{it[booleanPreferencesKey("homeGrid")]=grid}}
@@ -137,7 +137,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         old.copy(artists=profiles)
     }
     suspend fun restorePreferences(value: BackupPreferences) {
-        require(value.appearance in setOf("System", "Light", "Dark", "AMOLED"))
+        require(value.appearance in ThemeStyles.appearances)
         context.musicPreferences.edit {
             it[stringPreferencesKey("appearance")] = value.appearance
             it[booleanPreferencesKey("autoScan")] = value.autoScan

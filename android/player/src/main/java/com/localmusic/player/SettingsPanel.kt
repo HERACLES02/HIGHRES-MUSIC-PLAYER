@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.ThemeAccent
+import com.localmusic.core.ThemeStyles
 
 @Composable
 fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: Boolean,
@@ -34,7 +35,7 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
         SettingsCard("Appearance") {
             Text("Theme",style=MaterialTheme.typography.titleMedium)
             PlayerActions {
-                listOf("System", "Light", "Dark", "AMOLED").forEach { name ->
+                ThemeStyles.appearances.forEach { name ->
                     FilterChip(selected = preferences.appearance == name, enabled = ready, onClick = {
                         send(PlaybackService.PREFERENCES, Bundle().apply {
                             putString("appearance", name); putBoolean("autoScan", preferences.autoScan)

@@ -290,8 +290,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         StartupTiming.mark("activity_create")
         val launch=StartupAppearance.read(this)
-        setTheme(if(launch.appearance=="AMOLED")R.style.PlayerLaunchBlack
-            else if(StartupAppearance.dark(this,launch.appearance))R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
+        val launchStyle=StartupAppearance.style(this,launch)
+        setTheme(if(launchStyle.trueBlack)R.style.PlayerLaunchBlack
+            else if(launchStyle.dark)R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
         fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
@@ -323,8 +324,9 @@ class MainActivity : ComponentActivity() {
             }
             val initialAppearance=remember{launch}
             val preferences = store?.preferences?.collectAsState()?.value ?: initialAppearance
-            val dark = when (preferences.appearance) { "Light" -> false; "Dark", "AMOLED" -> true; else -> isSystemInDarkTheme() }
-            val colors = remember(dark, preferences.appearance,preferences.accent) { playerColorScheme(dark, preferences.appearance == "AMOLED",preferences.accent) }
+            val style = ThemeStyles.resolve(preferences.appearance, preferences.accent, isSystemInDarkTheme())
+            val dark = style.dark
+            val colors = remember(style) { playerColorScheme(style.dark, style.trueBlack, style.accent) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}

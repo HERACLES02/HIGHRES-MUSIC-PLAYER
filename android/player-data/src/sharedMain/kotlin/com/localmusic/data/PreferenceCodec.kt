@@ -36,6 +36,6 @@ object PreferenceCodec {
         return BackupPreferences(o.getValue("appearance").jsonPrimitive.content,o.getValue("autoScan").jsonPrimitive.boolean,o.getValue("homeGrid").jsonPrimitive.boolean,
             o["audio"]?.let{AudioCodec.settings(it.toString())}?:AudioSettings(),widgets,artists,o["artworkSize"]?.jsonPrimitive?.content ?: "Large",
             o["accent"]?.jsonPrimitive?.let{require(it.isString){"Accent must be text"};ThemeAccent.valueOf(it.content)}?:ThemeAccent.SAGE)
-            .also{require(it.appearance in setOf("System","Light","Dark","AMOLED"));require(it.artworkSize in setOf("Compact","Large","Full width"))}
+            .also{require(it.appearance in ThemeStyles.appearances);require(it.artworkSize in setOf("Compact","Large","Full width"))}
     }
 }

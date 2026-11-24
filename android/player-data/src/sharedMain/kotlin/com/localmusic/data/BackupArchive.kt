@@ -41,7 +41,7 @@ object BackupArchive {
     fun artworkReferences(state:AppBackup):Set<String> = (state.extras.values.mapNotNull{it.artworkOverride?.takeIf(String::isNotEmpty)}+
         state.preferences.artists.values.mapNotNull{it.imagePath}).toSet()
     fun validate(state:AppBackup){
-        require(state.preferences.appearance in setOf("System","Light","Dark","AMOLED")){"Unknown appearance"}
+        require(state.preferences.appearance in ThemeStyles.appearances){"Unknown appearance"}
         PreferenceCodec.decode(PreferenceCodec.encode(state.preferences))
         require(state.preferences.artists.values.all{p->p.imagePath?.let(::assetName)?:true}){"Unsafe artist artwork reference"}
         require(state.tracks.size<=100000&&state.playlists.size<=5000&&state.lyrics.size<=100000)

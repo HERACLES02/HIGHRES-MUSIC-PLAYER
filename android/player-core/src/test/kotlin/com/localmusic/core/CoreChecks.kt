@@ -314,6 +314,6 @@ private fun identityChecks() {
 
 fun main() {
     peerSearchChecks()
-    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); libraryFavoritesChecks(); libraryBrowseChecks()
+    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); libraryFavoritesChecks(); libraryBrowseChecks(); themeStyleChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }
