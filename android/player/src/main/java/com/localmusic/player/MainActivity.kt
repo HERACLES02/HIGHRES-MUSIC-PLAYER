@@ -907,7 +907,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     if (licenses) {
         val context = androidx.compose.ui.platform.LocalContext.current
         var notice by remember { mutableStateOf("Loading notices…") }
-        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
+        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
         AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Open-source notices") }, text = { Text(notice, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })
     }
