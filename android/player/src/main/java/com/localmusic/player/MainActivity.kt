@@ -609,7 +609,16 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                     Icon(if (libraryGrid) PlayerGlyph.Grid else PlayerGlyph.List, if (libraryGrid) "Grid view" else "List view")
                                 }
                             }
-                            TextButton(onClick = { newest = !newest }) { Text(if (newest) "Newest first" else "Title A–Z") }
+                            Box {
+                                var sortMenu by remember { mutableStateOf(false) }
+                                TextButton(onClick = { sortMenu = true }) { Text((if (newest) "Newest first" else "Title A–Z") + " ▾") }
+                                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                                    listOf(false to "Title A–Z", true to "Newest first").forEach { (byNewest, label) ->
+                                        DropdownMenuItem(text = { Text(label) }, onClick = { newest = byNewest; sortMenu = false },
+                                            leadingIcon = { RadioButton(selected = newest == byNewest, onClick = null) })
+                                    }
+                                }
+                            }
                         } }
                         if (category != "Songs" && group == null) {
                             if (libraryGrid) {
@@ -668,18 +677,14 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         } else {
                             if (group != null) item(key = "collection") {
                                 MarqueeText(if(category=="Folders")folderDisplayPath(group.orEmpty())else group.orEmpty(), style = MaterialTheme.typography.titleLarge)
-                                TextButton(onClick = { group = null }) { Text("All $category") }
-                            }
-                            item(key = "selection") { PlayerActions {
-                                TextButton(onClick = { selecting = !selecting; selection = emptySet() }) { Text(if (selecting) "Done selecting" else "Select songs") }
-                                if (selecting) TextButton(enabled = selection.size in 1..50, onClick = { editingIds = library.tracks.filter { it.id in selection }.map { it.id.value.toString() } }) { Text("Edit ${selection.size} selected") }
-                                if (selecting && selection.isNotEmpty()) TextButton(onClick = { openPlaylistPicker(selection.toList()) }) { Text("Add to playlist") }
-                                if (category == "Albums" && group != null) {
-                                    TextButton(enabled = shown.size in 1..50, onClick = { editingIds = shown.map { it.id.value.toString() } }) { Text("Edit album") }
-                                    TextButton(enabled = ready && shown.size in 1..5000, onClick = { listeningUi.resetLookup(); listeningUi.coverTargets = shown }) { Text("Find cover") }
+                                PlayerActions {
+                                    TextButton(onClick = { group = null }) { Text("All $category") }
+                                    if (category == "Albums") {
+                                        TextButton(enabled = shown.size in 1..50, onClick = { editingIds = shown.map { it.id.value.toString() } }) { Text("Edit album") }
+                                        TextButton(enabled = ready && shown.size in 1..5000, onClick = { listeningUi.resetLookup(); listeningUi.coverTargets = shown }) { Text("Find cover") }
+                                    }
                                 }
-                            } }
-                            if (selection.size > 50) item { Text("Use batches of at most 50 songs.") }
+                            }
                             if (shown.isEmpty()) item { EmptyMusicState("No matching songs", "Scan your library or try another search.") }
                             items(shown, key = { "song-${it.id.value}" }) { track ->
                                 SongRow(track, ready, { start(shown, shown.indexOf(track), origin = when (category) {
@@ -687,8 +692,20 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                                 }) }, send, store?.artwork(track.id), if (selecting) track.id in selection else null,
                                     { selection = if (track.id in selection) selection - track.id else selection + track.id },
                                     { openPlaylistPicker(listOf(track.id)) }, { details = track },
-                                    editTags = { editingIds = listOf(track.id.value.toString()) })
+                                    editTags = { editingIds = listOf(track.id.value.toString()) },
+                                    startSelection = { keyboard?.hide(); selecting = true; selection = setOf(track.id) })
                             }
+                        }
+                    }
+                    if (selecting) Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                            PlayerActions {
+                                TextButton(onClick = { selecting = false; selection = emptySet() }) { Text("Done") }
+                                Text("${selection.size} selected", Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.labelLarge)
+                                TextButton(enabled = selection.size in 1..50, onClick = { editingIds = library.tracks.filter { it.id in selection }.map { it.id.value.toString() } }) { Text("Edit selected") }
+                                TextButton(enabled = selection.isNotEmpty(), onClick = { openPlaylistPicker(selection.toList()) }) { Text("Add to playlist") }
+                            }
+                            if (selection.size > 50) Text("Use batches of at most 50 songs.", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -949,11 +966,13 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
 
 @Composable private fun SongRow(track: Track, ready: Boolean, play: () -> Unit, send: (String, Bundle) -> Unit,
     art: String? = null, selected: Boolean? = null, toggle: (() -> Unit)? = null, addToPlaylist: () -> Unit = {},
-    details: () -> Unit, editTags: (() -> Unit)? = null) {
+    details: () -> Unit, editTags: (() -> Unit)? = null, startSelection: (() -> Unit)? = null) {
     val menu = remember(track.id) { mutableStateOf(false) }
+    // Where selection is offered, long-press selects; the options menu stays on the overflow button.
     ListItem(modifier = Modifier.combinedClickable(enabled = ready,
         onClick = { if (selected != null) toggle?.invoke() else if (track.availability == Availability.AVAILABLE) play() },
-        onLongClickLabel = "Song options", onLongClick = { menu.value = true }),
+        onLongClickLabel = if (selected != null) "Toggle selection" else if (startSelection != null) "Select songs" else "Song options",
+        onLongClick = { if (selected != null) toggle?.invoke() else if (startSelection != null) startSelection() else menu.value = true }),
         leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp), contentScale = ContentScale.Crop) },
         headlineContent = { MarqueeText(track.tags.title) },
         supportingContent = { Text(artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
