@@ -22,6 +22,18 @@ fun backupArchiveChecks() {
     var invalidAccent=false
     try{PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"accent\":\"UNKNOWN\"}")}catch(_:IllegalArgumentException){invalidAccent=true}
     verify(invalidAccent,"invalid accent cannot silently alter restored appearance")
+    PreferenceCodec.decode(legacyPreferences).let{verify(it.cyberAccent==CyberAccent.NEON_STATIC&&it.appearance=="System"&&it.accent==ThemeAccent.SAGE,"older preferences get Neon Static with appearance and accent unchanged")}
+    for(cyber in CyberAccent.entries){
+        val preference=BackupPreferences(appearance="Cyberpunk",accent=ThemeAccent.OCEAN,cyberAccent=cyber)
+        verify(PreferenceCodec.decode(PreferenceCodec.encode(preference))==preference,"Cyberpunk keeps both accents through persistence: $cyber")
+    }
+    val bothAccents=BackupPreferences(appearance="Dark",accent=ThemeAccent.ROSE,cyberAccent=CyberAccent.NEON_STATIC)
+    PreferenceCodec.mergeRestore(BackupPreferences(appearance="Cyberpunk",accent=ThemeAccent.AMBER),bothAccents).let{
+        verify(it.appearance=="Dark"&&it.accent==ThemeAccent.ROSE&&it.cyberAccent==CyberAccent.NEON_STATIC,"restore merge takes the backup's normal and Cyberpunk accents independently")}
+    rejects("unknown Cyberpunk accent rejected"){PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"cyberAccent\":\"UNKNOWN\"}")}
+    rejects("non-text Cyberpunk accent rejected"){PreferenceCodec.decode(legacyPreferences.dropLast(1)+",\"cyberAccent\":1}")}
+    BackupArchive.validate(AppBackup(preferences=BackupPreferences(appearance="Cyberpunk")))
+    rejects("backup validation still rejects an unknown appearance"){BackupArchive.validate(AppBackup(preferences=BackupPreferences(appearance="Neon")))}
     fun encodedArtwork(text: String) = Json.parseToJsonElement(PreferenceCodec.encode(PreferenceCodec.decode(text))).jsonObject["artworkSize"]?.jsonPrimitive?.content
     verify(encodedArtwork(legacyPreferences) == "Large", "legacy settings default to large artwork")
     val compactPreferences = legacyPreferences.dropLast(1) + ",\"artworkSize\":\"Compact\"}"

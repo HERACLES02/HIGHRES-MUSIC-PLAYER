@@ -291,8 +291,9 @@ class MainActivity : ComponentActivity() {
         StartupTiming.mark("activity_create")
         val launch=StartupAppearance.read(this)
         val launchStyle=StartupAppearance.style(this,launch)
-        setTheme(if(launchStyle.trueBlack)R.style.PlayerLaunchBlack
-            else if(launchStyle.dark)R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
+        setTheme(when{launchStyle.cyber==CyberAccent.NEON_STATIC->R.style.PlayerLaunchNeonStatic
+            launchStyle.trueBlack->R.style.PlayerLaunchBlack
+            launchStyle.dark->R.style.PlayerLaunchDark else->R.style.PlayerLaunchLight})
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
         fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
@@ -324,9 +325,9 @@ class MainActivity : ComponentActivity() {
             }
             val initialAppearance=remember{launch}
             val preferences = store?.preferences?.collectAsState()?.value ?: initialAppearance
-            val style = ThemeStyles.resolve(preferences.appearance, preferences.accent, isSystemInDarkTheme())
+            val style = ThemeStyles.resolve(preferences.appearance, preferences.accent, preferences.cyberAccent, isSystemInDarkTheme())
             val dark = style.dark
-            val colors = remember(style) { playerColorScheme(style.dark, style.trueBlack, style.accent) }
+            val colors = remember(style) { playerColorScheme(style) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}
@@ -334,7 +335,7 @@ class MainActivity : ComponentActivity() {
             // The logo is only the first frame. Report usable content separately.
             ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
-            MaterialTheme(colorScheme = colors) {
+            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors) {
                 // Exposes test tags to the baseline-profile generator's UiAutomator.
                 Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                     val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()
@@ -403,7 +404,7 @@ class MainActivity : ComponentActivity() {
                             Bundle().apply { putString("edit", row.id); if (hash != null) putString("sha", hash) }); confirmRestore = null }) { Text("Restore original") } },
                         dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } }) }
                 }
-            }
+            } }
         }
     }
     private fun readState(bundle: Bundle) {

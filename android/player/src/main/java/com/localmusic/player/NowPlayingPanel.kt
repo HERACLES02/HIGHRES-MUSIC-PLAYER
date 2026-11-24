@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -41,6 +43,10 @@ import com.localmusic.core.*
 
 private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
 
+/** Cyberpunk accents show album, quality, time codes and active toggles in their cyan info colour; normal themes keep today's colours. */
+@Composable
+private fun infoColor(normal: Color): Color = if (LocalThemeStyle.current?.cyber != null) MaterialTheme.colorScheme.secondary else normal
+
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
@@ -52,7 +58,9 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
     val duration = playback.duration.coerceAtLeast(0)
     val playing = playback.playWhenReady
     val toggle = { if (playing) controller?.pause() else controller?.play(); Unit }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val wash = if (LocalThemeStyle.current?.cyber != null)
+        Modifier.background(Brush.verticalGradient(0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f), 0.5f to Color.Transparent)) else Modifier
+    BoxWithConstraints(Modifier.fillMaxSize().then(wash)) {
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         val panelHeight = maxHeight
@@ -117,7 +125,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
                             modifier = Modifier.clickable(onClickLabel = "Open artist page", onClick = openArtist),
                             style = MaterialTheme.typography.bodyLarge.copy(textAlign=TextAlign.Center),
                             color = MaterialTheme.colorScheme.primary,autoScroll=true)
-                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, modifier = Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum), style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true) }
+                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, modifier = Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum), style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = infoColor(MaterialTheme.colorScheme.onSurfaceVariant),autoScroll=true) }
                     }
 
                 }
@@ -125,16 +133,17 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
         }
         val controls: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = details) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
+            TextButton(onClick = details, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
             PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() },prominent=true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                val toggleColors = IconButtonDefaults.iconToggleButtonColors(checkedContentColor = infoColor(MaterialTheme.colorScheme.primary))
                 IconToggleButton(checked = controller?.shuffleModeEnabled == true,
-                    onCheckedChange = { controller?.shuffleModeEnabled = it }, enabled = ready) {
+                    onCheckedChange = { controller?.shuffleModeEnabled = it }, enabled = ready, colors = toggleColors) {
                     Icon(PlayerGlyph.Shuffle, if (controller?.shuffleModeEnabled == true) "Shuffle on" else "Shuffle off")
                 }
                 val repeat = controller?.repeatMode ?: Player.REPEAT_MODE_OFF
-                IconToggleButton(checked = repeat != Player.REPEAT_MODE_OFF, enabled = ready,
+                IconToggleButton(checked = repeat != Player.REPEAT_MODE_OFF, enabled = ready, colors = toggleColors,
                     onCheckedChange = { controller?.repeatMode = (repeat + 1) % 3 }) {
                     BadgedBox(badge = { if (repeat == Player.REPEAT_MODE_ONE) Badge { Text("1") } }) {
                         Icon(PlayerGlyph.Repeat, "Repeat ${when (repeat) { Player.REPEAT_MODE_ONE -> "one"; Player.REPEAT_MODE_ALL -> "all"; else -> "off" }}")
@@ -229,8 +238,9 @@ private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boo
             }},
             modifier = Modifier.semantics { contentDescription = "Playback position" })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = MaterialTheme.typography.labelSmall)
-            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = MaterialTheme.typography.labelSmall)
+            val timeColor = infoColor(Color.Unspecified)
+            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = MaterialTheme.typography.labelSmall, color = timeColor)
+            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = MaterialTheme.typography.labelSmall, color = timeColor)
         }
     }
 }

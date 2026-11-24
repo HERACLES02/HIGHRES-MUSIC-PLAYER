@@ -14,7 +14,7 @@ object PreferenceCodec {
     }
     fun encode(value:BackupPreferences):String=buildJsonObject{
         put("version",1);put("appearance",value.appearance);put("autoScan",value.autoScan);put("homeGrid",value.homeGrid);put("artworkSize",value.artworkSize)
-        put("accent",value.accent.name)
+        put("accent",value.accent.name);put("cyberAccent",value.cyberAccent.name)
         put("audio",Json.parseToJsonElement(AudioCodec.settings(value.audio)))
         put("widgets",buildJsonObject{put("theme",value.widgets.theme);put("artwork",value.widgets.artwork)})
         put("artists",JsonObject(value.artists.mapValues{(_,p)->buildJsonObject{
@@ -35,7 +35,8 @@ object PreferenceCodec {
         val widgets=o["widgets"]?.jsonObject?.let{WidgetSettings(it.getValue("theme").jsonPrimitive.content,it.getValue("artwork").jsonPrimitive.boolean)}?:WidgetSettings()
         return BackupPreferences(o.getValue("appearance").jsonPrimitive.content,o.getValue("autoScan").jsonPrimitive.boolean,o.getValue("homeGrid").jsonPrimitive.boolean,
             o["audio"]?.let{AudioCodec.settings(it.toString())}?:AudioSettings(),widgets,artists,o["artworkSize"]?.jsonPrimitive?.content ?: "Large",
-            o["accent"]?.jsonPrimitive?.let{require(it.isString){"Accent must be text"};ThemeAccent.valueOf(it.content)}?:ThemeAccent.SAGE)
+            o["accent"]?.jsonPrimitive?.let{require(it.isString){"Accent must be text"};ThemeAccent.valueOf(it.content)}?:ThemeAccent.SAGE,
+            o["cyberAccent"]?.jsonPrimitive?.let{require(it.isString){"Cyberpunk accent must be text"};CyberAccent.valueOf(it.content)}?:CyberAccent.NEON_STATIC)
             .also{require(it.appearance in ThemeStyles.appearances);require(it.artworkSize in setOf("Compact","Large","Full width"))}
     }
 }

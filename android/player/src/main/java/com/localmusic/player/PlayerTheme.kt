@@ -1,8 +1,11 @@
 package com.localmusic.player
 
 import androidx.compose.material3.*
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.localmusic.core.CyberAccent
 import com.localmusic.core.ThemeAccent
+import com.localmusic.core.ThemeStyle
 
 private data class AccentPalette(val primary:Color,val onPrimary:Color,val container:Color,val onContainer:Color)
 private fun palette(accent:ThemeAccent,dark:Boolean):AccentPalette {
@@ -21,6 +24,31 @@ private fun palette(accent:ThemeAccent,dark:Boolean):AccentPalette {
     return AccentPalette(Color(colors[0]),Color(colors[1]),Color(colors[2]),Color(colors[3]))
 }
 internal fun accentPreviewColor(accent:ThemeAccent):Color=palette(accent,false).primary
+internal fun cyberPreviewColor(accent:CyberAccent):Color=when(accent){CyberAccent.NEON_STATIC->Color(0xFFFCEE0A)}
+
+/** Lets screens add touches that only a Cyberpunk accent asks for; null outside the themed activity content. */
+val LocalThemeStyle=staticCompositionLocalOf<ThemeStyle?>{null}
+
+fun playerColorScheme(style:ThemeStyle):ColorScheme=style.cyber?.let(::cyberColorScheme)?:playerColorScheme(style.dark,style.trueBlack,style.accent)
+
+/** Every text role reaches 4.5:1 on the background, cards (surfaceContainer) and dialogs (surfaceContainerHigh).
+ *  The red is lighter than the concept's #FF003C, which is only 4.2:1 on the cards. */
+private fun cyberColorScheme(accent:CyberAccent):ColorScheme=when(accent){
+    CyberAccent.NEON_STATIC->darkColorScheme(
+        primary=Color(0xFFFCEE0A),onPrimary=Color(0xFF0B0C10),primaryContainer=Color(0xFF3D3A00),onPrimaryContainer=Color(0xFFFCEE0A),
+        secondary=Color(0xFF00F0FF),onSecondary=Color(0xFF0B0C10),secondaryContainer=Color(0xFF00393D),onSecondaryContainer=Color(0xFF00F0FF),
+        tertiary=Color(0xFF00F0FF),onTertiary=Color(0xFF0B0C10),tertiaryContainer=Color(0xFF00393D),onTertiaryContainer=Color(0xFF00F0FF),
+        error=Color(0xFFFF4565),onError=Color(0xFF0B0C10),errorContainer=Color(0xFF4D0014),onErrorContainer=Color(0xFFFFD9DE),
+        background=Color(0xFF0B0C10),onBackground=Color(0xFFE8E6DA),surface=Color(0xFF0B0C10),onSurface=Color(0xFFE8E6DA),
+        onSurfaceVariant=Color(0xFFB4B8C5),surfaceVariant=Color(0xFF2A2E3A),
+        surfaceDim=Color(0xFF0B0C10),surfaceBright=Color(0xFF323746),surfaceContainerLowest=Color(0xFF07080B),
+        surfaceContainerLow=Color(0xFF14161D),surfaceContainer=Color(0xFF1C1F29),
+        surfaceContainerHigh=Color(0xFF222531),surfaceContainerHighest=Color(0xFF2A2E3A),
+        outline=Color(0xFF8A8F9E),outlineVariant=Color(0xFF3A3F4E),
+        inverseSurface=Color(0xFFE8E6DA),inverseOnSurface=Color(0xFF1C1F29),inversePrimary=Color(0xFF5C5700),
+        surfaceTint=Color(0xFFFCEE0A)
+    )
+}
 
 /** Neutral surfaces keep accents distinct; AMOLED retains true black base surfaces. */
 fun playerColorScheme(dark:Boolean,amoled:Boolean,accent:ThemeAccent=ThemeAccent.SAGE):ColorScheme {

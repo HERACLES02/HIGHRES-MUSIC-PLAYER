@@ -26,4 +26,9 @@
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
     </style>
+    <style name="PlayerLaunchNeonStatic" parent="PlayerLaunchDark">
+        <item name="android:windowBackground">#0B0C10</item>
+        <item name="android:statusBarColor">#0B0C10</item>
+        <item name="android:navigationBarColor">#0B0C10</item>
+    </style>
 </resources>

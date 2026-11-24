@@ -11,7 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.localmusic.core.CyberAccent
 import com.localmusic.core.ThemeAccent
 import com.localmusic.core.ThemeStyles
 
@@ -47,13 +49,14 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
             HorizontalDivider()
             Text("Accent color",style=MaterialTheme.typography.titleMedium)
             PlayerActions {
-                ThemeAccent.entries.forEach { accent ->
-                    FilterChip(selected=preferences.accent==accent,enabled=ready,
-                        onClick={send(PlaybackService.THEME_ACCENT,Bundle().apply{putString("accent",accent.name)})},
-                        label={Text(accent.label)},leadingIcon={
-                            Box(Modifier.size(14.dp).background(accentPreviewColor(accent),CircleShape)
-                                .border(1.dp,MaterialTheme.colorScheme.outlineVariant,CircleShape))
-                        })
+                if (preferences.appearance == "Cyberpunk") CyberAccent.entries.forEach { accent ->
+                    AccentChip(accent.label, cyberPreviewColor(accent), preferences.cyberAccent == accent, ready) {
+                        send(PlaybackService.CYBER_ACCENT, Bundle().apply { putString("accent", accent.name) })
+                    }
+                } else ThemeAccent.entries.forEach { accent ->
+                    AccentChip(accent.label, accentPreviewColor(accent), preferences.accent == accent, ready) {
+                        send(PlaybackService.THEME_ACCENT, Bundle().apply { putString("accent", accent.name) })
+                    }
                 }
             }
         }
@@ -117,4 +120,11 @@ fun SettingsPanel(library: LibraryState, preferences: MusicPreferences, ready: B
             TextButton(onClick = licenses) { Text("Open-source notices") }
         }
     }
+}
+
+@Composable
+private fun AccentChip(label: String, preview: Color, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, enabled = enabled, onClick = onClick, label = { Text(label) }, leadingIcon = {
+        Box(Modifier.size(14.dp).background(preview, CircleShape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape))
+    })
 }
