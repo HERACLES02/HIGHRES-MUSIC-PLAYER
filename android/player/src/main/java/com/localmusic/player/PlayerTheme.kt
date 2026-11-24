@@ -35,7 +35,7 @@ fun playerColorScheme(style:ThemeStyle):ColorScheme=style.cyber?.let(::cyberColo
  *  Night Ride, Redline and Hazard also reach it on every other surface. Where a concept colour falls short it is shifted:
  *  Neon Static's red (#FF003C is 4.2:1 on cards), Night Ride's pink (#FF2E88 is 4.5:1 only on the background) and
  *  Hazard's red text (#C4001F is 3.9:1 on cards; it stays as the white-text tag colour, primaryContainer). */
-private fun cyberColorScheme(accent:CyberAccent):ColorScheme=when(accent){
+internal fun cyberColorScheme(accent:CyberAccent):ColorScheme=when(accent){
     CyberAccent.NEON_STATIC->darkColorScheme(
         primary=Color(0xFFFCEE0A),onPrimary=Color(0xFF0B0C10),primaryContainer=Color(0xFF3D3A00),onPrimaryContainer=Color(0xFFFCEE0A),
         secondary=Color(0xFF00F0FF),onSecondary=Color(0xFF0B0C10),secondaryContainer=Color(0xFF00393D),onSecondaryContainer=Color(0xFF00F0FF),

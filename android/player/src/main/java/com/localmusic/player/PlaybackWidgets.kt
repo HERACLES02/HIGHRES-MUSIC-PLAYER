@@ -4,7 +4,9 @@ import android.app.PendingIntent
 import android.appwidget.*
 import android.content.*
 import android.content.res.Configuration
+import com.localmusic.core.CyberAccent
 import com.localmusic.core.ThemeStyles
+import androidx.compose.ui.graphics.toArgb
 import android.graphics.*
 import android.net.Uri
 import android.os.Bundle
@@ -41,8 +43,21 @@ class WidgetUpdates(private val context:Context,scope:CoroutineScope){
         }.getOrDefault(WidgetSnapshot())
         suspend fun refresh(context:Context,snapshot:WidgetSnapshot=active?:cached(context)){
             val prefs=(context.applicationContext as MusicApplication).storage.await().backupPreferences()
-            val dark=when(prefs.widgets.theme){"Light"->false;"Dark"->true;else->ThemeStyles.resolve(prefs.appearance,prefs.accent,prefs.cyberAccent,context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES).dark}
-            val color=Color.parseColor(if(dark)"#f0f1e9" else "#242d24")
+            val style=ThemeStyles.resolve(prefs.appearance,prefs.accent,prefs.cyberAccent,context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES)
+            val dark=when(prefs.widgets.theme){"Light"->false;"Dark"->true;else->style.dark}
+            // An explicit widget Light/Dark wins over the app's Cyberpunk look.
+            val cyber=style.cyber.takeIf{prefs.widgets.theme!="Light"&&prefs.widgets.theme!="Dark"}
+            val scheme=cyber?.let(::cyberColorScheme)
+            val color=scheme?.onBackground?.toArgb()?:Color.parseColor(if(dark)"#f0f1e9" else "#242d24")
+            val iconColor=scheme?.primary?.toArgb()?:color
+            // Each drawable is the accent's background colour from cyberColorScheme.
+            val background=when(cyber){
+                CyberAccent.NEON_STATIC->R.drawable.widget_background_neon_static
+                CyberAccent.NIGHT_RIDE->R.drawable.widget_background_night_ride
+                CyberAccent.REDLINE->R.drawable.widget_background_redline
+                CyberAccent.HAZARD->R.drawable.widget_background_hazard
+                null->if(dark)R.drawable.widget_background_dark else R.drawable.widget_background_light
+            }
             val art=if(prefs.widgets.artwork)snapshot.artwork?.let{path->runCatching{
                 val options=BitmapFactory.Options().apply{inJustDecodeBounds=true};BitmapFactory.decodeFile(path,options)
                 require(options.outWidth>0&&options.outHeight>0)
@@ -53,7 +68,7 @@ class WidgetUpdates(private val context:Context,scope:CoroutineScope){
             try{for((provider,layout)in listOf(ArtworkWidget::class.java to R.layout.widget_artwork,CompactWidget::class.java to R.layout.widget_compact)){
                 for(id in manager.getAppWidgetIds(ComponentName(context,provider))){
                     val views=RemoteViews(context.packageName,layout)
-                    views.setInt(R.id.widget_root,"setBackgroundResource",if(dark)R.drawable.widget_background_dark else R.drawable.widget_background_light)
+                    views.setInt(R.id.widget_root,"setBackgroundResource",background)
                     views.setTextViewText(R.id.widget_title,snapshot.title);views.setTextViewText(R.id.widget_artist,snapshot.artist)
                     views.setTextColor(R.id.widget_title,color);views.setTextColor(R.id.widget_artist,color)
                     if(art!=null)views.setImageViewBitmap(R.id.widget_cover,art)else views.setImageViewResource(R.id.widget_cover,R.drawable.ic_local_music)
@@ -62,7 +77,7 @@ class WidgetUpdates(private val context:Context,scope:CoroutineScope){
                     for((view,action,res)in listOf(Triple(R.id.widget_play,"toggle",if(snapshot.playing)R.drawable.ic_widget_pause else R.drawable.ic_widget_play),Triple(R.id.widget_next,"next",R.drawable.ic_widget_next),Triple(R.id.widget_previous,"previous",R.drawable.ic_widget_previous))){
                         if(provider==CompactWidget::class.java&&view==R.id.widget_previous)continue
                         val edge=(24f*context.resources.displayMetrics.density).toInt().coerceIn(24,192)
-                        val drawable=requireNotNull(context.getDrawable(res)).mutate().apply{setTint(color);setBounds(0,0,edge,edge)}
+                        val drawable=requireNotNull(context.getDrawable(res)).mutate().apply{setTint(iconColor);setBounds(0,0,edge,edge)}
                         val bitmap=Bitmap.createBitmap(edge,edge,Bitmap.Config.ARGB_8888).apply{density=context.resources.displayMetrics.densityDpi}
                         drawable.draw(Canvas(bitmap));views.setImageViewBitmap(view,bitmap)
                         views.setContentDescription(view,if(action=="toggle")if(snapshot.playing)"Pause" else "Play" else if(action=="previous")"Previous track"else"Next track")

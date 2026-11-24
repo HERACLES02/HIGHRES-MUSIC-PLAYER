@@ -47,6 +47,15 @@ private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, 
 @Composable
 private fun infoColor(normal: Color): Color = if (LocalThemeStyle.current?.cyber != null) MaterialTheme.colorScheme.secondary else normal
 
+/** The Now Playing screen background. Cyberpunk's faint cyan wash starts at the top of the screen, behind the title bar,
+ *  so it has no seam under the bar. */
+@Composable
+internal fun nowPlayingBackground(): Modifier {
+    val base = Modifier.background(MaterialTheme.colorScheme.background)
+    return if (LocalThemeStyle.current?.cyber != null)
+        base.background(Brush.verticalGradient(0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f), 0.5f to Color.Transparent)) else base
+}
+
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
@@ -58,9 +67,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
     val duration = playback.duration.coerceAtLeast(0)
     val playing = playback.playWhenReady
     val toggle = { if (playing) controller?.pause() else controller?.play(); Unit }
-    val wash = if (LocalThemeStyle.current?.cyber != null)
-        Modifier.background(Brush.verticalGradient(0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f), 0.5f to Color.Transparent)) else Modifier
-    BoxWithConstraints(Modifier.fillMaxSize().then(wash)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         val panelHeight = maxHeight

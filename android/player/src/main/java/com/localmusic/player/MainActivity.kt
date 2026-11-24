@@ -835,7 +835,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     AnimatedVisibility(visible=screen=="Playing",enter=slideInVertically(tween(240)){it},
         exit=if(dismissedByDrag)ExitTransition.None else slideOutVertically(tween(220)){it}) {
         PlayerMotionFrame(true,{dismissedByDrag=true;back()},Modifier.fillMaxSize()) { _ ->
-            Scaffold(modifier=Modifier.fillMaxSize().imePadding(),topBar={
+            Scaffold(modifier=Modifier.fillMaxSize().then(nowPlayingBackground()).imePadding(),
+                containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.onBackground,topBar={
                 Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal=8.dp),
                     horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                     Spacer(Modifier.size(48.dp))
