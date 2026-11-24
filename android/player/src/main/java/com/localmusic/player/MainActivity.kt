@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun backupCommand(action: String, args: Bundle) {
         val connected = controller
-        if (connected == null || !sessionState.optBoolean("ready")) { backupUi.busy = false; backupUi.message = "Wait for the library to open, then try again."; return }
+        if (connected == null || !sessionState.ready) { backupUi.busy = false; backupUi.message = "Wait for the library to open, then try again."; return }
         backupUi.busy = true
         backupUi.message = when(action) {
             PlaybackService.BACKUP_EXPORT -> "Saving and verifying your backup…"
@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
         val ui = playlistUi
         val preview = ui.importPreview.value ?: return
         val connected = controller ?: return
-        if (!sessionState.optBoolean("ready") || ui.fileBusy.value) return
+        if (!sessionState.ready || ui.fileBusy.value) return
         val ids = preview.matches.mapNotNull { it.id }
         if ((ids.isEmpty() && preview.matches.isNotEmpty()) || ui.importName.value.isBlank()) return
         ui.fileBusy.value = true
@@ -277,7 +277,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun send(action: String, args: Bundle = Bundle.EMPTY) {
         val connected = controller
-        if (connected == null || !sessionState.optBoolean("ready")) {
+        if (connected == null || !sessionState.ready) {
             if (pendingCommands.size < 20) pendingCommands.addLast(action to Bundle(args))
             else permissionMessage = "The library is still opening. Wait before sending more commands."
             return
@@ -324,10 +324,10 @@ class MainActivity : ComponentActivity() {
             val colors = remember(dark, preferences.appearance,preferences.accent) { playerColorScheme(dark, preferences.appearance == "AMOLED",preferences.accent) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
-            val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.optString("error")).any{it.isNotBlank()}
-            val showLaunch=!entered && !startupError && (store==null || !sessionState.optBoolean("ready"))
+            val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}
+            val showLaunch=!entered && !startupError && (store==null || !sessionState.ready)
             // The logo is only the first frame. Report usable content separately.
-            ReportDrawnWhen { store!=null && sessionState.optBoolean("ready") && !startupError }
+            ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
             MaterialTheme(colorScheme = colors) {
                 Surface(Modifier.fillMaxSize()) {
@@ -402,7 +402,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun readState(bundle: Bundle) {
         playbackUi.accept(runCatching { JSONObject(bundle.getString("state") ?: "{}") }.getOrDefault(JSONObject()))
-        if (controller != null && sessionState.optBoolean("ready")) {
+        if (controller != null && sessionState.ready) {
             val queued = pendingCommands.toList(); pendingCommands.clear()
             for ((action, args) in queued) send(action, args)
         }
@@ -425,7 +425,7 @@ private fun collectionBundle(tracks: List<Track>, index: Int, resume: Boolean = 
 
 @Composable
 private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, playlistUi: PlaylistUiState, confirmImport: () -> Unit, pickPlaylist: () -> Unit,
-    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: JSONObject, clock:PlaybackUiState, message: String, info: String,
+    exportPlaylist: (Playlist, PlaylistFileFormat) -> Unit, library: LibraryState, controller: MediaController?, playback: PlaybackSnapshot, clock:PlaybackUiState, message: String, info: String,
     send: (String, Bundle) -> Unit, store: MusicStore?, preferences: MusicPreferences, actions: FeatureActions,
     onScan: () -> Unit, onNotifications: () -> Unit, onExport: () -> Unit,
     soulseek: SoulseekTab?, soulseekDownloadsRequest: Int, foreground: Boolean) {
@@ -486,9 +486,9 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     fun playlistArgs(id: PlaylistId, entry: String? = null, shuffle: Boolean = false) = Bundle().apply {
         putString("id", id.value.toString()); entry?.let { putString("entry", it) }; putBoolean("shuffle", shuffle)
     }
-    val ready = playback.optBoolean("ready") && controller != null
+    val ready = playback.ready && controller != null
     val tileMin = 144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)
-    val currentId = playback.optString("currentId")
+    val currentId = playback.currentId
     val selected = runCatching { library.trackById[PlaybackAuthority.id(currentId)] }.getOrNull()
     val current = selected?.takeUnless { library.details[it.id]?.hidden==true }
     LaunchedEffect(selected?.id,library.details[selected?.id]?.hidden) {
@@ -543,10 +543,10 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     }, bottomBar = {
         Column(if (browseSecondary || useRail) Modifier.navigationBarsPadding() else Modifier) {
             if (current != null) CompactPlayer(current, store?.artwork(current.id),
-                playback.optBoolean("playWhenReady"), ready,
-                { if (playback.optLong("duration") > 0) clock.position.longValue.toFloat() / playback.optLong("duration") else 0f },
+                playback.playWhenReady, ready,
+                { if (playback.duration > 0) clock.position.longValue.toFloat() / playback.duration else 0f },
                 open = { keyboard?.hide(); screen = "Playing" },
-                toggle = { if (playback.optBoolean("playWhenReady")) controller?.pause() else controller?.play() },
+                toggle = { if (playback.playWhenReady) controller?.pause() else controller?.play() },
                 previous = { controller?.seekToPrevious() },
                 next = { controller?.seekToNext() })
             if (!browseSecondary && !useRail) PlayerNavigation(browseScreen, soulseekEnabled) { tab -> keyboard?.hide(); screen = tab; mainScreen = tab }
@@ -557,7 +557,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
             if (message.isNotBlank()) PlayerMessage(message)
             if (info.isNotBlank()) PlayerMessage(info, info = true)
             if (library.error.isNotBlank()) PlayerMessage(library.error) { send(PlaybackService.CLEAR_ERROR, Bundle.EMPTY) }
-            if (playback.optString("error").isNotBlank()) PlayerMessage(playback.optString("error"))
+            if (playback.error.isNotBlank()) PlayerMessage(playback.error)
             AnimatedContent(targetState=browseScreen,modifier=Modifier.weight(1f),label="Screen transition",
                 transitionSpec={fadeIn(tween(170)) togetherWith fadeOut(tween(110))}) { displayedScreen ->
             Column(Modifier.fillMaxSize()) {

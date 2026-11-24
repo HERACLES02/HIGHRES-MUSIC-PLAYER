@@ -13,19 +13,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.*
-import org.json.JSONObject
 
 @Composable
-fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:JSONObject,ready:Boolean,
+fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:PlaybackSnapshot,ready:Boolean,
     send:(String,Bundle)->Unit,openPlaying:()->Unit,clear:()->Unit,modifier:Modifier=Modifier) {
     val list=rememberLazyListState()
-    fun entries(tracks:String,ids:String):List<Pair<String,Track?>> {
-        val values=playback.optJSONArray(tracks);val keys=playback.optJSONArray(ids)
-        return List(minOf(values?.length() ?: 0,keys?.length() ?: 0)){i->
-            keys!!.getString(i) to runCatching{library.trackById[PlaybackAuthority.id(values!!.getString(i))]}.getOrNull()
+    fun entries(values:List<String>,keys:List<String>):List<Pair<String,Track?>> =
+        List(minOf(values.size,keys.size)){i->
+            keys[i] to runCatching{library.trackById[PlaybackAuthority.id(values[i])]}.getOrNull()
         }
-    }
-    val manual=entries("manual","manualIds");val coming=entries("sequence","sequenceIds")
+    val manual=entries(playback.manual,playback.manualIds);val coming=entries(playback.sequence,playback.sequenceIds)
     val tracks=(manual+coming).toMap()
     fun move(id:String,index:Int)=send(PlaybackService.QUEUE_MOVE,Bundle().apply{putString("entry",id);putInt("index",index)})
     val manualOrder=rememberEntryReorder(manual.map{it.first},list,::move)
@@ -36,7 +33,7 @@ fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:JS
             if(current!=null)ListItem(modifier=Modifier.combinedClickable(onClick=openPlaying),
                 leadingContent={CoverArt(store?.artwork(current.id),current.tags.title,Modifier.size(48.dp),contentScale=ContentScale.Crop)},
                 headlineContent={MarqueeText(current.tags.title)},
-                supportingContent={Text(collectionDisplayLabel(playback.optString("collectionLabel","Library")),maxLines=2)})
+                supportingContent={Text(collectionDisplayLabel(playback.collectionLabel),maxLines=2)})
         }
         item(key="manual-heading"){Text("Queued by you",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(vertical=12.dp))}
         if(manual.isEmpty())item(key="empty-manual"){Text("No manually queued songs. Use a song’s menu to add one.")}
@@ -47,8 +44,8 @@ fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:JS
                 move={move(id,it)},remove={send(PlaybackService.QUEUE_REMOVE,Bundle().apply{putString("entry",id)})},
                 handle={EntryDragHandle(id,index,manualOrder.ids.size,manualOrder,ready,::move)})
         }
-        if(playback.optInt("manualCount")>0)item(key="clear"){TextButton(onClick=clear,enabled=ready){Text("Clear queue")}}
-        if(playback.optInt("manualCount")>60)item(key="manual-limit"){Text("${playback.optInt("manualCount")} queued songs (first 60 shown)",style=MaterialTheme.typography.bodySmall)}
+        if(playback.manualCount>0)item(key="clear"){TextButton(onClick=clear,enabled=ready){Text("Clear queue")}}
+        if(playback.manualCount>60)item(key="manual-limit"){Text("${playback.manualCount} queued songs (first 60 shown)",style=MaterialTheme.typography.bodySmall)}
         item(key="coming-heading"){Text("Coming up",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(vertical=12.dp))}
         itemsIndexed(comingOrder.ids,key={_,id->id}){index,id->
             QueueEntryRow(tracks[id],store,ready,index,comingOrder.ids.size,
@@ -56,8 +53,8 @@ fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:JS
                 play={send(PlaybackService.QUEUE_PLAY,Bundle().apply{putString("entry",id)})},move={move(id,it)},
                 handle={EntryDragHandle(id,index,comingOrder.ids.size,comingOrder,ready,::move)})
         }
-        item(key="remaining"){Text(countLabel(playback.optInt("sequenceCount"),"song")+" remaining"+
-            if(playback.optInt("sequenceCount")>60)" (first 60 shown)"else "",style=MaterialTheme.typography.bodySmall)}
+        item(key="remaining"){Text(countLabel(playback.sequenceCount,"song")+" remaining"+
+            if(playback.sequenceCount>60)" (first 60 shown)"else "",style=MaterialTheme.typography.bodySmall)}
     }
 }
 

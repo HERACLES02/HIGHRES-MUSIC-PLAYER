@@ -29,6 +29,7 @@ object UiStateChecks {
         verify(playback.position.longValue==350L && playback.sleepRemaining.longValue==4750L,"Clock values still advance")
         playback.accept(JSONObject("""{"currentId":"one","position":350,"manualIds":["b","a"]}"""))
         verify(playback.snapshot!==sameSong,"Reorders invalidate the cached browse snapshot")
+        verify(playback.snapshot.currentId=="one" && playback.snapshot.manualIds==listOf("b","a") && playback.snapshot.sleepMode=="OFF","Typed snapshot reads fields and defaults")
         try {
             store.setPreferences("Light",original.autoScan)
             store.setAccent(ThemeAccent.VIOLET)
