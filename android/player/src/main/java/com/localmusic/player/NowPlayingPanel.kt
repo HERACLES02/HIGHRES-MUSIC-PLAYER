@@ -140,7 +140,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
         }
         val controls: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = details, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
+            TextButton(onClick = details, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) { Text(PlaybackPresentation.quality(track.audio), style = readoutStyle(MaterialTheme.typography.labelMedium)) }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
             PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() },prominent=true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
@@ -246,8 +246,8 @@ private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boo
             modifier = Modifier.semantics { contentDescription = "Playback position" })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             val timeColor = infoColor(Color.Unspecified)
-            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = MaterialTheme.typography.labelSmall, color = timeColor)
-            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = MaterialTheme.typography.labelSmall, color = timeColor)
+            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = readoutStyle(MaterialTheme.typography.labelSmall), color = timeColor)
+            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = readoutStyle(MaterialTheme.typography.labelSmall), color = timeColor)
         }
     }
 }

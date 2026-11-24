@@ -20,8 +20,12 @@ fun themeStyleChecks() {
         verify(redline.cyber == CyberAccent.REDLINE && redline.dark && redline.trueBlack, "Cyberpunk + Redline is dark and true black (system dark=$systemDark)")
         val hazard = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.HAZARD, systemDark)
         verify(hazard.cyber == CyberAccent.HAZARD && !hazard.dark && !hazard.trueBlack, "Cyberpunk + Hazard is light (system dark=$systemDark)")
+        verify(neon.font == ThemeFont.CHAKRA_PETCH, "Neon Static uses Chakra Petch (system dark=$systemDark)")
+        verify(nightRide.font == ThemeFont.RAJDHANI, "Night Ride uses Rajdhani (system dark=$systemDark)")
+        verify(redline.font == ThemeFont.SHARE_TECH_MONO, "Redline uses Share Tech Mono (system dark=$systemDark)")
+        verify(hazard.font == ThemeFont.CHAKRA_PETCH, "Hazard uses Chakra Petch (system dark=$systemDark)")
         for (style in listOf(neon, nightRide, redline, hazard))
-            verify(style.accent == accent && style.font == ThemeFont.DEFAULT && style.corners == ThemeCorners.ROUNDED, "${style.cyber} keeps the normal accent, default font and rounded corners for now")
+            verify(style.accent == accent && style.corners == ThemeCorners.ROUNDED, "${style.cyber} keeps the normal accent and rounded corners for now")
     }
     verify(CyberAccent.entries.map { it.label } == listOf("Neon Static", "Night Ride", "Redline", "Hazard"), "Cyberpunk offers Neon Static, Night Ride, Redline and Hazard")
     for (appearance in ThemeStyles.appearances - "Cyberpunk") for (systemDark in listOf(true, false)) for (chosen in ThemeAccent.entries) {

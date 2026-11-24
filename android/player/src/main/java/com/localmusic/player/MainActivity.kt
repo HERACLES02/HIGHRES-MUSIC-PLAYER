@@ -298,6 +298,9 @@ class MainActivity : ComponentActivity() {
             launchStyle.trueBlack->R.style.PlayerLaunchBlack
             launchStyle.dark->R.style.PlayerLaunchDark else->R.style.PlayerLaunchLight})
         super.onCreate(savedInstanceState)
+        // Draw behind the status bar on every Android version, as Android 15+ already forces, so the
+        // Now Playing background reaches the top of the screen instead of meeting a flat bar.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         if (savedInstanceState == null && intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
         fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
         savedInstanceState?.getString("writeAction")?.let { action ->
@@ -331,6 +334,7 @@ class MainActivity : ComponentActivity() {
             val style = ThemeStyles.resolve(preferences.appearance, preferences.accent, preferences.cyberAccent, isSystemInDarkTheme())
             val dark = style.dark
             val colors = remember(style) { playerColorScheme(style) }
+            val typography = remember(style.font) { playerTypography(style.font) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}
@@ -338,14 +342,14 @@ class MainActivity : ComponentActivity() {
             // The logo is only the first frame. Report usable content separately.
             ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
-            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors) {
+            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors, typography = typography) {
                 // Exposes test tags to the baseline-profile generator's UiAutomator.
                 Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                     val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()
                     SideEffect {
                         @Suppress("DEPRECATION")
                         if (Build.VERSION.SDK_INT < 35) {
-                            window.statusBarColor = barColor
+                            window.statusBarColor = android.graphics.Color.TRANSPARENT
                             window.navigationBarColor = barColor
                         }
                         WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -935,7 +939,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     if (licenses) {
         val context = androidx.compose.ui.platform.LocalContext.current
         var notice by remember { mutableStateOf("Loading notices…") }
-        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
+        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt", "CYBERPUNK-FONTS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
         AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Open-source notices") }, text = { Text(notice, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })
     }
