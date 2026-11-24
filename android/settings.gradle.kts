@@ -7,4 +7,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "MusicPlayerAndroid"
 include(":usb-core", ":app", ":player-core", ":player-data")
-include(":player")
+include(":player", ":baselineprofile")

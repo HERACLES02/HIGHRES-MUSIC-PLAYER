@@ -44,6 +44,18 @@ android {
             matchingFallbacks += listOf("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-preview.pro")
         }
+        // Separate package so generating the baseline profile never touches the installed app or its data.
+        // Unminified so the profile names real classes; R8 rewrites them for release.
+        create("profileGen") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".profilegen"
+            versionNameSuffix = "-profilegen"
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isProfileable = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
@@ -67,4 +79,5 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 }

@@ -1,5 +1,5 @@
 @file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 package com.localmusic.player
 
 import android.Manifest
@@ -34,6 +34,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -330,7 +333,8 @@ class MainActivity : ComponentActivity() {
             ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
             MaterialTheme(colorScheme = colors) {
-                Surface(Modifier.fillMaxSize()) {
+                // Exposes test tags to the baseline-profile generator's UiAutomator.
+                Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                     val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()
                     SideEffect {
                         @Suppress("DEPRECATION")
@@ -592,7 +596,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                             addCollectionToPlaylist = { openPlaylistPicker(it.map { track -> track.id }) },
                             album = { track -> category = "Albums"; group = LibraryBrowse.albumKey(track) },
                             editTags = { editingIds = listOf(it.id.value.toString()) }) }
-                    } else LazyColumn(Modifier.weight(1f), state = libraryScroll, contentPadding = PaddingValues(20.dp),
+                    } else LazyColumn(Modifier.weight(1f).testTag("libraryList"), state = libraryScroll, contentPadding = PaddingValues(20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item(key = "search") {
                             MusicSearchField(search,{search=it},"Search your library",Modifier.focusRequester(searchFocus))
