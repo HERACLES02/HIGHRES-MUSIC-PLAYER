@@ -7,6 +7,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -146,7 +147,7 @@ fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, 
             Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).clickable(onClickLabel = "Open Now Playing", onClick = open).padding(4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CoverArt(art, track.tags.title, Modifier.size(44.dp))
+                    CoverArt(art, track.tags.title, Modifier.size(44.dp), contentScale = ContentScale.Crop)
                     Column(Modifier.weight(1f)) {
                         MarqueeText(track.tags.title,
                             style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,autoScroll=true)

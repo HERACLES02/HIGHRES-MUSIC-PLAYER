@@ -934,7 +934,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     modifier:Modifier=Modifier,handle:@Composable ()->Unit={},play: () -> Unit, move: (Int) -> Unit, remove: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     ListItem(modifier = modifier.combinedClickable(onClick = { if (track?.availability == Availability.AVAILABLE) play() }, onLongClickLabel = "Playlist entry options", onLongClick = { menu = true }),
-        leadingContent = { CoverArt(art, track?.tags?.title ?: "Unavailable song", Modifier.size(48.dp)) },
+        leadingContent = { CoverArt(art, track?.tags?.title ?: "Unavailable song", Modifier.size(48.dp), contentScale = ContentScale.Crop) },
         headlineContent = { MarqueeText(track?.tags?.title ?: "Unavailable song") },
         supportingContent = { Text(if (track == null) "Not in the library yet; scan again or remove this entry."
             else artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -954,7 +954,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     ListItem(modifier = Modifier.combinedClickable(enabled = ready,
         onClick = { if (selected != null) toggle?.invoke() else if (track.availability == Availability.AVAILABLE) play() },
         onLongClickLabel = "Song options", onLongClick = { menu.value = true }),
-        leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
+        leadingContent = { if (selected != null) Checkbox(selected, { toggle?.invoke() }) else CoverArt(art, track.tags.title, Modifier.size(48.dp), contentScale = ContentScale.Crop) },
         headlineContent = { MarqueeText(track.tags.title) },
         supportingContent = { Text(artist(track) + if (track.availability != Availability.AVAILABLE) " · Unavailable" else "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags) })

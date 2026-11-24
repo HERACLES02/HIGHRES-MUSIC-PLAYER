@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,7 +81,7 @@ fun ArtistPage(name:String,tracks:List<Track>,profile:ArtistProfile?,store:Music
         items(tracks,key={it.id.value.toString()}){track->
             val menu=remember(track.id){mutableStateOf(false)}
             ListItem(modifier=Modifier.combinedClickable(enabled=ready,onClick={if(track.availability==Availability.AVAILABLE)play(tracks,tracks.indexOf(track),false)},onLongClickLabel="Song options",onLongClick={menu.value=true}),
-            leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp))},headlineContent={MarqueeText(track.tags.title)},
+            leadingContent={CoverArt(store?.artwork(track.id),track.tags.title,Modifier.size(48.dp),contentScale=ContentScale.Crop)},headlineContent={MarqueeText(track.tags.title)},
             supportingContent={MarqueeText(track.tags.album.orEmpty())},trailingContent={TrackMenu(track,ready,send,{addToPlaylist(track)},{details(track)},menu,editTags?.let{{it(track)}})})}
     }
     if(editingNote)AlertDialog(onDismissRequest={editingNote=false},title={Text("Artist note")},text={OutlinedTextField(note,{note=it.take(6000)},modifier=Modifier.fillMaxWidth().heightIn(min=160.dp,max=340.dp),label={Text("About this artist")})},

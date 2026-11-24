@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localmusic.core.*
@@ -33,7 +34,7 @@ fun QueuePanel(library:LibraryState,store:MusicStore?,current:Track?,playback:JS
         item(key="current") {
             Text("Playing now",style=MaterialTheme.typography.titleLarge,modifier=Modifier.padding(vertical=12.dp))
             if(current!=null)ListItem(modifier=Modifier.combinedClickable(onClick=openPlaying),
-                leadingContent={CoverArt(store?.artwork(current.id),current.tags.title,Modifier.size(48.dp))},
+                leadingContent={CoverArt(store?.artwork(current.id),current.tags.title,Modifier.size(48.dp),contentScale=ContentScale.Crop)},
                 headlineContent={MarqueeText(current.tags.title)},
                 supportingContent={Text(collectionDisplayLabel(playback.optString("collectionLabel","Library")),maxLines=2)})
         }
@@ -66,7 +67,7 @@ private fun QueueEntryRow(track:Track?,store:MusicStore?,ready:Boolean,index:Int
     var menu by remember{mutableStateOf(false)}
     ListItem(modifier=modifier.combinedClickable(enabled=ready,onClick={if(track?.availability==Availability.AVAILABLE)play()},
         onLongClickLabel="Queue options",onLongClick={menu=true}),
-        leadingContent={CoverArt(track?.let{store?.artwork(it.id)},track?.tags?.title ?: "Unavailable song",Modifier.size(44.dp))},
+        leadingContent={CoverArt(track?.let{store?.artwork(it.id)},track?.tags?.title ?: "Unavailable song",Modifier.size(44.dp),contentScale=ContentScale.Crop)},
         headlineContent={MarqueeText(track?.tags?.title ?: "Unavailable song")},
         supportingContent={Text(if(track==null)"Unavailable" else track.tags.artists.joinToString(", ")+
             if(track.availability!=Availability.AVAILABLE)" · Unavailable" else "",maxLines=1,overflow=TextOverflow.Ellipsis)},

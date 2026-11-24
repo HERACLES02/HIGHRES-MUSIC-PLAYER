@@ -38,9 +38,9 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     val commit: (List<FileEditRow>) -> Unit, val undo: (FileEditRow) -> Unit, val recovery: (FileEditRow) -> Unit,
     val createBackup: () -> Unit, val restoreBackup: () -> Unit, val backupBusy: Boolean)
 
-@Composable fun CoverArt(path: String?, title: String, modifier: Modifier = Modifier) {
+@Composable fun CoverArt(path: String?, title: String, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Fit) {
     Surface(modifier, color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-        if (path != null) AsyncImage(model = File(path), contentDescription = "Cover for $title", contentScale = ContentScale.Fit)
+        if (path != null) AsyncImage(model = File(path), contentDescription = "Cover for $title", contentScale = contentScale)
         else Box(Modifier.padding(10.dp), contentAlignment = androidx.compose.ui.Alignment.Center) { Icon(PlayerGlyph.Music, "No cover artwork", Modifier.size(32.dp)) }
     }
 }
