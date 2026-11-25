@@ -22,7 +22,7 @@ try {
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
     if ($ExperimentalDirectUsb) { $verificationArgs += '-PexperimentalDirectUsb=true' }
-    if ($Beta) { $verificationArgs += '-PexperimentalDirectUsb=false', '-Psoulseek=false' }
+    if ($Beta) { $verificationArgs += '-PexperimentalDirectUsb=false', '-Psoulseek=false', '-PpublicSoulseek=false' }
     $variantTask = if ($Beta) { 'Release' } elseif ($OptimizedPreview) { 'Preview' } else { 'Debug' }
     $variantName = $variantTask.ToLowerInvariant()
     $buildTasks = @(':player-core:selfTest', ':player-data:selfTest', ":player:assemble$variantTask", ":player:lint$variantTask")
