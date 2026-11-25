@@ -16,7 +16,8 @@ import java.util.zip.ZipOutputStream
 import kotlinx.serialization.json.*
 
 data class BackupPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
-    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large",val accent:ThemeAccent=ThemeAccent.SAGE)
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large",val accent:ThemeAccent=ThemeAccent.SAGE,
+    val cyberAccent:CyberAccent=CyberAccent.NEON_STATIC)
 data class BackupPlaylist(val playlist: Playlist, val entries: List<PlaylistEntry>)
 data class AppBackup(val tracks: List<Track> = emptyList(), val playlists: List<BackupPlaylist> = emptyList(),
     val lyrics: List<SavedLyrics> = emptyList(), val selections: Map<TrackId, UUID> = emptyMap(),
@@ -44,7 +45,7 @@ object BackupArchive {
         state.playlists.mapNotNull{it.playlist.artwork?.takeIf(String::isNotEmpty)}
     ).toSet()
     fun validate(state:AppBackup){
-        require(state.preferences.appearance in setOf("System","Light","Dark","AMOLED")){"Unknown appearance"}
+        require(state.preferences.appearance in ThemeStyles.appearances){"Unknown appearance"}
         PreferenceCodec.decode(PreferenceCodec.encode(state.preferences))
         require(state.preferences.artists.values.all{p->p.imagePath?.let(::assetName)?:true}){"Unsafe artist artwork reference"}
         require(state.playlists.all{p->p.playlist.artwork?.let(::assetName)?:true}){"Unsafe playlist artwork reference"}

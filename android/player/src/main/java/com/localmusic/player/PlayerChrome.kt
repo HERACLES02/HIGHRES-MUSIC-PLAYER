@@ -2,7 +2,6 @@ package com.localmusic.player
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -151,7 +150,7 @@ fun CompactPlayer(track: Track, art: String?, playing: Boolean, ready: Boolean, 
             enabled = ready,
             onDragStopped = { velocity -> scope.launch { settle(velocity) } }
         ),
-        shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        shape = cornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
         Column {
             Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).testTag("miniPlayer").clickable(onClickLabel = "Open Now Playing", onClick = open).padding(4.dp),
@@ -179,7 +178,7 @@ fun PlaybackButtons(playing: Boolean, ready: Boolean, previous: () -> Unit, togg
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = previous, enabled = ready, modifier = Modifier.size(56.dp)) { Icon(PlayerGlyph.Previous, "Previous track", Modifier.size(32.dp)) }
-        FilledIconButton(onClick = toggle, enabled = ready, modifier = Modifier.size(if(prominent)80.dp else 72.dp)) {
+        FilledIconButton(onClick = toggle, enabled = ready, modifier = Modifier.size(if(prominent)80.dp else 72.dp), shape = roundShape()) {
             Icon(if (playing) PlayerGlyph.Pause else PlayerGlyph.Play, if (playing) "Pause" else "Play", Modifier.size(36.dp))
         }
         IconButton(onClick = next, enabled = ready, modifier = Modifier.size(56.dp)) { Icon(PlayerGlyph.Next, "Next track", Modifier.size(32.dp)) }

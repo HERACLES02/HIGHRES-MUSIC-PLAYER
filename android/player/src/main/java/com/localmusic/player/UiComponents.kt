@@ -16,7 +16,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
@@ -122,7 +121,7 @@ fun PlayerMessage(message: String, info: Boolean = false, dismiss: (() -> Unit)?
 
 @Composable
 fun MusicSearchField(value:String,change:(String)->Unit,hint:String,modifier:Modifier=Modifier) {
-    OutlinedTextField(value,change,singleLine=true,shape=RoundedCornerShape(28.dp),
+    OutlinedTextField(value,change,singleLine=true,shape=cornerShape(28.dp),
         textStyle=MaterialTheme.typography.bodyMedium,
         placeholder={Text(hint,maxLines=1,overflow=TextOverflow.Ellipsis)},
         trailingIcon={if(value.isNotEmpty())IconButton(onClick={change("")}){Icon(PlayerGlyph.Close,"Clear search")}},

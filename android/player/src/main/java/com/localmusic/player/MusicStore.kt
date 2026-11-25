@@ -30,8 +30,9 @@ import kotlinx.coroutines.sync.withLock
 
 private val Context.musicPreferences by preferencesDataStore("local-music-settings")
 data class MusicPreferences(val appearance:String="System",val autoScan:Boolean=false,val homeGrid:Boolean=true,
-    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large",val accent:ThemeAccent=ThemeAccent.SAGE)
-private fun BackupPreferences.forPlayer()=MusicPreferences(appearance,autoScan,homeGrid,audio,widgets,artists,artworkSize,accent)
+    val audio:AudioSettings=AudioSettings(),val widgets:WidgetSettings=WidgetSettings(),val artists:Map<String,ArtistProfile> = emptyMap(),val artworkSize:String="Large",val accent:ThemeAccent=ThemeAccent.SAGE,
+    val cyberAccent:CyberAccent=CyberAccent.NEON_STATIC)
+private fun BackupPreferences.forPlayer()=MusicPreferences(appearance,autoScan,homeGrid,audio,widgets,artists,artworkSize,accent,cyberAccent)
 data class LyricsChoice(val receipt: String, val candidate: LyricsCandidate)
 
 data class LibraryState(val tracks: List<Track> = emptyList(), val continues: Map<TrackId, Long> = emptyMap(),
@@ -112,7 +113,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }.stateIn(scope, SharingStarted.Eagerly, StartupAppearance.read(context))
     suspend fun setPreferences(appearance: String, autoScan: Boolean) {
         AppBackups(context,this).recoverPreferences()
-        require(appearance in setOf("System", "Light", "Dark", "AMOLED"))
+        require(appearance in ThemeStyles.appearances)
         context.musicPreferences.edit { it[stringPreferencesKey("appearance")] = appearance; it[booleanPreferencesKey("autoScan")] = autoScan }
     }
     suspend fun setHomeGrid(grid:Boolean){AppBackups(context,this).recoverPreferences();context.musicPreferences.edit{it[booleanPreferencesKey("homeGrid")]=grid}}
@@ -127,6 +128,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
     }}
     suspend fun setAudio(value:AudioSettings)=updateTools{it.copy(audio=value)}
     suspend fun setAccent(value:ThemeAccent)=updateTools{it.copy(accent=value)}
+    suspend fun setCyberAccent(value:CyberAccent)=updateTools{it.copy(cyberAccent=value)}
     suspend fun setWidgets(value:WidgetSettings)=updateTools{it.copy(widgets=value)}
     suspend fun setArtworkSize(value:String) {
         require(value in setOf("Compact","Large","Full width"))
@@ -139,7 +141,7 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         old.copy(artists=profiles)
     }
     suspend fun restorePreferences(value: BackupPreferences) {
-        require(value.appearance in setOf("System", "Light", "Dark", "AMOLED"))
+        require(value.appearance in ThemeStyles.appearances)
         context.musicPreferences.edit {
             it[stringPreferencesKey("appearance")] = value.appearance
             it[booleanPreferencesKey("autoScan")] = value.autoScan

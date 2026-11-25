@@ -5,8 +5,6 @@ package com.localmusic.player
 import android.os.Bundle
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -15,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -40,6 +40,19 @@ import androidx.media3.session.MediaController
 import com.localmusic.core.*
 
 private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
+
+/** Cyberpunk accents show album, quality, time codes and active toggles in their cyan info colour; normal themes keep today's colours. */
+@Composable
+private fun infoColor(normal: Color): Color = if (LocalThemeStyle.current?.cyber != null) MaterialTheme.colorScheme.secondary else normal
+
+/** The Now Playing screen background. Cyberpunk's faint cyan wash starts at the top of the screen, behind the title bar,
+ *  so it has no seam under the bar. */
+@Composable
+internal fun nowPlayingBackground(): Modifier {
+    val base = Modifier.background(MaterialTheme.colorScheme.background)
+    return if (LocalThemeStyle.current?.cyber != null)
+        base.background(Brush.verticalGradient(0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f), 0.5f to Color.Transparent)) else base
+}
 
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
@@ -109,7 +122,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
                         enabled = ready,
                         onDragStopped = { velocity -> scope.launch { settle(velocity) } }
                     )
-                    .shadow(12.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp)))
+                    .shadow(12.dp, cornerShape(24.dp)).clip(cornerShape(24.dp)))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         MarqueeText(track.tags.title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold,textAlign=TextAlign.Center),autoScroll=true)
@@ -117,7 +130,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
                             modifier = Modifier.clickable(onClickLabel = "Open artist page", onClick = openArtist),
                             style = MaterialTheme.typography.bodyLarge.copy(textAlign=TextAlign.Center),
                             color = MaterialTheme.colorScheme.primary,autoScroll=true)
-                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, modifier = Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum), style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = MaterialTheme.colorScheme.onSurfaceVariant,autoScroll=true) }
+                        track.tags.album?.takeIf { it.isNotBlank() }?.let { MarqueeText(it, modifier = Modifier.clickable(onClickLabel = "Open album", onClick = openAlbum), style = MaterialTheme.typography.bodySmall.copy(textAlign=TextAlign.Center), color = infoColor(MaterialTheme.colorScheme.onSurfaceVariant),autoScroll=true) }
                     }
 
                 }
@@ -125,16 +138,17 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
         }
         val controls: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = details) { Text(PlaybackPresentation.quality(track.audio), style = MaterialTheme.typography.labelMedium) }
+            TextButton(onClick = details, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) { Text(PlaybackPresentation.quality(track.audio), style = readoutStyle(MaterialTheme.typography.labelMedium)) }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
             PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() },prominent=true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                val toggleColors = IconButtonDefaults.iconToggleButtonColors(checkedContentColor = infoColor(MaterialTheme.colorScheme.primary))
                 IconToggleButton(checked = controller?.shuffleModeEnabled == true,
-                    onCheckedChange = { controller?.shuffleModeEnabled = it }, enabled = ready) {
+                    onCheckedChange = { controller?.shuffleModeEnabled = it }, enabled = ready, colors = toggleColors) {
                     Icon(PlayerGlyph.Shuffle, if (controller?.shuffleModeEnabled == true) "Shuffle on" else "Shuffle off")
                 }
                 val repeat = controller?.repeatMode ?: Player.REPEAT_MODE_OFF
-                IconToggleButton(checked = repeat != Player.REPEAT_MODE_OFF, enabled = ready,
+                IconToggleButton(checked = repeat != Player.REPEAT_MODE_OFF, enabled = ready, colors = toggleColors,
                     onCheckedChange = { controller?.repeatMode = (repeat + 1) % 3 }) {
                     BadgedBox(badge = { if (repeat == Player.REPEAT_MODE_ONE) Badge { Text("1") } }) {
                         Icon(PlayerGlyph.Repeat, "Repeat ${when (repeat) { Player.REPEAT_MODE_ONE -> "one"; Player.REPEAT_MODE_ALL -> "all"; else -> "off" }}")
@@ -219,7 +233,7 @@ private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boo
         Slider(value = dragged ?: if (duration > 0) position.coerceAtMost(duration).toFloat() / duration else 0f,
             onValueChange = { dragged = it }, enabled = ready && duration > 0,
             onValueChangeFinished = { dragged?.let { seek((it * duration).toLong()) }; dragged = null },
-            thumb={Box(Modifier.size(16.dp).background(active,CircleShape))},
+            thumb={Box(Modifier.size(16.dp).background(active,handleShape()))},
             track={state->Canvas(Modifier.fillMaxWidth().height(4.dp)){
                 val start=Offset(if(rtl)size.width else 0f,center.y)
                 val end=Offset(if(rtl)0f else size.width,center.y)
@@ -229,8 +243,9 @@ private fun SeekControls(id: TrackId, position: Long, duration: Long, ready: Boo
             }},
             modifier = Modifier.semantics { contentDescription = "Playback position" })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = MaterialTheme.typography.labelSmall)
-            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = MaterialTheme.typography.labelSmall)
+            val timeColor = infoColor(Color.Unspecified)
+            Text(clockText(dragged?.let { (it * duration).toLong() } ?: position), style = readoutStyle(MaterialTheme.typography.labelSmall), color = timeColor)
+            Text(if (duration > 0) clockText(duration) else "Unknown duration", style = readoutStyle(MaterialTheme.typography.labelSmall), color = timeColor)
         }
     }
 }

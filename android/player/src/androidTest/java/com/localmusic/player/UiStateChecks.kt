@@ -36,9 +36,9 @@ object UiStateChecks {
             withTimeout(5000){store.preferences.first{it.appearance=="Light" && it.accent==ThemeAccent.VIOLET}}
             val launch=StartupAppearance.read(context)
             verify(launch.appearance=="Light" && launch.accent==ThemeAccent.VIOLET,"Launch cache must match saved light theme/accent")
-            verify(!StartupAppearance.dark(context,"Light"),"Explicit light theme ignores system night mode")
-            verify(StartupAppearance.dark(context,"Dark"),"Explicit dark theme stays dark")
-            verify(StartupAppearance.dark(context,"AMOLED"),"AMOLED starts dark")
+            verify(!StartupAppearance.style(context,launch).dark,"Explicit light theme ignores system night mode")
+            verify(StartupAppearance.style(context,launch.copy(appearance="Dark")).dark,"Explicit dark theme stays dark")
+            verify(StartupAppearance.style(context,launch.copy(appearance="AMOLED")).let{it.dark&&it.trueBlack},"AMOLED starts dark")
             val ui=store.uiState.first()
             store.scanProgress(123,"Background progress")
             verify(store.uiState.first()==ui,"Per-file progress does not change the visible library")

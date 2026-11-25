@@ -105,6 +105,7 @@ class PlaybackService : MediaLibraryService() {
                         OUTPUT_MODE -> {check(authority.requestOutput(args.getBoolean("direct"))){"Native Direct USB is unavailable in this beta."}}
                         AUDIO_SETTINGS -> {val value=AudioCodec.settings(requireNotNull(args.getString("settings")));store.setAudio(value);authority.audioSettingsChanged(value)}
                         THEME_ACCENT -> store.setAccent(ThemeAccent.valueOf(requireNotNull(args.getString("accent"))))
+                        CYBER_ACCENT -> store.setCyberAccent(CyberAccent.valueOf(requireNotNull(args.getString("accent"))))
                         WIDGET_SETTINGS -> {store.setWidgets(WidgetSettings(args.getString("theme")?:"Match app",args.getBoolean("artwork",true)));widgets.invalidate();publish()}
                         WIDGET_CONTROL -> when(args.getString("control")){
                             "toggle"->if(authority.playWhenReady)authority.pause()else{
@@ -410,6 +411,7 @@ class PlaybackService : MediaLibraryService() {
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
         const val AUDIO_INFO="com.localmusic.player.AUDIO_INFO"
         const val THEME_ACCENT="com.localmusic.player.THEME_ACCENT"
+        const val CYBER_ACCENT="com.localmusic.player.CYBER_ACCENT"
         const val QUEUE_PLAY="com.localmusic.player.QUEUE_PLAY"
         const val WIDGET_SETTINGS="com.localmusic.player.WIDGET_SETTINGS"
         const val WIDGET_CONTROL="com.localmusic.player.WIDGET_CONTROL"
@@ -467,7 +469,7 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
         const val OUTPUT_MODE="com.localmusic.player.OUTPUT_MODE"
-        val ACTIONS = setOf(OUTPUT_MODE,SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
+        val ACTIONS = setOf(OUTPUT_MODE,SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,CYBER_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, PLAYLIST_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

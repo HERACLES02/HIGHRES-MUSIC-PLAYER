@@ -22,7 +22,6 @@ import androidx.compose.foundation.*
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -295,9 +294,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         StartupTiming.mark("activity_create")
         val launch=StartupAppearance.read(this)
-        setTheme(if(launch.appearance=="AMOLED")R.style.PlayerLaunchBlack
-            else if(StartupAppearance.dark(this,launch.appearance))R.style.PlayerLaunchDark else R.style.PlayerLaunchLight)
+        val launchStyle=StartupAppearance.style(this,launch)
+        // Redline reuses the true-black launch style.
+        setTheme(when{launchStyle.cyber==CyberAccent.NEON_STATIC->R.style.PlayerLaunchNeonStatic
+            launchStyle.cyber==CyberAccent.NIGHT_RIDE->R.style.PlayerLaunchNightRide
+            launchStyle.cyber==CyberAccent.HAZARD->R.style.PlayerLaunchHazard
+            launchStyle.trueBlack->R.style.PlayerLaunchBlack
+            launchStyle.dark->R.style.PlayerLaunchDark else->R.style.PlayerLaunchLight})
         super.onCreate(savedInstanceState)
+        // Draw behind the status bar on every Android version, as Android 15+ already forces, so the
+        // Now Playing background reaches the top of the screen instead of meeting a flat bar.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         if (savedInstanceState == null && intent.action == SOULSEEK_DOWNLOADS) soulseekDownloadsRequest++
         fullyDrawnReporter.addOnReportDrawnListener { StartupTiming.mark("library_screen_drawn") }
         savedInstanceState?.getString("writeAction")?.let { action ->
@@ -328,8 +335,11 @@ class MainActivity : ComponentActivity() {
             }
             val initialAppearance=remember{launch}
             val preferences = store?.preferences?.collectAsState()?.value ?: initialAppearance
-            val dark = when (preferences.appearance) { "Light" -> false; "Dark", "AMOLED" -> true; else -> isSystemInDarkTheme() }
-            val colors = remember(dark, preferences.appearance,preferences.accent) { playerColorScheme(dark, preferences.appearance == "AMOLED",preferences.accent) }
+            val style = ThemeStyles.resolve(preferences.appearance, preferences.accent, preferences.cyberAccent, isSystemInDarkTheme())
+            val dark = style.dark
+            val colors = remember(style) { playerColorScheme(style) }
+            val typography = remember(style.font) { playerTypography(style.font) }
+            val shapes = remember(style.corners) { playerShapes(style.corners) }
             val library = store?.uiState?.collectAsState(initial=store?.state?.value ?: LibraryState())?.value ?: LibraryState()
             var entered by remember { mutableStateOf(false) }
             val startupError=listOf(connectionError,openError,permissionMessage,library.error,sessionState.error).any{it.isNotBlank()}
@@ -337,14 +347,14 @@ class MainActivity : ComponentActivity() {
             // The logo is only the first frame. Report usable content separately.
             ReportDrawnWhen { store!=null && sessionState.ready && !startupError }
             SideEffect { if(!showLaunch)entered=true }
-            MaterialTheme(colorScheme = colors) {
+            CompositionLocalProvider(LocalThemeStyle provides style) { MaterialTheme(colorScheme = colors, typography = typography, shapes = shapes) {
                 // Exposes test tags to the baseline-profile generator's UiAutomator.
                 Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }) {
                     val barColor = if(showLaunch)ContextCompat.getColor(this,R.color.player_launch_background) else MaterialTheme.colorScheme.background.toArgb()
                     SideEffect {
                         @Suppress("DEPRECATION")
                         if (Build.VERSION.SDK_INT < 35) {
-                            window.statusBarColor = barColor
+                            window.statusBarColor = android.graphics.Color.TRANSPARENT
                             window.navigationBarColor = barColor
                         }
                         WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -406,7 +416,7 @@ class MainActivity : ComponentActivity() {
                             Bundle().apply { putString("edit", row.id); if (hash != null) putString("sha", hash) }); confirmRestore = null }) { Text("Restore original") } },
                         dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } }) }
                 }
-            }
+            } }
         }
     }
     private fun readState(bundle: Bundle) {
@@ -759,7 +769,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                             item { TextButton(onClick = { smartPlaylistDetail = null }) { Text("All playlists") } }
                             item {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(Modifier.size(88.dp), shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                                    Surface(Modifier.size(88.dp), shape = cornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                             Icon(icon, contentDescription = null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
                                         }
@@ -1024,7 +1034,8 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     AnimatedVisibility(visible=screen=="Playing",enter=slideInVertically(tween(240)){it},
         exit=if(dismissedByDrag)ExitTransition.None else slideOutVertically(tween(220)){it}) {
         PlayerMotionFrame(true,{dismissedByDrag=true;back()},Modifier.fillMaxSize()) { _ ->
-            Scaffold(modifier=Modifier.fillMaxSize().imePadding(),topBar={
+            Scaffold(modifier=Modifier.fillMaxSize().then(nowPlayingBackground()).imePadding(),
+                containerColor=Color.Transparent,contentColor=MaterialTheme.colorScheme.onBackground,topBar={
                 Row(Modifier.fillMaxWidth().statusBarsPadding().height(48.dp).padding(horizontal=8.dp),
                     horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
                     Spacer(Modifier.size(48.dp))
@@ -1123,7 +1134,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     if (licenses) {
         val context = androidx.compose.ui.platform.LocalContext.current
         var notice by remember { mutableStateOf("Loading notices…") }
-        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
+        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt", "CYBERPUNK-FONTS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
         AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Open-source notices") }, text = { Text(notice, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })
     }

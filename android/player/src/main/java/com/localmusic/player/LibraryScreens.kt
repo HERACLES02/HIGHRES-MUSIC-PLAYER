@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -188,7 +187,7 @@ fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifi
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { covers = emptyList() } // Artwork is optional; the saved playlist remains available.
     }
-        Surface(modifier.clearAndSetSemantics { contentDescription = "Cover for ${playlist.name}" }, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+        Surface(modifier.clearAndSetSemantics { contentDescription = "Cover for ${playlist.name}" }, shape = cornerShape(18.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
             if (covers.isEmpty()) Box(Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer))), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(PlayerGlyph.Playlists, null, Modifier.size(52.dp))
@@ -234,7 +233,7 @@ fun CollectionCard(title: String, art: String?, count: Int, kind: String, ready:
     extraActions: List<Pair<String, () -> Unit>> = emptyList(), modifier: Modifier = Modifier) {
     var menu by remember(title, kind) { mutableStateOf(false) }
     Column(modifier.fillMaxWidth().combinedClickable(onClick = open, onLongClickLabel = "$kind options", onLongClick = { menu = true })) {
-        CoverArt(art, title, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+        CoverArt(art, title, Modifier.fillMaxWidth().aspectRatio(1f).clip(cornerShape(12.dp)), contentScale = ContentScale.Crop)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(top = 6.dp)) {
                 MarqueeText(title, style = MaterialTheme.typography.titleSmall)
@@ -271,7 +270,7 @@ fun SmartPlaylistCard(
     Column(modifier.fillMaxWidth().clickable(onClick = open)) {
         Surface(
             Modifier.fillMaxWidth().aspectRatio(1f),
-            shape = RoundedCornerShape(18.dp),
+            shape = cornerShape(18.dp),
             color = MaterialTheme.colorScheme.secondaryContainer
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

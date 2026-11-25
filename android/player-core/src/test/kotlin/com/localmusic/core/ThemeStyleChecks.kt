@@ -1,0 +1,39 @@
+package com.localmusic.core
+
+fun themeStyleChecks() {
+    fun verify(ok: Boolean, label: String) = check(ok) { "Theme style: $label" }
+    verify(ThemeStyles.appearances == listOf("System", "Light", "Dark", "AMOLED", "Cyberpunk"), "allowed appearances are exactly System, Light, Dark, AMOLED, Cyberpunk")
+
+    val accent = ThemeAccent.OCEAN
+    val cyber = CyberAccent.NEON_STATIC
+    verify(ThemeStyles.resolve("System", accent, cyber, systemDark = true).let { it.dark && !it.trueBlack }, "System follows a dark phone")
+    verify(ThemeStyles.resolve("System", accent, cyber, systemDark = false).let { !it.dark && !it.trueBlack }, "System follows a light phone")
+    for (systemDark in listOf(true, false)) {
+        verify(ThemeStyles.resolve("Light", accent, cyber, systemDark).let { !it.dark && !it.trueBlack }, "Light stays light (system dark=$systemDark)")
+        verify(ThemeStyles.resolve("Dark", accent, cyber, systemDark).let { it.dark && !it.trueBlack }, "Dark stays dark (system dark=$systemDark)")
+        verify(ThemeStyles.resolve("AMOLED", accent, cyber, systemDark).let { it.dark && it.trueBlack }, "AMOLED is dark and true black (system dark=$systemDark)")
+        val neon = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.NEON_STATIC, systemDark)
+        verify(neon.cyber == CyberAccent.NEON_STATIC && neon.dark && !neon.trueBlack, "Cyberpunk + Neon Static is dark, not true black (system dark=$systemDark)")
+        val nightRide = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.NIGHT_RIDE, systemDark)
+        verify(nightRide.cyber == CyberAccent.NIGHT_RIDE && nightRide.dark && !nightRide.trueBlack, "Cyberpunk + Night Ride is dark, not true black (system dark=$systemDark)")
+        val redline = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.REDLINE, systemDark)
+        verify(redline.cyber == CyberAccent.REDLINE && redline.dark && redline.trueBlack, "Cyberpunk + Redline is dark and true black (system dark=$systemDark)")
+        val hazard = ThemeStyles.resolve("Cyberpunk", accent, CyberAccent.HAZARD, systemDark)
+        verify(hazard.cyber == CyberAccent.HAZARD && !hazard.dark && !hazard.trueBlack, "Cyberpunk + Hazard is light (system dark=$systemDark)")
+        verify(neon.font == ThemeFont.CHAKRA_PETCH, "Neon Static uses Chakra Petch (system dark=$systemDark)")
+        verify(nightRide.font == ThemeFont.RAJDHANI, "Night Ride uses Rajdhani (system dark=$systemDark)")
+        verify(redline.font == ThemeFont.SHARE_TECH_MONO, "Redline uses Share Tech Mono (system dark=$systemDark)")
+        verify(hazard.font == ThemeFont.CHAKRA_PETCH, "Hazard uses Chakra Petch (system dark=$systemDark)")
+        for (style in listOf(neon, nightRide, redline, hazard)) verify(style.accent == accent, "${style.cyber} keeps the normal accent")
+        verify(neon.corners == ThemeCorners.CUT, "Neon Static has cut corners (system dark=$systemDark)")
+        verify(nightRide.corners == ThemeCorners.ROUNDED, "Night Ride keeps rounded corners (system dark=$systemDark)")
+        verify(redline.corners == ThemeCorners.CUT, "Redline has cut corners (system dark=$systemDark)")
+        verify(hazard.corners == ThemeCorners.CUT, "Hazard has cut corners (system dark=$systemDark)")
+    }
+    verify(CyberAccent.entries.map { it.label } == listOf("Neon Static", "Night Ride", "Redline", "Hazard"), "Cyberpunk offers Neon Static, Night Ride, Redline and Hazard")
+    for (appearance in ThemeStyles.appearances - "Cyberpunk") for (systemDark in listOf(true, false)) for (chosen in ThemeAccent.entries) {
+        val style = ThemeStyles.resolve(appearance, chosen, cyber, systemDark)
+        verify(style.accent == chosen && style.cyber == null, "$appearance uses the chosen normal accent $chosen")
+        verify(style.font == ThemeFont.DEFAULT && style.corners == ThemeCorners.ROUNDED, "$appearance uses the default font and rounded corners")
+    }
+}

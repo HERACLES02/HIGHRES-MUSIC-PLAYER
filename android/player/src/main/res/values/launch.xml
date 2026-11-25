@@ -26,4 +26,19 @@
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
     </style>
+    <style name="PlayerLaunchNeonStatic" parent="PlayerLaunchDark">
+        <item name="android:windowBackground">#0B0C10</item>
+        <item name="android:statusBarColor">#0B0C10</item>
+        <item name="android:navigationBarColor">#0B0C10</item>
+    </style>
+    <style name="PlayerLaunchNightRide" parent="PlayerLaunchDark">
+        <item name="android:windowBackground">#0E0620</item>
+        <item name="android:statusBarColor">#0E0620</item>
+        <item name="android:navigationBarColor">#0E0620</item>
+    </style>
+    <style name="PlayerLaunchHazard" parent="PlayerLaunchLight">
+        <item name="android:windowBackground">#F3E600</item>
+        <item name="android:statusBarColor">#F3E600</item>
+        <item name="android:navigationBarColor">#F3E600</item>
+    </style>
 </resources>
