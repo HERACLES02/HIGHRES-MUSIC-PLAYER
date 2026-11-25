@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,27 +38,26 @@ fun TrackMenu(track: Track, ready: Boolean, send: (String, Bundle) -> Unit, addT
                 DropdownMenuItem(text = { Text("Edit tags") }, onClick = { open = false; editTags() })
             }
             DropdownMenuItem(text = { Text("Details") }, onClick = { open = false; details() })
-            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) })
-            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) })
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            val destructive = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error)
+            DropdownMenuItem(text = { Text("Remove from library...") }, onClick = { open=false;removeSong(track,false) }, colors = destructive)
+            DropdownMenuItem(text = { Text("Delete file from phone...") }, onClick = { open=false;removeSong(track,true) }, colors = destructive)
         }
     }
 }
 
 @Composable
-fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
+fun HomeLibraryScreen(library: LibraryState, browse: LibraryBrowse, store: MusicStore?, grid: Boolean, search: String, ready: Boolean,
     onSearch: (String) -> Unit, changeGrid: (Boolean) -> Unit, scan: () -> Unit,
     play: (List<Track>, Int, Boolean, String) -> Unit, send: (String, Bundle) -> Unit,
     addToPlaylist: (Track) -> Unit, details: (Track) -> Unit, playlistCard: @Composable (Playlist, Int) -> Unit, allPlaylists: () -> Unit, allSongs: () -> Unit,
     editTags: ((Track) -> Unit)? = null) {
-    val tracks = remember(library.tracks, search) { library.tracks.filter {
-        (it.tags.title + " " + it.tags.artists.joinToString(" ") + " " + it.tags.album.orEmpty()).contains(search, true)
-    }.sortedByDescending { it.addedAtMs } }
+    val tracks = remember(browse, search) { browse.search(search, BrowseOrder.NEWEST) }
     val continues = remember(tracks, library.continues) { tracks.filter { it.id in library.continues && it.availability == Availability.AVAILABLE } }
     LazyVerticalGrid(columns = if (grid) GridCells.Adaptive(144.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.4f)) else GridCells.Fixed(1), modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Your music, offline", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            Text("Make time for a good song.", style = MaterialTheme.typography.headlineSmall)
+        item(span = { GridItemSpan(maxLineSpan) }) { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Make time for a good song.", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             MusicSearchField(search,onSearch,"Search your music")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(countLabel(tracks.size, "song"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
@@ -78,7 +78,7 @@ fun HomeLibraryScreen(library: LibraryState, store: MusicStore?, grid: Boolean, 
                         ElevatedCard(modifier = Modifier.width(180.dp).combinedClickable(enabled = ready,
                             onClick = { play(listOf(track), 0, true, "Continue listening") },
                             onLongClickLabel = "Song options", onLongClick = { menu.value = true })) {
-                            CoverArt(store?.artwork(track.id), track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
+                            CoverArt(store?.artwork(track.id), track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop)
                             Column(Modifier.padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.weight(1f)) { MarqueeText(track.tags.title, style = MaterialTheme.typography.titleSmall) }
@@ -133,7 +133,7 @@ private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean,
     val menu = remember(track.id) { mutableStateOf(false) }
     val enabled = ready && track.availability == Availability.AVAILABLE
     if (grid) Column(Modifier.fillMaxWidth().combinedClickable(enabled = ready, onClick = { if (enabled) play() }, onLongClickLabel = "Song options", onLongClick = { menu.value = true })) {
-        CoverArt(art, track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f))
+        CoverArt(art, track.tags.title, Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(top = 8.dp)) {
                 MarqueeText(track.tags.title, style = MaterialTheme.typography.titleSmall)
@@ -143,7 +143,7 @@ private fun HomeTrack(track: Track, art: String?, grid: Boolean, ready: Boolean,
             TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags)
         }
     } else ListItem(modifier = Modifier.combinedClickable(enabled = ready, onClick = { if (enabled) play() }, onLongClickLabel = "Song options", onLongClick = { menu.value = true }),
-        leadingContent = { CoverArt(art, track.tags.title, Modifier.size(48.dp)) },
+        leadingContent = { CoverArt(art, track.tags.title, Modifier.size(48.dp), contentScale = ContentScale.Crop) },
         headlineContent = { MarqueeText(track.tags.title) },
         supportingContent = { MarqueeText(track.tags.artists.joinToString(", ") + if (enabled) "" else " · Unavailable") },
         trailingContent = { TrackMenu(track, ready, send, addToPlaylist, details, menu, editTags) })
@@ -195,10 +195,10 @@ fun PlaylistCover(playlist: Playlist, store: MusicStore?, revision: Long, modifi
                     Text(String(Character.toChars(playlist.name.codePointAt(0))).uppercase(), style = MaterialTheme.typography.headlineMedium)
                 }
             }
-            else if (covers.size == 1 || playlist.artwork != null) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize())
+            else if (covers.size == 1 || playlist.artwork != null) CoverArt(covers.first(), playlist.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else Column {
                 repeat(2) { row -> Row(Modifier.weight(1f)) { repeat(2) { column ->
-                    CoverArt(covers.getOrNull((row * 2 + column) % covers.size), playlist.name, Modifier.weight(1f).fillMaxHeight())
+                    CoverArt(covers.getOrNull((row * 2 + column) % covers.size), playlist.name, Modifier.weight(1f).fillMaxHeight(), contentScale = ContentScale.Crop)
                 } } }
             }
         }
@@ -212,7 +212,7 @@ fun CollectionRow(title: String, art: String?, count: Int, kind: String, ready: 
     var menu by remember(title, kind) { mutableStateOf(false) }
     ListItem(modifier = Modifier.combinedClickable(onClick = open,
         onLongClickLabel = "$kind options", onLongClick = { menu = true }),
-        leadingContent = { CoverArt(art, title, Modifier.size(56.dp)) },
+        leadingContent = { CoverArt(art, title, Modifier.size(56.dp), contentScale = ContentScale.Crop) },
         headlineContent = { MarqueeText(title) }, supportingContent = { Text(countLabel(count, "song")) },
         trailingContent = { Box {
             IconButton(onClick = { menu = true }) { Icon(PlayerGlyph.More, "Options for $title") }
@@ -234,7 +234,7 @@ fun CollectionCard(title: String, art: String?, count: Int, kind: String, ready:
     extraActions: List<Pair<String, () -> Unit>> = emptyList(), modifier: Modifier = Modifier) {
     var menu by remember(title, kind) { mutableStateOf(false) }
     Column(modifier.fillMaxWidth().combinedClickable(onClick = open, onLongClickLabel = "$kind options", onLongClick = { menu = true })) {
-        CoverArt(art, title, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)))
+        CoverArt(art, title, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(top = 6.dp)) {
                 MarqueeText(title, style = MaterialTheme.typography.titleSmall)

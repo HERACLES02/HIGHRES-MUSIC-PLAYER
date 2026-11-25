@@ -97,14 +97,15 @@ fun EmptyMusicState(title: String, description: String, action: (@Composable () 
 }
 
 @Composable
-fun PlayerMessage(message: String, dismiss: (() -> Unit)? = null) {
+fun PlayerMessage(message: String, info: Boolean = false, dismiss: (() -> Unit)? = null) {
     var visible by rememberSaveable(message) { mutableStateOf(true) }
     LaunchedEffect(message) { delay(8000); visible=false }
     var expanded by remember(message) { mutableStateOf(false) }
     AnimatedVisibility(visible,enter=fadeIn(),exit=fadeOut()+shrinkVertically()) {
     Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer) {
+        shape = MaterialTheme.shapes.medium,
+        color = if (info) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.errorContainer,
+        contentColor = if (info) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onErrorContainer) {
         Column(Modifier.padding(12.dp)) {
             Text(message, if (expanded) Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()) else Modifier,
                 maxLines = if (expanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,

@@ -54,7 +54,7 @@ data class PeerSearchOptions(
     val includeUnknown: Boolean = false,
     val minMb: String = "",
     val maxMb: String = "",
-    val hideName: String = "",
+    val nameContains: String = "",
     val sort: PeerSearchSort = PeerSearchSort.NAME,
 ) {
     private val minimumBytes = parseMb(minMb)
@@ -65,7 +65,7 @@ data class PeerSearchOptions(
 
     fun matching(collected: List<PeerSearchTrack>): List<PeerSearchTrack> {
         if (invalidSizeRange) return emptyList()
-        val hidden = hideName.trim()
+        val words = nameContains.split(' ').filter { it.isNotBlank() }
         val byName = compareBy<PeerSearchTrack, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
         val order = when (sort) {
             PeerSearchSort.NAME -> byName
@@ -74,7 +74,7 @@ data class PeerSearchOptions(
         }
         return collected.filter { track ->
             (format == null || track.format == format) &&
-                (hidden.isEmpty() || !track.name.contains(hidden, ignoreCase = true)) &&
+                words.all { track.name.contains(it, ignoreCase = true) } &&
                 (minimumBytes == null || BigDecimal.valueOf(track.size) >= minimumBytes) &&
                 (maximumBytes == null || BigDecimal.valueOf(track.size) <= maximumBytes) &&
                 matchesQuality(track)

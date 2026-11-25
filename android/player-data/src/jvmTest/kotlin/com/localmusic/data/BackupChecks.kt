@@ -80,12 +80,12 @@ fun backupArchiveChecks() {
     val artist=com.localmusic.core.ArtistProfile("00000000-0000-0000-0000-000000000005","Mira",biography="Offline biography",imagePath=name,imageCredit="Test creator",savedAtMs=123)
     val prefs=backup.preferences.copy(audio=AudioSettings(true,EqPreset("Test",-2.0),listOf(EqPreset("Saved")),ReplayGainMode.ALBUM,4),artists=mapOf("mira" to artist),widgets=WidgetSettings("Light",false),accent=ThemeAccent.OCEAN)
     val modern=backup.copy(preferences=prefs)
-    verify(BackupArchive.read(encode(BackupBundle(modern,mapOf(name to art))).inputStream()).state==modern,"Archive saves effects, preset bank, widget choice and credited artist with artwork")
+    verify(BackupArchive.read(encode(BackupBundle(modern,mapOf(name to art))).inputStream()).state==modern,"v2 saves effects, preset bank, widget choice and credited artist with artwork")
     val converted=checkNotNull(AudioCodec::class.java.getResourceAsStream("/eq/external-graphic.json")).bufferedReader(Charsets.UTF_8).use{AudioCodec.importPreset(it.readText()).preset}
     val independent=modern.copy(preferences=prefs.copy(artists=mapOf("mira" to artist.copy(providerId="wikipedia:123",biographyUrl="https://en.wikipedia.org/?curid=123")),
         audio=prefs.audio.copy(preset=converted,presets=listOf(converted))),
         lyrics=modern.lyrics.map{it.copy(providerId="lyrics.ovh:fixture",sourceUrl="https://api.lyrics.ovh/v1/Fixture/Title")})
-    verify(BackupArchive.read(encode(BackupBundle(independent,mapOf(name to art))).inputStream()).state==independent,"Archive preserves converted EQ, independent Wikipedia identity and alternate lyric provenance")
+    verify(BackupArchive.read(encode(BackupBundle(independent,mapOf(name to art))).inputStream()).state==independent,"v2 archive preserves converted EQ, independent Wikipedia identity and alternate lyric provenance")
     val storage=java.nio.file.Files.createTempDirectory("backup-artwork-").toFile()
     try {
         val missing=java.io.File(storage,"missing.jpg")

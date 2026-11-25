@@ -22,7 +22,7 @@ try {
     $verificationArgs = @('--offline')
     if ($UpdateDependencyVerification) { $verificationArgs = @('--write-verification-metadata', 'sha256') }
     if ($ExperimentalDirectUsb) { $verificationArgs += '-PexperimentalDirectUsb=true' }
-    if ($Beta) { $verificationArgs += '-PexperimentalDirectUsb=false' }
+    if ($Beta) { $verificationArgs += '-PexperimentalDirectUsb=false', '-Psoulseek=false' }
     $variantTask = if ($Beta) { 'Release' } elseif ($OptimizedPreview) { 'Preview' } else { 'Debug' }
     $variantName = $variantTask.ToLowerInvariant()
     $buildTasks = @(':player-core:selfTest', ':player-data:selfTest', ":player:assemble$variantTask", ":player:lint$variantTask")
@@ -38,7 +38,7 @@ try {
         Write-Host "Unsigned beta APK: $apk"
         return
     }
-    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.2-direct-coverage' } else { 'local-music-0.14.2' }
+    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.4-direct-coverage' } else { 'local-music-0.14.4' }
     $apkName = if ($OptimizedPreview) { "$releaseName-optimized-preview.apk" } else { "$releaseName-debug.apk" }
     $apk = Join-Path $projectRoot "releases/$apkName"
     Copy-Item -LiteralPath (Join-Path $projectRoot "player/build/outputs/apk/$variantName/player-$variantName.apk") -Destination $apk -Force

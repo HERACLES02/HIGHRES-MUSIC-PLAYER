@@ -330,6 +330,6 @@ fun main() {
     expect(!delayed.isRetired(),"Overflowed retirement evidence fails closed")
     val unknown=OutputRetirement();unknown.remember{error("unavailable")}
     expect(!unknown.isRetired(),"Unknown retirement does not permit takeover")
-    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks()
+    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks(); libraryFavoritesChecks(); libraryBrowseChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

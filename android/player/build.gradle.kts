@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 val experimentalDirectUsb=providers.gradleProperty("experimentalDirectUsb").orNull=="true"
+val soulseek=providers.gradleProperty("soulseek").orNull=="true"
 android {
     namespace = "com.localmusic.player"
     compileSdk = 36
@@ -13,8 +14,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
         buildConfigField("boolean", "PUBLIC_SOULSEEK", "false")
-        versionCode = 50
-        versionName = if(experimentalDirectUsb)"0.14.2-direct-coverage" else "0.14.2"
+        versionCode = 52
+        versionName = if(experimentalDirectUsb)"0.14.4-direct-coverage" else "0.14.4"
         buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake {
@@ -30,6 +31,11 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     buildTypes {
         getByName("debug") { versionNameSuffix = "-debug" }
+        getByName("release") {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-preview.pro")
+        }
         create("peerTest") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".peertest"
@@ -57,11 +63,27 @@ android {
             matchingFallbacks += listOf("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-preview.pro")
         }
+        // Separate package so generating the baseline profile never touches the installed app or its data.
+        // Unminified so the profile names real classes; R8 rewrites them for release.
+        create("profileGen") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".profilegen"
+            versionNameSuffix = "-profilegen"
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isProfileable = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-tags/notices"))
-    sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/peer-test/jniLibs"))
+    // Soulseek appears only when its native library is packaged (SoulseekFixture.available).
+    // The normal app leaves it out unless built with -Psoulseek=true; Peer Test builds always carry it.
+    val peerLibs = rootProject.file(".tools/peer-test/jniLibs")
+    (if (soulseek) listOf("main") else listOf("peerTest", "peerPublicTest"))
+        .forEach { sourceSets.getByName(it).jniLibs.srcDir(peerLibs) }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
     sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
     sourceSets.getByName("peerPublicTest") {
@@ -90,4 +112,5 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.7")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 }

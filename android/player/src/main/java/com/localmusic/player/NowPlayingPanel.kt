@@ -38,20 +38,19 @@ import kotlinx.coroutines.launch
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import com.localmusic.core.*
-import org.json.JSONObject
 
 private fun clockText(ms: Long) = "%d:%02d".format(ms.coerceAtLeast(0) / 60000, ms.coerceAtLeast(0) / 1000 % 60)
 
 @Composable
-fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller: MediaController?, ready: Boolean,
+fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
     openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,clock:PlaybackUiState?=null) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
-    val position = (clock?.position?.longValue ?: playback.optLong("position")).coerceAtLeast(0)
-    val duration = playback.optLong("duration").coerceAtLeast(0)
-    val playing = playback.optBoolean("playWhenReady")
+    val position = (clock?.position?.longValue ?: 0).coerceAtLeast(0)
+    val duration = playback.duration.coerceAtLeast(0)
+    val playing = playback.playWhenReady
     val toggle = { if (playing) controller?.pause() else controller?.play(); Unit }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp && maxWidth > maxHeight
@@ -154,8 +153,8 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
                     }
                 }
             }
-            when (playback.optString("sleepMode", "OFF")) {
-                "IMMEDIATE" -> Text("Sleep timer · ${clockText(clock?.sleepRemaining?.longValue ?: playback.optLong("sleepRemaining"))} left", style = MaterialTheme.typography.labelMedium)
+            when (playback.sleepMode) {
+                "IMMEDIATE" -> Text("Sleep timer · ${clockText(clock?.sleepRemaining?.longValue ?: 0)} left", style = MaterialTheme.typography.labelMedium)
                 "END_OF_TRACK" -> Text("Sleep timer · after this track", style = MaterialTheme.typography.labelMedium)
             }
             }
@@ -196,8 +195,8 @@ fun NowPlayingPanel(track: Track, art: String?, playback: JSONObject, controller
     }
     if (timerOpen) AlertDialog(onDismissRequest = { timerOpen = false }, title = { Text("Sleep timer") },
         text = { Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
-            Text(when (playback.optString("sleepMode", "OFF")) {
-                "IMMEDIATE" -> "Pausing in ${clockText(clock?.sleepRemaining?.longValue ?: playback.optLong("sleepRemaining"))}."
+            Text(when (playback.sleepMode) {
+                "IMMEDIATE" -> "Pausing in ${clockText(clock?.sleepRemaining?.longValue ?: 0)}."
                 "END_OF_TRACK" -> "Pausing after this track ends."
                 else -> "No timer set."
             })
