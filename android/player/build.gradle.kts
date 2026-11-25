@@ -5,6 +5,7 @@ plugins {
 }
 val experimentalDirectUsb=providers.gradleProperty("experimentalDirectUsb").orNull=="true"
 val soulseek=providers.gradleProperty("soulseek").orNull=="true"
+val publicSoulseek=providers.gradleProperty("publicSoulseek").orNull=="true"
 android {
     namespace = "com.localmusic.player"
     compileSdk = 36
@@ -13,7 +14,7 @@ android {
         minSdk = 30
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
-        buildConfigField("boolean", "PUBLIC_SOULSEEK", "false")
+        buildConfigField("boolean", "PUBLIC_SOULSEEK", publicSoulseek.toString())
         versionCode = 52
         versionName = if(experimentalDirectUsb)"0.14.4-direct-coverage" else "0.14.4"
         buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
@@ -41,6 +42,7 @@ android {
             applicationIdSuffix = ".peertest"
             versionNameSuffix = "-peer-test"
             matchingFallbacks += listOf("debug")
+            buildConfigField("boolean", "PUBLIC_SOULSEEK", "false")
             manifestPlaceholders["peerAppLabel"] = "Local Music Peer Test"
             manifestPlaceholders["peerDiagnosticsEnabled"] = "true"
         }

@@ -10,6 +10,15 @@ The bridge pins [soulseek-rs 20.0.0 at `434dcc0`](https://github.com/michel/soul
 
 The regular Local Music app packages the engine only when Gradle gets `-Psoulseek=true`. Without it, and always for `android\build-player.ps1 -Beta`, the app has no Soulseek tab or setting. The Peer Test and Public Peer Test builds always include the engine.
 
+Public Soulseek sign-in is a second switch. The regular app uses it only when Gradle gets `-PpublicSoulseek=true`; otherwise it connects to the private test server. The beta build forces it off. The Peer Test build never uses public sign-in, and the Public Peer Test build always does.
+
+To turn both switches on for every build on one PC, put these lines in `android\.tools\gradle-cache\gradle.properties`, which Git ignores. The `-Beta` build still forces both off.
+
+```properties
+soulseek=true
+publicSoulseek=true
+```
+
 ## Run the controlled test
 
 From `D:\music_player`, build with the existing local Android toolchain and Rust 1.91 or newer. The first build fetches pinned Rust dependencies.
