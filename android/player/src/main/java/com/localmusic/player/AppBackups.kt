@@ -23,32 +23,28 @@ class AppBackups(private val context: Context, private val store: MusicStore) {
         store.restorePreferences(prefs(record.getJSONObject(if (committed) "target" else "original")))
         pending.delete()
     }
-    suspend fun export(uri: Uri) = withContext(Dispatchers.IO) {
+    suspend fun export(uri: Uri): Int = withContext(Dispatchers.IO) {
         val state = store.repository().captureBackup(store.backupPreferences())
-        val assets = linkedMapOf<String, ByteArray>()
-        val root = context.filesDir.canonicalFile.toPath()
-        fun asset(path:String):String {
-            val file=File(path).canonicalFile;require(file.toPath().startsWith(root)){"Chosen artwork is outside app storage."}
-            val bytes=file.inputStream().use{readLimited(it,BackupArchive.MAX_ASSET)}
-            val name="art/${BackupArchive.sha(bytes)}.img";assets[name]=bytes;return name
-        }
-        val extras = state.extras.mapValues { (_, detail) ->
-            val override = detail.artworkOverride?.takeIf { it.isNotEmpty() }?.let { path ->
-                val file = File(path).canonicalFile
-                require(file.toPath().startsWith(root)) { "Chosen artwork is outside app storage." }
-                val bytes = file.inputStream().use { readLimited(it, BackupArchive.MAX_ASSET) }
-                val name = "art/${BackupArchive.sha(bytes)}.img"
-                assets[name] = bytes; name
-            } ?: detail.artworkOverride
-            detail.copy(artworkPath = null, artworkStamp = null, artworkOverride = override)
-        }
-        val artists=state.preferences.artists.mapValues{(_,profile)->profile.copy(imagePath=profile.imagePath?.let(::asset))}
-        val bundle = BackupBundle(state.copy(extras=extras,preferences=state.preferences.copy(artists=artists)),assets)
+        val captured = BackupArtwork.capture(state, context.filesDir)
+        val bundle = captured.bundle
         val bytes = ByteArrayOutputStream().also { BackupArchive.write(bundle, it) }.toByteArray()
         BackupArchive.read(bytes.inputStream())
         requireNotNull(context.contentResolver.openOutputStream(uri, "wt")) { "Cannot open backup destination." }.use { it.write(bytes) }
         val saved = requireNotNull(context.contentResolver.openInputStream(uri)) { "Cannot verify saved backup." }.use { BackupArchive.read(it) }
-        check(saved.state == bundle.state && saved.assets.keys == assets.keys) { "Saved backup verification failed." }
+        check(saved.state == bundle.state && saved.assets.keys == bundle.assets.keys) {
+            "Saved backup verification failed: " +
+            "tracks: ${saved.state.tracks == bundle.state.tracks}, " +
+            "playlists: ${saved.state.playlists == bundle.state.playlists}, " +
+            "lyrics: ${saved.state.lyrics == bundle.state.lyrics}, " +
+            "selections: ${saved.state.selections == bundle.state.selections}, " +
+            "extras: ${saved.state.extras == bundle.state.extras}, " +
+            "resumes: ${saved.state.resumes == bundle.state.resumes}, " +
+            "folders: ${saved.state.folders == bundle.state.folders}, " +
+            "session: ${saved.state.session == bundle.state.session}, " +
+            "preferences: ${saved.state.preferences == bundle.state.preferences}, " +
+            "assets: ${saved.assets.keys == bundle.assets.keys}"
+        }
+        captured.missingFiles
     }
     suspend fun preview(uri: Uri): BackupBundle = withContext(Dispatchers.IO) {
         val bundle = requireNotNull(context.contentResolver.openInputStream(uri)) { "Cannot open backup." }.use { BackupArchive.read(it) }

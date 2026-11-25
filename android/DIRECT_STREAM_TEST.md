@@ -2,7 +2,7 @@
 
 Physical update: the first two reports are received. Transport counters and
 submission fingerprints match the reference, but the user reports missing left
-audio in both. See [STREAM_PHONE_RESULTS.md](STREAM_PHONE_RESULTS.md). Hold the
+audio in both. Hold the
 long run and use its targeted level check; the checklist below records the
 original handoff and subsequent tests are conditional on working stereo.
 
@@ -13,7 +13,7 @@ Use the first short listening checks below before attempting long runs.
 ## First phone check
 
 1. Update Music USB Probe with
-   [releases/music-usb-probe-0.5.0.apk](releases/music-usb-probe-0.5.0.apk).
+   `android/releases/music-usb-probe-0.5.0.apk`.
    Connect M2, select its physical **Standard** preset, stop other audio apps,
    lower Android media volume, and initially keep earphones out of your ears.
 2. Use **Inspect cable** if USB permission is needed. Open

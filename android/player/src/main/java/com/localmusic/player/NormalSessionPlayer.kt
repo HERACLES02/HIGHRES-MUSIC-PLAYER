@@ -11,6 +11,20 @@ import com.google.common.util.concurrent.ListenableFuture
 class NormalSessionPlayer(private val owner: PlaybackAuthority) : SimpleBasePlayer(Looper.getMainLooper()) {
     private var closed = false
     override fun getState(): State {
+        if(owner.directOutput) {
+            val view=owner.directState;val track=owner.current
+            val commands=Player.Commands.Builder().addAll(Player.COMMAND_RELEASE,Player.COMMAND_GET_CURRENT_MEDIA_ITEM,Player.COMMAND_GET_TIMELINE,Player.COMMAND_GET_METADATA)
+            if(owner.ready)commands.addAll(Player.COMMAND_SET_REPEAT_MODE,Player.COMMAND_SET_SHUFFLE_MODE,Player.COMMAND_STOP)
+            if(track!=null)commands.addAll(Player.COMMAND_SEEK_TO_NEXT,Player.COMMAND_SEEK_TO_PREVIOUS)
+            if(owner.directMatches && view.phase in setOf("running","paused","end"))commands.addAll(Player.COMMAND_PLAY_PAUSE,Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,Player.COMMAND_SEEK_TO_DEFAULT_POSITION)
+            val state=State.Builder().setAvailableCommands(commands.build()).setPlayWhenReady(owner.playWhenReady,Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+                .setPlaybackState(when {view.closed || view.error!=null -> Player.STATE_IDLE;view.phase=="end"->Player.STATE_ENDED;view.phase in setOf("running","paused")->Player.STATE_READY;else->Player.STATE_BUFFERING})
+                .setRepeatMode(when(owner.queue.repeat){RepeatMode.ALL->Player.REPEAT_MODE_ALL;RepeatMode.ONE->Player.REPEAT_MODE_ONE;else->Player.REPEAT_MODE_OFF})
+                .setShuffleModeEnabled(owner.queue.shuffle)
+            if(track!=null)state.setPlaylist(listOf(MediaItemData.Builder(owner.queue.current!!.id.value.toString()).setMediaItem(owner.mediaItem(track))
+                .setDurationUs(track.audio.durationMs.coerceAtMost(Long.MAX_VALUE/1000)*1000).setIsSeekable(true).build())).setCurrentMediaItemIndex(0).setContentPositionMs(owner.positionMs.coerceAtLeast(0))
+            return state.build()
+        }
         val engine = owner.engine
         val track = owner.current
         val commands = Player.Commands.Builder().addAll(Player.COMMAND_RELEASE, Player.COMMAND_GET_CURRENT_MEDIA_ITEM,

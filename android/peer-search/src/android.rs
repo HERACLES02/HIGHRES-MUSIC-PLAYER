@@ -22,11 +22,17 @@ const DIAGNOSTIC_ACCOUNT: &str = "local-music-fixture";
 
 struct Session {
     client: Option<Client>,
-    credentials: Option<(String, String)>,
+    credentials: Option<Credentials>,
     generation: u64,
     download: Option<Transfer>,
     share: Option<PathBuf>,
     wishlist: Option<Wishlist>,
+}
+
+struct Credentials {
+    username: String,
+    password: String,
+    public_server: bool,
 }
 
 struct Wishlist {
@@ -112,14 +118,18 @@ static SESSION: Mutex<Session> = Mutex::new(Session {
 });
 
 impl Session {
-    fn sign_in(&mut self, username: &str, password: &str) -> Result<Value> {
+    fn sign_in(&mut self, username: &str, password: &str, public_server: bool) -> Result<Value> {
         if username.trim().is_empty() || password.is_empty() {
-            return Err("Enter the private fixture username and password".into());
+            return Err("Enter the Soulseek username and password".into());
         }
         self.credentials = None;
         self.stop(true)?;
-        self.client = Some(connect(username, password)?);
-        self.credentials = Some((username.into(), password.into()));
+        self.client = Some(connect(username, password, public_server)?);
+        self.credentials = Some(Credentials {
+            username: username.into(),
+            password: password.into(),
+            public_server,
+        });
         self.generation += 1;
         self.wishlist = Some(Wishlist::started());
         Ok(Value::Null)
@@ -127,7 +137,7 @@ impl Session {
 
     fn client(&mut self, diagnostic: bool) -> Result<&Client> {
         if !diagnostic && self.credentials.is_none() {
-            return Err("Sign in to the private fixture first".into());
+            return Err("Sign in to Soulseek first".into());
         }
         if self
             .client
@@ -138,13 +148,14 @@ impl Session {
             self.client = None;
         }
         if self.client.is_none() {
-            let (username, password) = self
-                .credentials
-                .as_ref()
-                .map_or((DIAGNOSTIC_ACCOUNT, "local-fixture"), |(user, pass)| {
-                    (user.as_str(), pass.as_str())
-                });
-            self.client = Some(connect(username, password)?);
+            self.client = Some(match self.credentials.as_ref() {
+                Some(credentials) => connect(
+                    &credentials.username,
+                    &credentials.password,
+                    credentials.public_server,
+                )?,
+                None => connect(DIAGNOSTIC_ACCOUNT, "local-fixture", false)?,
+            });
             self.generation += 1;
             self.wishlist = Some(Wishlist::started());
         }
@@ -351,9 +362,9 @@ impl Session {
         if !supported_track(basename, size, !diagnostic) || basename.contains(['\0', ':']) {
             return Err("The selected track has an invalid name or size".into());
         }
-        let (_, events) = self
-            .client(diagnostic)?
-            .download(path.into(), user.into(), size, directory.into())?;
+        let (_, events) =
+            self.client(diagnostic)?
+                .download(path.into(), user.into(), size, directory.into())?;
         self.download = Some(Transfer {
             user: user.into(),
             path: path.into(),
@@ -407,17 +418,21 @@ impl Session {
     }
 }
 
-fn connect(username: &str, password: &str) -> Result<Client> {
+fn connect(username: &str, password: &str, public_server: bool) -> Result<Client> {
     let mut settings = ClientSettings::new(username, password);
-    settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
-    settings.listen_port = 45417;
+    if !public_server {
+        settings.server_address = PeerAddress::new("127.0.0.1".into(), 45415);
+        settings.listen_port = 45417;
+    }
     let mut client = Client::with_settings(settings);
     client.set_upload_slots(1);
     client.connect()?;
     if !client.login()? {
-        return Err("Private fixture login was declined".into());
+        return Err("Soulseek login was declined".into());
     }
-    client.set_download_speed_limit(FIXTURE_BYTES_PER_SECOND);
+    if !public_server {
+        client.set_download_speed_limit(FIXTURE_BYTES_PER_SECOND);
+    }
     client.check_privileges()?;
     Ok(client)
 }
@@ -438,14 +453,20 @@ fn supported_track(path: &str, size: u64, expanded: bool) -> bool {
     let extension = path.rsplit_once('.').map(|(_, extension)| extension);
     let flac = extension.is_some_and(|ext| ext.eq_ignore_ascii_case("flac"));
     let mp3 = extension.is_some_and(|ext| ext.eq_ignore_ascii_case("mp3"));
-    size > 0 && if expanded {
-        size <= i64::MAX as u64 && (flac || mp3)
-    } else {
-        size <= FIXTURE_MAX_BYTES && flac
-    }
+    size > 0
+        && if expanded {
+            size <= i64::MAX as u64 && (flac || mp3)
+        } else {
+            size <= FIXTURE_MAX_BYTES && flac
+        }
 }
 
-fn track_details(user: &str, path: &str, size: u64, attribute: impl Fn(u32) -> Option<u32>) -> Value {
+fn track_details(
+    user: &str,
+    path: &str,
+    size: u64,
+    attribute: impl Fn(u32) -> Option<u32>,
+) -> Value {
     let mut track = json!({"user": user, "path": path, "size": size});
     for (key, code) in [("bitrate", 0), ("sampleRate", 4), ("bitDepth", 5)] {
         if let Some(value) = attribute(code).filter(|&value| value > 0) {
@@ -461,9 +482,15 @@ fn search_tracks(results: Vec<SearchResult>, expanded: bool) -> Vec<Value> {
         .flat_map(|result| result.files)
         .filter(|file| supported_track(&file.name, file.size, expanded))
         .take(if expanded { usize::MAX } else { 100 })
-        .map(|file| track_details(&file.username, &file.name, file.size, |code| {
-            if expanded { file.attribs.get(&code).copied() } else { None }
-        }))
+        .map(|file| {
+            track_details(&file.username, &file.name, file.size, |code| {
+                if expanded {
+                    file.attribs.get(&code).copied()
+                } else {
+                    None
+                }
+            })
+        })
         .collect()
 }
 
@@ -493,7 +520,11 @@ fn operate(request: Value) -> Result<Value> {
             return session.stop(request["disconnect"].as_bool().unwrap_or(false));
         }
         "connect" => {
-            return session.sign_in(field(&request, "username")?, field(&request, "password")?);
+            return session.sign_in(
+                field(&request, "username")?,
+                field(&request, "password")?,
+                request["publicServer"].as_bool().unwrap_or(false),
+            );
         }
         "poll" => return session.poll(),
         "shareStatus" => return Ok(session.share_status()),
@@ -532,12 +563,21 @@ fn operate(request: Value) -> Result<Value> {
             let deadline = Instant::now() + Duration::from_secs(12);
             while Instant::now() < deadline {
                 if let Some(dirs) = client.take_folder_contents(user, folder) {
-                    let tracks: Vec<_> = dirs.into_iter().filter(|dir| dir.name == folder)
+                    let tracks: Vec<_> = dirs
+                        .into_iter()
+                        .filter(|dir| dir.name == folder)
                         .flat_map(|dir| dir.files)
-                        .filter(|file| supported_track(&file.name, file.size, expanded) && !file.name.contains(['/', '\\']))
+                        .filter(|file| {
+                            supported_track(&file.name, file.size, expanded)
+                                && !file.name.contains(['/', '\\'])
+                        })
                         .take(if expanded { usize::MAX } else { 100 })
                         .map(|file| {
-                            let path = if folder.is_empty() { file.name.clone() } else { format!("{folder}\\{}", file.name) };
+                            let path = if folder.is_empty() {
+                                file.name.clone()
+                            } else {
+                                format!("{folder}\\{}", file.name)
+                            };
                             track_details(user, &path, file.size, |code| {
                                 if expanded { file.attribute(code) } else { None }
                             })

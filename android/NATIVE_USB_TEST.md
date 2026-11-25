@@ -1,19 +1,11 @@
 # M2 native connection diagnostic 0.3.0
 
-The requested phone report has now been received. See
-[NATIVE_PHONE_RESULTS.md](NATIVE_PHONE_RESULTS.md) for the physical results and
-next gates. The instructions below document the completed test; no repeat is
-needed now. Statements below about unverified restoration describe the original
-build handoff; the new report confirms driver-active status after release, but
-does not independently test restored sound/microphone/buttons.
-
-This is the next Stage A phone test, following the reviewed 0.2.0 results in
-[PHONE_TEST_RESULTS.md](PHONE_TEST_RESULTS.md). It investigates the failed volume
+This diagnostic investigates the failed volume
 queries and native connection access. It is not a direct-audio streaming build.
 
 ## Phone steps
 
-1. Install [releases/music-usb-probe-0.3.0.apk](releases/music-usb-probe-0.3.0.apk)
+1. Install `android/releases/music-usb-probe-0.3.0.apk`
    as an **update** over Music USB Probe. Keep the current app/data; no uninstall
    or phone-setting change is needed. This is still the diagnostic package, not
    the future Local Music player.

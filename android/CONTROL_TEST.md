@@ -1,17 +1,12 @@
 # M2 silent volume/rate test: 0.4.0
 
-The physical report has now passed this control test. See
-[CONTROL_PHONE_RESULTS.md](CONTROL_PHONE_RESULTS.md). The instructions below
-document the completed run; no repeat is needed now. Streaming and clocking
-validation remain outstanding.
-
 The 0.3.0 report proved native access and hardware-volume GETs. This next APK
 tests actual control writes and readback, without sending audio. The daily-use
 player remains behind the accepted Direct USB gate.
 
 ## Phone instructions
 
-1. Install [releases/music-usb-probe-0.4.0.apk](releases/music-usb-probe-0.4.0.apk)
+1. Install `android/releases/music-usb-probe-0.4.0.apk`
    as an update. Connect M2, select its physical **Standard** preset, lower Android
    media volume and keep earphones out of your ears. Stop other audio apps.
 2. Open Music USB Probe. Select M2 and use **Inspect cable** if USB permission is

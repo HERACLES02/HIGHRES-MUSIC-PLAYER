@@ -1,10 +1,12 @@
+param([switch]$PublicTest, [switch]$NativeOnly)
+
 $ErrorActionPreference = 'Stop'
 $android = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $android '.tools'
 $ndkBin = Join-Path $tools 'sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/windows-x86_64/bin'
 $rustTargetDir = Join-Path $tools 'peer-test/bridge-target'
 $manifest = Join-Path $android 'peer-search/Cargo.toml'
-$jniLibs = Join-Path $android 'player/src/peerTest/jniLibs'
+$jniLibs = Join-Path $tools 'peer-test/jniLibs'
 $ndk = Join-Path $tools 'sdk/ndk/27.2.12479018'
 $cmake = Join-Path $tools 'sdk/cmake/3.22.1/bin/cmake.exe'
 $ninja = Join-Path $tools 'sdk/cmake/3.22.1/bin/ninja.exe'
@@ -27,12 +29,15 @@ New-Item -ItemType Directory -Force $destination | Out-Null
 Copy-Item -LiteralPath (Join-Path $flacBuild 'liblocalmusic_peer_flac.so') -Destination $destination -Force
 Copy-Item -LiteralPath (Join-Path $rustTargetDir 'aarch64-linux-android/release/liblocalmusic_peer_search.so') -Destination $destination -Force
 
+if ($NativeOnly) { return }
+
 & cargo build --locked --manifest-path $manifest --target-dir $rustTargetDir --bin fixture-seeder
 if ($LASTEXITCODE -ne 0) { throw 'Private fixture seeder build failed.' }
 
 $env:ANDROID_USER_HOME = Join-Path $tools 'android-user'
 Push-Location -LiteralPath $android
 try {
-    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') --offline --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') :player:assemblePeerTest
+    $assembleTask = if ($PublicTest) { ':player:assemblePeerPublicTest' } else { ':player:assemblePeerTest' }
+    & (Join-Path $tools 'gradle-8.13/bin/gradle.bat') --offline --no-daemon --console=plain -g (Join-Path $tools 'gradle-cache') $assembleTask
     if ($LASTEXITCODE -ne 0) { throw 'Peer Test APK build failed.' }
 } finally { Pop-Location }

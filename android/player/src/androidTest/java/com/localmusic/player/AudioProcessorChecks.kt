@@ -21,6 +21,40 @@ class AudioProcessorChecks : Instrumentation() {
     override fun onStart() {
         val results = Bundle()
         try {
+            if (suite?.startsWith("usb-output-") == true) {
+                val count = UsbOutputRegressionChecks.run(targetContext, requireNotNull(suite))
+                results.putInt("checksPassed", count)
+                finish(Activity.RESULT_OK, results)
+                return
+            }
+            if (suite == "usb-route") {
+                val count = UsbRouteChecks.run(this)
+                results.putInt("checksPassed", count)
+                results.putString("stream", "\nUSB route checks passed: $count\n")
+                finish(Activity.RESULT_OK, results)
+                return
+            }
+            if (suite == "ui-backup") {
+                val count=UiBackupChecks.run(this)
+                results.putInt("checksPassed",count)
+                results.putString("stream","\nBackup UI checks passed: $count\n")
+                finish(Activity.RESULT_OK,results)
+                return
+            }
+            if (suite == "clipping-feedback") {
+                val count = ClippingUiChecks.run(this)
+                results.putInt("checksPassed", count)
+                results.putString("stream", "\nClipping UI checks passed: $count\n")
+                finish(Activity.RESULT_OK, results)
+                return
+            }
+            if (suite == "smart-playlists") {
+                val count = SmartPlaylistsUiChecks.run(this)
+                results.putInt("checksPassed", count)
+                results.putString("stream", "\nSmart playlists UI checks passed: $count\n")
+                finish(Activity.RESULT_OK, results)
+                return
+            }
             if (suite == "ui-startup") {
                 val count=UiStartupChecks.run(this)
                 results.putInt("checksPassed",count)
@@ -145,7 +179,9 @@ class AudioProcessorChecks : Instrumentation() {
             results.putInt("checksPassed", passed)
             finish(Activity.RESULT_OK, results)
         } catch (failure: Throwable) {
-            results.putString("stream", "\nAudio processor checks FAILED:\n${failure.stackTraceToString()}\n")
+            val sw = java.io.StringWriter()
+            failure.printStackTrace(java.io.PrintWriter(sw))
+            results.putString("stream", "\nAudio processor checks FAILED:\n$sw\n")
             finish(Activity.RESULT_CANCELED, results)
         }
     }

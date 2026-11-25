@@ -6,6 +6,19 @@ This increment for [issue #16](https://github.com/HERACLES02/HIGHRES-MUSIC-PLAYE
 
 The bridge pins [soulseek-rs 20.0.0 at `434dcc0`](https://github.com/michel/soulseek-rs/tree/434dcc0155ed87203cafcd1cf7b1a1073f88a63d). It builds with Rust and the existing Android NDK. A small JNI bridge hands file metadata to Kotlin, which owns the screen, foreground transfer service, verification, destination handoff and Library scan. The APK carries the engineâ€™s MIT copyright and permission notice. A 32-bit ARM test build of upstream fails on Androidâ€™s `u32` file-descriptor limit being compared with a `u64` constant. This increment packages the engine for ARM64. A narrow upstream change to normalize the integer widths would let us retry the 32-bit build. [Upstream connection code](https://github.com/michel/soulseek-rs/blob/434dcc0155ed87203cafcd1cf7b1a1073f88a63d/soulseek-rs-lib/src/client/connection.rs)
 
+## Which builds include Soulseek
+
+The regular Local Music app packages the engine only when Gradle gets `-Psoulseek=true`. Without it, and always for `android\build-player.ps1 -Beta`, the app has no Soulseek tab or setting. The Peer Test and Public Peer Test builds always include the engine.
+
+Public Soulseek sign-in is a second switch. The regular app uses it only when Gradle gets `-PpublicSoulseek=true`; otherwise it connects to the private test server. The beta build forces it off. The Peer Test build never uses public sign-in, and the Public Peer Test build always does.
+
+To turn both switches on for every build on one PC, put these lines in `android\.tools\gradle-cache\gradle.properties`, which Git ignores. The `-Beta` build still forces both off.
+
+```properties
+soulseek=true
+publicSoulseek=true
+```
+
 ## Run the controlled test
 
 From `D:\music_player`, build with the existing local Android toolchain and Rust 1.91 or newer. The first build fetches pinned Rust dependencies.

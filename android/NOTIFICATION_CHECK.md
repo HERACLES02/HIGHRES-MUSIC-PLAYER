@@ -2,7 +2,7 @@
 
 ## Direct Stop result and remaining lock-screen issue
 
-[m2-notification-during-playback.json](../m2-notification-during-playback.json)
+`m2-notification-during-playback.json`
 is actually a completed native stream report, despite its filename, not an
 active NotificationManager snapshot. It records 0.8.0, channels-24-96000.wav,
 interruptionReason **notification_stop**, stoppedByRequest=true, 10,130 ms native
@@ -29,7 +29,7 @@ or lock-screen acceptance complete. No new code/build was performed in this revi
 
 ## First phone result received
 
-[m2-notification-diagnosis.json](../m2-notification-diagnosis.json), exported
+`m2-notification-diagnosis.json`, exported
 2 November 2026 at 11:03:06.851 UTC, confirms app 0.8.0 on the target API 30
 phone. Notifications are enabled; Direct channel exists with importance 2 (low).
 Android lists test notification ID 506 on `direct-usb-experiment`, flags 16,
@@ -94,7 +94,7 @@ Locally built APK: 70,542,452 bytes. SHA-256
 Assembly/parser/fixture checks pass; lint has 0 errors. Signing certificate
 matches prior versions. Native libraries and fixtures are unchanged.
 
-1. Install [music-usb-probe-0.8.0.apk](releases/music-usb-probe-0.8.0.apk) as an
+1. Install `android/releases/music-usb-probe-0.8.0.apk` as an
    update, keeping app data. No USB cable or earphones are needed for this check.
 2. Open Direct USB, tap **Post test notification**, then look in the fully expanded
    shade for **Music USB Probe notification check**.
@@ -113,6 +113,5 @@ Official references: [notification channels](https://developer.android.com/devel
 [NotificationManager active notifications](https://developer.android.com/reference/android/app/NotificationManager#getActiveNotifications()),
 [Android 13+ permission](https://developer.android.com/develop/ui/compose/notifications/notification-permission).
 
-Build and verification evidence belongs in [BUILD_STATUS.md](BUILD_STATUS.md).
 Phone visibility and Stop-action acceptance require actual observations after
 installation; compilation or a manager snapshot cannot approve them alone.

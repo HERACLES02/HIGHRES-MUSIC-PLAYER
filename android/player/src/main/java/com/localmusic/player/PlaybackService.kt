@@ -37,7 +37,7 @@ class PlaybackService : MediaLibraryService() {
     private fun publish() {
         session?.setSessionExtras(authority.extras())
         if(::widgets.isInitialized){val track=authority.current
-            widgets.publish(if(track==null)WidgetSnapshot()else WidgetSnapshot(track.id.value.toString(),track.tags.title.take(300),if(track.availability==Availability.AVAILABLE)track.tags.artists.joinToString(", ").take(300)else "Unavailable · open app",storage?.artwork(track.id),authority.engine.playWhenReady))
+            widgets.publish(if(track==null)WidgetSnapshot()else WidgetSnapshot(track.id.value.toString(),track.tags.title.take(300),if(track.availability==Availability.AVAILABLE)track.tags.artists.joinToString(", ").take(300)else "Unavailable · open app",storage?.artwork(track.id),authority.playWhenReady))
         }
     }
     override fun onCreate() {
@@ -45,6 +45,7 @@ class PlaybackService : MediaLibraryService() {
         StartupTiming.mark("service_create")
         widgets=WidgetUpdates(this,scope)
         authority = PlaybackAuthority(this, ::publish)
+        activeAuthority = authority
         StartupTiming.mark("engine_created")
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val closeButton = CommandButton.Builder(CommandButton.ICON_UNDEFINED)
@@ -101,18 +102,19 @@ class PlaybackService : MediaLibraryService() {
                     check(authority.ready) { "Library is still opening." }
                     val result = Bundle()
                     when (command.customAction) {
+                        OUTPUT_MODE -> {check(authority.requestOutput(args.getBoolean("direct"))){"Native Direct USB is unavailable in this beta."}}
                         AUDIO_SETTINGS -> {val value=AudioCodec.settings(requireNotNull(args.getString("settings")));store.setAudio(value);authority.audioSettingsChanged(value)}
                         THEME_ACCENT -> store.setAccent(ThemeAccent.valueOf(requireNotNull(args.getString("accent"))))
                         CYBER_ACCENT -> store.setCyberAccent(CyberAccent.valueOf(requireNotNull(args.getString("accent"))))
                         WIDGET_SETTINGS -> {store.setWidgets(WidgetSettings(args.getString("theme")?:"Match app",args.getBoolean("artwork",true)));widgets.invalidate();publish()}
                         WIDGET_CONTROL -> when(args.getString("control")){
-                            "toggle"->if(authority.engine.playWhenReady)authority.pause()else{
+                            "toggle"->if(authority.playWhenReady)authority.pause()else{
                                 // A user widget click may resume a background/cold service. Establish
                                 // its media foreground notification before Android 15 audio focus.
                                 notificationDismissed = false
                                 setShowNotificationForIdlePlayer(SHOW_NOTIFICATION_FOR_IDLE_PLAYER_AFTER_STOP_OR_ERROR)
                                 if(authority.current?.availability==Availability.AVAILABLE)onUpdateNotification(session,true)
-                                try{authority.play()}finally{onUpdateNotification(session,authority.engine.playWhenReady)}
+                                try{authority.play()}finally{onUpdateNotification(session,authority.playWhenReady)}
                             }
                             "next"->authority.advance();"previous"->authority.previous();else->error("Unknown widget control.")
                         }
@@ -122,7 +124,7 @@ class PlaybackService : MediaLibraryService() {
                         ARTIST_PHOTO -> store.artistLookup.savePhoto(requireNotNull(args.getString("name")),Uri.parse(requireNotNull(args.getString("uri"))))
                         COVER_SAVE -> store.operationMutex.withLock{store.artistLookup.saveCover(requireNotNull(args.getStringArrayList("ids")).map(PlaybackAuthority::id),requireNotNull(args.getString("receipt")))}
                         BACKUP_EXPORT -> backupOperation(store) {
-                            AppBackups(this@PlaybackService, store).export(Uri.parse(requireNotNull(args.getString("uri"))))
+                            result.putInt("missingArtwork",AppBackups(this@PlaybackService, store).export(Uri.parse(requireNotNull(args.getString("uri")))))
                         }
                         BACKUP_PREVIEW -> {
                             backupPreview = null
@@ -396,11 +398,15 @@ class PlaybackService : MediaLibraryService() {
         return START_NOT_STICKY
     }
     override fun onDestroy() {
-        if (::authority.isInitialized) authority.release()
+        if (::authority.isInitialized) {
+            if (activeAuthority === authority) activeAuthority = null
+            authority.release()
+        }
         session?.let { removeSession(it); it.release() }; session = null
         scope.cancel(); super.onDestroy()
     }
     companion object {
+        @Volatile internal var activeAuthority: PlaybackAuthority? = null
         const val CLOSE_PLAYER = "com.localmusic.player.CLOSE_PLAYER"
         const val AUDIO_SETTINGS="com.localmusic.player.AUDIO_SETTINGS"
         const val AUDIO_INFO="com.localmusic.player.AUDIO_INFO"
@@ -462,7 +468,8 @@ class PlaybackService : MediaLibraryService() {
         const val SLEEP_SET = "com.localmusic.player.SLEEP_SET"
         const val SLEEP_END_TRACK = "com.localmusic.player.SLEEP_END_TRACK"
         const val SLEEP_CANCEL = "com.localmusic.player.SLEEP_CANCEL"
-        val ACTIONS = setOf(SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,CYBER_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
+        const val OUTPUT_MODE="com.localmusic.player.OUTPUT_MODE"
+        val ACTIONS = setOf(OUTPUT_MODE,SONG_HIDE,SONG_RESTORE,SONG_DELETE_PREVIEW,SONG_DELETE,SONG_DELETE_CANCEL,QUEUE_PLAY,THEME_ACCENT,CYBER_ACCENT,AUDIO_INFO,AUDIO_SETTINGS,WIDGET_SETTINGS,WIDGET_CONTROL,ARTIST_SAVE,ARTIST_CLEAR,ARTIST_NOTE,ARTIST_PHOTO,COVER_SAVE,BACKUP_EXPORT, BACKUP_PREVIEW, BACKUP_RESTORE, BACKUP_CANCEL, START, NEXT, ADD, FAVORITE, SCAN, CANCEL_SCAN, CLEAR_ERROR, EXPORT, ADD_FOLDER, PREFERENCES, HOME_VIEW, ARTWORK_SIZE,
             LYRICS_SAVE, LYRICS_SELECT, LYRICS_OFFSET, LYRICS_PROVIDER, APP_TAGS, APP_ART, PLAYLIST_ART, EDIT_PREPARE, EDIT_COMMIT, EDIT_DISCARD,
             EDIT_UNDO, EDIT_RECOVER, EDIT_RECOVERY_REVIEW, PLAYLIST_CREATE, PLAYLIST_IMPORT, PLAYLIST_RENAME, PLAYLIST_DELETE, PLAYLIST_ADD,
             PLAYLIST_REMOVE, PLAYLIST_MOVE, PLAYLIST_START, QUEUE_REMOVE, QUEUE_MOVE, QUEUE_CLEAR, SLEEP_SET, SLEEP_END_TRACK, SLEEP_CANCEL)

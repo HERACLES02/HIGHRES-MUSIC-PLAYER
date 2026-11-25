@@ -12,7 +12,7 @@ StreamState state;
 std::vector<unsigned char> pcm;
 int bytesPerFrame, capacity, allocations, frees, submits, events, failSubmit, failAllocation, shortPacketAt, errorAt, eventErrorAt, action;
 uint64_t expectedOffset;
-bool didAction;
+bool didAction, stopWhilePaused, cancelNotFound;
 void reset(int rate,int bits) {
     queue.clear(); cancelled.clear(); state.reset();
     bytesPerFrame=2*bits/8; capacity=bits==16?388:582;
@@ -22,7 +22,7 @@ void reset(int rate,int bits) {
         for(int b=0;b<bits/8;++b) pcm.push_back((value>>(8*b))&255);
     }
     allocations=frees=submits=events=failSubmit=failAllocation=shortPacketAt=errorAt=eventErrorAt=action=0;
-    expectedOffset=0; didAction=false;
+    expectedOffset=0; didAction=stopWhilePaused=cancelNotFound=false;
 }
 }
 extern "C" {
@@ -35,6 +35,7 @@ void LIBUSB_CALL libusb_free_transfer(libusb_transfer* transfer) {
     assert(fake::queue.empty()); ++fake::frees; std::free(transfer);
 }
 int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* transfer) {
+    assert(!fake::state.stop); // Stop must suppress every later USB submission.
     assert(transfer->endpoint==4 && transfer->type==LIBUSB_TRANSFER_TYPE_ISOCHRONOUS);
     assert(transfer->num_iso_packets>0 && transfer->num_iso_packets<=8 && transfer->timeout==1000);
     if(++fake::submits==fake::failSubmit) return LIBUSB_ERROR_IO;
@@ -51,7 +52,11 @@ int LIBUSB_CALL libusb_submit_transfer(libusb_transfer* transfer) {
     assert(offset==transfer->length);
     fake::queue.push_back(transfer); return 0;
 }
-int LIBUSB_CALL libusb_cancel_transfer(libusb_transfer* transfer) { fake::cancelled.insert(transfer); return 0; }
+int LIBUSB_CALL libusb_cancel_transfer(libusb_transfer* transfer) {
+    // The transfer can already be complete in the OS, with its callback queued.
+    if(fake::cancelNotFound) return LIBUSB_ERROR_NOT_FOUND;
+    fake::cancelled.insert(transfer); return 0;
+}
 int LIBUSB_CALL libusb_handle_events_timeout_completed(libusb_context*,timeval*,int*) {
     ++fake::events;
     if(fake::eventErrorAt==fake::events) return LIBUSB_ERROR_IO;
@@ -62,7 +67,10 @@ int LIBUSB_CALL libusb_handle_events_timeout_completed(libusb_context*,timeval*,
         if(fake::action==3) fake::state.seek=132300;
         if(fake::action==4) { fake::state.volumeDb=-30; ++fake::state.volumeCommand; }
     }
-    if(fake::state.phase==3 && fake::queue.empty()) fake::state.pause=false;
+    if(fake::state.phase==3 && fake::queue.empty()) {
+        if(fake::stopWhilePaused) fake::state.stop=true;
+        fake::state.pause=false; // A late Resume must not override Stop.
+    }
     if(fake::queue.empty()) return 0;
     auto* transfer=fake::queue.front(); fake::queue.pop_front();
     const bool cancelled=fake::cancelled.erase(transfer)>0;
@@ -98,6 +106,56 @@ int main() {
         assert(fake::state.completedIntervals==12000 && fake::state.completedBytes==uint64_t(rate)*12*(2*bits/8));
         assert(fake::state.submittedBytes==fake::state.completedBytes && fake::state.mismatches==0 && fake::state.error==0);
         assert(fake::state.queueEmpty==0); ++tests;
+    }
+    // Integration prerequisites: interruptions can arrive before audio starts,
+    // while paused, during reconfiguration, or while completions are queued.
+    // Exercise the real transport at every supported rate/depth; USB is simulated.
+    for(int bits:{16,24}) for(int rate:{44100,48000,88200,96000}) {
+        fake::reset(rate,bits); fake::state.stop=true;
+        auto before=run(rate,bits);
+        assert(before.first==0 && before.second==0 && fake::submits==0);
+        assert(fake::state.phase==5 && fake::state.error==0); ++tests;
+
+        fake::reset(rate,bits);
+        int prepares=0;
+        {
+            IsoExperiment stream(nullptr,nullptr,fake::state,fake::pcm,rate,bits,12,[&](bool idle) {
+                assert(!idle); ++prepares; fake::state.stop=true; return true;
+            });
+            stream.run();
+        }
+        assert(prepares==1 && fake::submits==0 && fake::state.pending==0 && fake::frees==8);
+        assert(fake::state.phase==5 && fake::state.error==0); ++tests;
+
+        fake::reset(rate,bits); fake::action=2; fake::stopWhilePaused=true;
+        auto paused=run(rate,bits);
+        assert(paused.first==1 && paused.second==1 && fake::state.pauseCount==1);
+        assert(fake::state.stop && fake::state.phase==5 && fake::state.error==0);
+        assert(fake::state.completedIntervals<12000); ++tests;
+
+        fake::reset(rate,bits); fake::action=4;
+        prepares=0; int idles=0;
+        {
+            IsoExperiment stream(nullptr,nullptr,fake::state,fake::pcm,rate,bits,12,[&](bool idle) {
+                assert(fake::queue.empty());
+                if(idle) {
+                    ++idles; fake::state.stop=true;
+                    fake::state.pause=false; fake::state.seek=rate;
+                    ++fake::state.volumeCommand;
+                } else ++prepares;
+                return true;
+            });
+            stream.run();
+        }
+        assert(prepares==1 && idles==1 && fake::state.stop && fake::state.error==0);
+        assert(fake::queue.empty() && fake::state.pending==0 && fake::frees==8);
+        assert(fake::state.phase==5 && fake::state.completedIntervals<12000); ++tests;
+
+        fake::reset(rate,bits); fake::action=1; fake::cancelNotFound=true;
+        auto completedBeforeCancel=run(rate,bits);
+        assert(completedBeforeCancel.first==1 && fake::state.phase==5 && fake::state.error==0);
+        assert(fake::state.completedIntervals>0 && fake::state.completedIntervals<12000);
+        assert(fake::state.cancelled==0); ++tests;
     }
     fake::reset(44100,16); fake::failSubmit=1; run(44100,16); assert(fake::state.error==LIBUSB_ERROR_IO && fake::state.submittedBytes==0); ++tests;
     fake::reset(44100,16); fake::failSubmit=11; run(44100,16); assert(fake::state.error==LIBUSB_ERROR_IO); ++tests;

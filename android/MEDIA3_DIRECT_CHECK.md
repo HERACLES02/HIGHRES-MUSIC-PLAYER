@@ -2,7 +2,7 @@
 
 Phone result received: the user confirms the lock-screen check worked. The report
 records Media3 Pause/Resume and notification Stop, zero recorded transport/PCM
-errors and clean restoration. See [MEDIA3_PHONE_RESULTS.md](MEDIA3_PHONE_RESULTS.md).
+errors and clean restoration.
 The handoff and pending-verification statements below describe the pre-test
 checkpoint; this specific phone acceptance is now recorded.
 
@@ -51,7 +51,7 @@ shared Normal/Direct coordinator. Room remains independent of this APK.
 
 ## Short phone check
 
-1. Install [music-usb-probe-0.10.0.apk](releases/music-usb-probe-0.10.0.apk) over
+1. Install `android/releases/music-usb-probe-0.10.0.apk` over
    the existing probe; keep its data.
 2. With M2 in Standard, start **24-bit / 96000 Hz / equal-tone WAV / 1 min**.
    Use the existing guarded hardware buttons to select a comfortable level.
@@ -71,4 +71,3 @@ Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File android\build.ps1`.
 The build also runs `scripts/test-direct-state.ps1`: 31 pure state assertions for
 preparing, playing, paused, draining, terminal/stale states, stop/detach guards,
 all four source rates, six-second wrap, and large-position overflow bounds.
-Build, lint, signature and APK byte comparisons are recorded in BUILD_STATUS.md.

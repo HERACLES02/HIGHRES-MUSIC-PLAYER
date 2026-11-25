@@ -10,6 +10,8 @@
 #ifndef USB_HOST_TEST
 #include "pcm_decode.hpp"
 #include "stream_transport.hpp"
+#include "experimental/finite_fixture_stream.hpp"
+#include "experimental/ordinary_source_stream.hpp"
 #endif
 
 namespace {
@@ -175,8 +177,108 @@ std::string inspect(int javaFd, bool allowDetach, bool testControls = false, con
 }
 #ifndef USB_HOST_TEST
 namespace { StreamState liveStream; }
+namespace {
+// No setter: opening the physical entry requires a later reviewed hardware gate.
+const std::atomic<bool> ordinarySourceHardwareReady{false};
+StreamPacketBridge::Endpoint ordinaryEndpoint(libusb_device_handle* dev,unsigned rate,unsigned bits) {
+    if((bits!=16 && bits!=24) || libusb_get_device_speed(libusb_get_device(dev))!=LIBUSB_SPEED_FULL)
+        throw std::runtime_error("Unsupported source/device speed");
+    libusb_config_descriptor* raw=nullptr;
+    if(libusb_get_active_config_descriptor(libusb_get_device(dev),&raw)<0 || !raw)
+        throw std::runtime_error("No active playback descriptors");
+    std::unique_ptr<libusb_config_descriptor,decltype(&libusb_free_config_descriptor)> config(raw,&libusb_free_config_descriptor);
+    StreamPacketBridge::Endpoint result{};
+    for(int i=0;i<config->bNumInterfaces;++i)for(int a=0;a<config->interface[i].num_altsetting;++a) {
+        const auto& alt=config->interface[i].altsetting[a];
+        if(alt.bInterfaceNumber!=2 || alt.bAlternateSetting!=(bits==16?1:2))continue;
+        if(result.address || alt.bInterfaceClass!=1 || alt.bInterfaceSubClass!=2 || alt.bNumEndpoints!=1 ||
+                !alt.endpoint || alt.extra_length<0 || alt.extra_length>512 || !alt.extra)
+            throw std::runtime_error("Unexpected playback alternate");
+        bool pcm=false,format=false;
+        for(int offset=0;offset<alt.extra_length;) {
+            const auto* p=alt.extra+offset;const int length=p[0];
+            if(length<3 || length>alt.extra_length-offset)throw std::runtime_error("Malformed playback descriptor");
+            if(p[1]==0x24 && p[2]==1) {
+                if(pcm || length!=7 || p[5]!=1 || p[6]!=0)throw std::runtime_error("Playback is not PCM");
+                pcm=true;
+            }
+            if(p[1]==0x24 && p[2]==2) {
+                if(format || length<8 || p[3]!=1 || p[4]!=2 || p[5]!=bits/8 || p[6]!=bits ||
+                        !p[7] || length!=8+3*p[7])throw std::runtime_error("Unsupported playback format");
+                for(int n=0;n<p[7];++n)if(unsigned(p[8+3*n]|p[9+3*n]<<8|p[10+3*n]<<16)==rate)format=true;
+                if(!format)throw std::runtime_error("Source rate absent from descriptor");
+            }
+            offset+=length;
+        }
+        const auto& ep=alt.endpoint[0];
+        result={ep.bEndpointAddress,ep.bmAttributes,ep.bInterval,ep.wMaxPacketSize,true};
+        if(!pcm || !format || ep.bEndpointAddress!=4 || ep.bmAttributes!=5 || ep.bSynchAddress!=0 ||
+                !StreamPacketBridge::supports(rate,bits,result))throw std::runtime_error("Unsupported playback endpoint");
+    }
+    if(!result.address)throw std::runtime_error("Playback alternate absent");
+    return result;
+}
+std::string ordinarySourceBackend(int usbFd,int sourceFd,unsigned rate,unsigned bits,StreamState& state,uint64_t first=0) {
+    if(state.stop){state.phase=5;return "{\"terminal\":\"cancelled\",\"usbOwnershipAttempted\":false,\"audioSubmitted\":false}";}
+#ifdef _WIN32
+    struct _stat64 sourceInfo{};
+    const bool wholeFile=sourceFd>=0 && !_fstat64(sourceFd,&sourceInfo) && (sourceInfo.st_mode&_S_IFMT)==_S_IFREG;
+#else
+    struct stat sourceInfo{};
+    const bool wholeFile=sourceFd>=0 && !fstat(sourceFd,&sourceInfo) && S_ISREG(sourceInfo.st_mode);
+#endif
+    if(!wholeFile || !StreamPacketBridge::supports(rate,bits,{4,5,1,582,true})) {
+        state.error=LIBUSB_ERROR_INVALID_PARAM;state.phase=6;
+        return "{\"terminal\":\"failed\",\"usbOwnershipAttempted\":false,\"audioSubmitted\":false}";
+    }
+    bool entered=false;
+    PlaybackHook hook=[&](libusb_context* ctx,libusb_device_handle* dev,ControlTest& controls) {
+        entered=true;
+        const auto endpoint=ordinaryEndpoint(dev,rate,bits);
+        bool configured=false;
+        const auto outcome=runOrdinarySourceStream(ctx,dev,sourceFd,rate,bits,endpoint,state,[&](const StreamSourceSession::Source&) {
+            if(state.stop)return false;
+            if(configured)return true;
+            configured=controls.alternateSet("source_format",bits==16?1:2) && controls.rateSet("source_rate",rate) && controls.lowStillSet("source_before_audio");
+            state.levelRaw1=controls.target[0];state.levelRaw2=controls.target[1];return configured;
+        },first);
+        const char* terminal=state.error?"failed":outcome.terminal==OrdinarySourceResult::Terminal::End?"eof":
+            outcome.terminal==OrdinarySourceResult::Terminal::Stopped?"cancelled":"failed";
+        state.phase=state.error?6:5;
+        std::ostringstream out;
+        out<<"{\"route\":\"ordinary_streaming_flac\",\"terminal\":\""<<terminal<<"\",\"wholeStreamMd5Verified\":"<<(outcome.wholeMd5?"true":"false")
+           <<",\"sourceGeneration\":"<<outcome.generation<<",\"sampleRateHz\":"<<rate<<",\"bits\":"<<bits<<",\"stats\":"<<state.json()
+           <<",\"clockingValidated\":false,\"positionMeaning\":\"Completed USB frames, not measured DAC render time\"}";
+        return PlaybackResult{out.str(),state.submittedBytes>0};
+    };
+    try {
+        auto report=inspect(usbFd,true,false,&hook);
+        if(!entered) {
+            state.error=LIBUSB_ERROR_NOT_SUPPORTED;state.phase=6;
+            return "{\"terminal\":\"failed\",\"usbReport\":"+report+",\"stats\":"+state.json()+"}";
+        }
+        return report;
+    }
+    catch(...) {
+        state.error=LIBUSB_ERROR_OTHER;state.phase=6;
+        return std::string("{\"terminal\":\"failed\",\"nativeException\":true,\"restorationUnknown\":true,\"audioSubmitted\":")+
+            (state.submittedBytes>0?"true":"false")+",\"stats\":"+state.json()+"}";
+    }
+}
+}
+#include "production_source_owner.hpp"
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_localmusic_diagnostics_NativeUsb_runOrdinarySource(JNIEnv* env,jclass,jint usbFd,jint sourceFd,jint rate,jint bits) {
+    if(!ordinarySourceHardwareReady.load())return env->NewStringUTF("{\"hardwareGateClosed\":true,\"usbOwnershipAttempted\":false,\"audioSubmitted\":false}");
+    // A generational production JNI/service owner must replace this closed entry
+    // before activation. Do not reuse the finite fixture command namespace.
+    if(!liveStream.reserved || !liveStream.executing)return env->NewStringUTF("{\"ownerRequired\":true,\"audioSubmitted\":false}");
+    try {return env->NewStringUTF(ordinarySourceBackend(usbFd,sourceFd,rate,bits,liveStream).c_str());}
+    catch(...) {return env->NewStringUTF("{\"nativeException\":true,\"restorationUnknown\":true}");}
+}
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_localmusic_diagnostics_NativeUsb_inspect(JNIEnv* env, jclass, jint fd, jboolean detach, jboolean controls) {
+    if(productionSource::registry.busy())return env->NewStringUTF("{\"productionOwnerActive\":true,\"audioSubmitted\":false}");
     try { return env->NewStringUTF(inspect(fd, detach == JNI_TRUE, controls == JNI_TRUE).c_str()); }
     catch (...) { return env->NewStringUTF("{\"nativeException\":true,\"audioSubmitted\":false}"); }
 }
@@ -188,11 +290,79 @@ Java_com_localmusic_diagnostics_NativeUsb_beginStream(JNIEnv*,jclass) {
 }
 extern "C" JNIEXPORT void JNICALL
 Java_com_localmusic_diagnostics_NativeUsb_streamCommand(JNIEnv*,jclass,jint command,jint value) {
+    if(productionSource::registry.busy())return;
+    if(liveStream.finiteSource && command!=0 && command!=4)return;
     if(command==0) liveStream.stop=true;
     else if(command==1) liveStream.pause=value!=0;
     else if(command==2 && value>=0 && value<=576000) liveStream.seek=value;
     else if(command==3 && (value==-40 || value==-30 || value==-20)) { liveStream.volumeDb=value; ++liveStream.volumeCommand; }
     else if(command==4) { liveStream.stop=true; if(!liveStream.executing) liveStream.reserved=false; }
+}
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_localmusic_diagnostics_NativeUsb_runStreamingFixture(JNIEnv* env,jclass,jint usbFd,jint sourceFd,jint rate,jint bits) {
+    if(productionSource::registry.busy())return env->NewStringUTF("{\"productionOwnerActive\":true,\"audioSubmitted\":false}");
+    if(!liveStream.reserved)return env->NewStringUTF("{\"notReserved\":true}");
+    bool expected=false;
+    if(!liveStream.executing.compare_exchange_strong(expected,true))return env->NewStringUTF("{\"alreadyExecuting\":true}");
+    struct Reservation {
+        ~Reservation(){liveStream.executing=false;liveStream.reserved=false;liveStream.phase=liveStream.error?6:5;}
+    } reservation;
+    liveStream.finiteSource=true;
+    try {
+        // Java keeps a verified, private, unchanged whole-file fd alive until
+        // this call returns. No decoder/FILE work runs on a USB callback.
+        const auto verified=validateQuietFlacFixture(sourceFd,rate,bits,liveStream.stop);
+        const char* names[]={"valid","cancelled","invalid_input","invalid_format","source_failed","wrong_length","too_loud","unverified"};
+        std::ostringstream preflight;
+        preflight<<"{\"status\":\""<<names[int(verified.status)]<<"\",\"frames\":"<<verified.frames
+                 <<",\"wholeStreamMd5Verified\":"<<(verified.md5Verified?"true":"false")<<"}";
+        if(verified.status!=QuietFlacFixture::Status::Valid || liveStream.stop) {
+            if(verified.status!=QuietFlacFixture::Status::Cancelled && !liveStream.stop)liveStream.error=LIBUSB_ERROR_INVALID_PARAM;
+            return env->NewStringUTF(("{\"audioSubmitted\":false,\"usbOwnershipAttempted\":false,\"sourcePreflight\":"+preflight.str()+"}").c_str());
+        }
+        PlaybackHook hook=[&](libusb_context* ctx,libusb_device_handle* dev,ControlTest& controls) {
+            // Decode the selected alternate's ACTUAL endpoint descriptor. Java
+            // also pins the complete recorded raw layout before entering JNI.
+            libusb_config_descriptor* raw=nullptr;
+            if(libusb_get_active_config_descriptor(libusb_get_device(dev),&raw)<0)throw std::runtime_error("No active endpoint descriptors");
+            std::unique_ptr<libusb_config_descriptor,decltype(&libusb_free_config_descriptor)> config(raw,&libusb_free_config_descriptor);
+            StreamPacketBridge::Endpoint endpoint{};
+            for(int i=0;i<config->bNumInterfaces;++i)for(int a=0;a<config->interface[i].num_altsetting;++a) {
+                const auto& alt=config->interface[i].altsetting[a];
+                if(alt.bInterfaceNumber!=2 || alt.bAlternateSetting!=(bits==16?1:2))continue;
+                if(alt.bNumEndpoints!=1)throw std::runtime_error("Unexpected playback endpoints");
+                const auto& ep=alt.endpoint[0];
+                if(ep.bEndpointAddress!=4 || ep.bmAttributes!=5 || ep.bInterval!=1 || ep.wMaxPacketSize!=(bits==16?388:582))
+                    throw std::runtime_error("Playback descriptor differs from recorded M2");
+                endpoint={ep.bEndpointAddress,ep.bmAttributes,ep.bInterval,ep.wMaxPacketSize,true};
+            }
+            if(!endpoint.address)throw std::runtime_error("Playback alternate absent");
+            const auto outcome=runFiniteFixtureStream(ctx,dev,sourceFd,rate,bits,endpoint,verified,liveStream,[&] {
+                if(liveStream.stop)return false;
+                if(!controls.alternateSet("finite_stream_format",bits==16?1:2) || !controls.rateSet("finite_stream_rate",rate))return false;
+                if(!controls.lowStillSet("finite_before_audio") || liveStream.stop)return false;
+                liveStream.levelRaw1=controls.target[0];liveStream.levelRaw2=controls.target[1];return true;
+            });
+            // Adapter transfers are drained/destroyed BEFORE inspect() restores
+            // controls, releases claims and closes the borrowed context.
+            const char* terminal=liveStream.error?"failed":outcome.terminal==FiniteFixtureResult::Terminal::End?"eof":
+                outcome.terminal==FiniteFixtureResult::Terminal::Stopped?"cancelled":"failed";
+            liveStream.phase=liveStream.error?6:5;
+            std::ostringstream report;
+            report<<"{\"route\":\"finite_streaming_flac\",\"terminal\":\""<<terminal<<"\",\"sourcePreflight\":"<<preflight.str()
+                  <<",\"wholeStreamMd5Verified\":"<<(outcome.md5Verified?"true":"false")<<",\"sampleRateHz\":"<<rate<<",\"bits\":"<<bits
+                  <<",\"durationSecondsRequested\":6,\"endpointInterval\":"<<endpoint.interval<<",\"maximumPacketBytes\":"<<endpoint.maxPacketBytes
+                  <<",\"positionMeaning\":\"Fully completed frame count, not DAC render time\",\"volumeVerification\":\"Startup readback only; no in-flight control transfers\","
+                  <<"\"clocking\":\"Experimental nominal 1000 intervals/s, no feedback or shared capture clock assumed\",\"stats\":"<<liveStream.json()<<"}";
+            return PlaybackResult{report.str(),liveStream.submittedBytes>0};
+        };
+        if(liveStream.stop)return env->NewStringUTF("{\"cancelledBeforeUsb\":true,\"usbOwnershipAttempted\":false,\"audioSubmitted\":false}");
+        return env->NewStringUTF(inspect(usbFd,true,false,&hook).c_str());
+    } catch(...) {
+        liveStream.error=LIBUSB_ERROR_OTHER;liveStream.phase=6;
+        return env->NewStringUTF((std::string("{\"nativeException\":true,\"restorationUnknown\":true,\"audioSubmitted\":")+
+            (liveStream.submittedBytes>0?"true":"false")+",\"stats\":"+liveStream.json()+"}").c_str());
+    }
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_localmusic_diagnostics_NativeUsb_streamStats(JNIEnv* env,jclass) { return env->NewStringUTF(liveStream.json().c_str()); }
@@ -211,6 +381,7 @@ Java_com_localmusic_diagnostics_NativeUsb_decodePcm(JNIEnv* env,jclass,jbyteArra
 }
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_localmusic_diagnostics_NativeUsb_runStream(JNIEnv* env,jclass,jint fd,jbyteArray pcm,jint rate,jint bits,jint seconds) {
+    if(productionSource::registry.busy())return env->NewStringUTF("{\"productionOwnerActive\":true,\"audioSubmitted\":false}");
     if(!liveStream.reserved) return env->NewStringUTF("{\"notReserved\":true}");
     bool expected=false;
     if(!liveStream.executing.compare_exchange_strong(expected,true)) return env->NewStringUTF("{\"alreadyExecuting\":true}");

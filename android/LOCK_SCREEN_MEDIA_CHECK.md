@@ -9,8 +9,7 @@ as history; there is no need to reinstall 0.9.0 or repeat its report collection.
 Phone follow-up: user says operation is normal but the lock-screen card still
 does not appear. Other players, including Namida, show controls on this phone.
 Treat this as an unresolved app/integration finding; do not mark 0.9.0 a lock-
-screen fix or repeat the unavailable-settings instruction. The requested source
-comparison is recorded in [NAMIDA_MEDIA_REVIEW.md](NAMIDA_MEDIA_REVIEW.md).
+screen fix or repeat the unavailable-settings instruction.
 No 0.9.0 result JSON has been uploaded yet at this comparison point.
 
 User confirms the lock-screen notification option is not available in the phone's
@@ -56,7 +55,7 @@ Locally built artifact: 70,147,886 bytes, SHA-256
 Build/lint/parser/fixture checks pass; signature matches prior updates. Native
 libraries and all fixtures are unchanged. Physical lock-screen acceptance is pending.
 
-1. Install [music-usb-probe-0.9.0.apk](releases/music-usb-probe-0.9.0.apk) over the
+1. Install `android/releases/music-usb-probe-0.9.0.apk` over the
    existing probe. Keep its data; no repeat of the hour-long run is requested.
 2. Start an explicit **24-bit / 96000 Hz / equal-tone WAV / 1 min** run, with M2
    Standard and comfortable guarded hardware level.
@@ -69,9 +68,7 @@ libraries and all fixtures are unchanged. Physical lock-screen acceptance is pen
    observations/files before claiming lock-screen support.
 
 No new dependencies, permissions, native source revisions, test PCM or hardware
-volume policy are introduced. Local build/signature/fixture evidence is recorded
-in [BUILD_STATUS.md](BUILD_STATUS.md). Media-card visibility and its remote controls
-require physical verification; a clean compile cannot establish them.
+volume policy are introduced. Media-card visibility and remote controls require a phone test.
 
 Official API references: [MediaStyle](https://developer.android.com/reference/android/app/Notification.MediaStyle),
 [public visibility request](https://developer.android.com/reference/android/app/Notification.Builder#setVisibility(int)).

@@ -82,7 +82,13 @@ fun backupArchiveChecks() {
     val legacyData=JsonObject(oldData).toString().toByteArray()
     val legacyManifest=buildJsonObject{put("format","local-music-backup");put("version",1);put("entries",buildJsonArray{add(buildJsonObject{put("name","data.json");put("length",legacyData.size);put("sha256",BackupArchive.sha(legacyData))})})}.toString().toByteArray()
     val legacy=ByteArrayOutputStream().also{out->ZipOutputStream(out).use{zip->for((n,v)in mapOf("manifest.json" to legacyManifest,"data.json" to legacyData)){zip.putNextEntry(ZipEntry(n));zip.write(v);zip.closeEntry()}}}.toByteArray()
-    verify(BackupArchive.read(legacy.inputStream()).state==backup,"version 1 backups restore with effects off and no invented profiles")
+    verify(BackupArchive.read(legacy.inputStream()).state==backup.copy(version=1),"version 1 backups restore with effects off and no invented profiles")
+    val v2Data = Json.parseToJsonElement(contents.getValue("data.json").toString(Charsets.UTF_8)).jsonObject.toMutableMap()
+    v2Data["version"] = JsonPrimitive(2)
+    val v2Bytes = JsonObject(v2Data).toString().toByteArray()
+    val v2Manifest = buildJsonObject{put("format","local-music-backup");put("version",2);put("entries",buildJsonArray{add(buildJsonObject{put("name","data.json");put("length",v2Bytes.size);put("sha256",BackupArchive.sha(v2Bytes))})})}.toString().toByteArray()
+    val v2Zip = ByteArrayOutputStream().also{out->ZipOutputStream(out).use{zip->for((n,v)in mapOf("manifest.json" to v2Manifest,"data.json" to v2Bytes)){zip.putNextEntry(ZipEntry(n));zip.write(v);zip.closeEntry()}}}.toByteArray()
+    verify(BackupArchive.read(v2Zip.inputStream()).state==backup.copy(version=2),"version 2 backups restore correctly")
     val artist=com.localmusic.core.ArtistProfile("00000000-0000-0000-0000-000000000005","Mira",biography="Offline biography",imagePath=name,imageCredit="Test creator",savedAtMs=123)
     val prefs=backup.preferences.copy(audio=AudioSettings(true,EqPreset("Test",-2.0),listOf(EqPreset("Saved")),ReplayGainMode.ALBUM,4),artists=mapOf("mira" to artist),widgets=WidgetSettings("Light",false),accent=ThemeAccent.OCEAN)
     val modern=backup.copy(preferences=prefs)
@@ -92,5 +98,48 @@ fun backupArchiveChecks() {
         audio=prefs.audio.copy(preset=converted,presets=listOf(converted))),
         lyrics=modern.lyrics.map{it.copy(providerId="lyrics.ovh:fixture",sourceUrl="https://api.lyrics.ovh/v1/Fixture/Title")})
     verify(BackupArchive.read(encode(BackupBundle(independent,mapOf(name to art))).inputStream()).state==independent,"v2 archive preserves converted EQ, independent Wikipedia identity and alternate lyric provenance")
+    val storage=java.nio.file.Files.createTempDirectory("backup-artwork-").toFile()
+    try {
+        val missing=java.io.File(storage,"missing.jpg")
+        val state=modern.copy(preferences=prefs.copy(artists=mapOf("mira" to artist.copy(imagePath=missing.path))))
+        val captured=BackupArtwork.capture(state,storage)
+        val restored=BackupArchive.read(encode(captured.bundle).inputStream())
+        verify(captured.missingFiles==1,"missing artist image is explicitly reported")
+        verify(restored.state==state.copy(preferences=state.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=null)))),"missing image does not lose artist text, playlist, queue, settings or other data")
+        verify(state.preferences.artists.getValue("mira").imagePath==missing.path,"export does not repair live artist references")
+        val reExported = BackupArtwork.capture(restored.state, storage)
+        verify(reExported.missingFiles == 0 && reExported.bundle.state == restored.state, "re-export of restored archive succeeds cleanly without missing files")
+        val baseForPlaylist = modern.copy(preferences = prefs.copy(artists = emptyMap()))
+        val playlistArtFile = java.io.File(storage, "playlist-art.jpg").apply { writeBytes(art) }
+        val withPlaylistDesc = baseForPlaylist.copy(playlists = listOf(BackupPlaylist(Playlist(pid, "Mix", playlistArtFile.path, "seeded description"), emptyList())))
+        val capDesc = BackupArtwork.capture(withPlaylistDesc, storage)
+        verify(capDesc.missingFiles == 0, "existing playlist artwork has 0 missing files")
+        verify(capDesc.bundle.state.playlists.single().playlist.artwork == name && capDesc.bundle.state.playlists.single().playlist.description == "seeded description", "v3 preserves playlist artwork reference and description")
+        verify(capDesc.bundle.assets.containsKey(name), "playlist artwork asset included in v3 bundle")
+        val restoredV3 = BackupArchive.read(encode(capDesc.bundle).inputStream())
+        verify(restoredV3.state.playlists.single().playlist.artwork == name && restoredV3.state.playlists.single().playlist.description == "seeded description", "v3 archive round-trips playlist artwork and description")
+
+        // Missing playlist artwork counts in missing files warning but preserves description
+        val missingPlaylistArt = java.io.File(storage, "missing-playlist-art.jpg")
+        val withMissingArt = baseForPlaylist.copy(playlists = listOf(BackupPlaylist(Playlist(pid, "Mix", missingPlaylistArt.path, "seeded description"), emptyList())))
+        val capMissing = BackupArtwork.capture(withMissingArt, storage)
+        verify(capMissing.missingFiles == 1, "missing playlist artwork increments missingFiles count")
+        verify(capMissing.bundle.state.playlists.single().playlist.artwork == null && capMissing.bundle.state.playlists.single().playlist.description == "seeded description", "missing playlist artwork omitted but description preserved")
+        val both=state.copy(extras=state.extras+(id to state.extras.getValue(id).copy(artworkOverride=missing.path)))
+        val absent=BackupArtwork.capture(both,storage)
+        verify(absent.missingFiles==1&&absent.bundle.state.extras.getValue(id).artworkOverride==null,"missing album image is omitted and shared missing path counted once")
+        BackupArchive.read(encode(absent.bundle).inputStream())
+        val present=java.io.File(storage,"present.jpg").apply{writeBytes(art)}
+        val available=both.copy(extras=both.extras+(id to both.extras.getValue(id).copy(artworkOverride=present.path)),
+            preferences=both.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=present.path))))
+        val included=BackupArtwork.capture(available,storage)
+        verify(included.missingFiles==0&&included.bundle.assets.size==1&&included.bundle.assets.getValue(name).contentEquals(art),"existing shared artwork is included exactly once")
+        verify(BackupArchive.read(encode(included.bundle).inputStream()).state==included.bundle.state,"included artwork still passes strict archive validation")
+        fun withPath(path:String)=state.copy(preferences=state.preferences.copy(artists=mapOf("mira" to artist.copy(imagePath=path))))
+        rejects("outside-storage path remains an error even when missing"){BackupArtwork.capture(withPath(java.io.File(storage.parentFile,"outside-art.jpg").path),storage)}
+        rejects("unreadable directory is not treated as a missing image"){BackupArtwork.capture(withPath(storage.path),storage)}
+        val large=java.io.File(storage,"large.jpg").apply{java.io.RandomAccessFile(this,"rw").use{it.setLength(BackupArchive.MAX_ASSET+1L)}}
+        rejects("oversized artwork still fails"){BackupArtwork.capture(withPath(large.path),storage)}
+    } finally { storage.deleteRecursively() }
     println("Backup archive checks passed: $count assertions.")
 }

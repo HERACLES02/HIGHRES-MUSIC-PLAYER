@@ -124,8 +124,10 @@ object SeekChecks {
                 output.append("target=$target audioResumeMs=${firstAudio.get()-start} flushMs=${flushed.get()-start} pcmMs=${firstPcm.get()-start} initMs=${sinkInit.get()-start} readyMs=${ready.get()-start} sinkBufferBytes=$sinkBufferBytes bytes=${bytes.get()-initialBytes} opens=${opens.get()-initialOpens}\n")
             }
             var mediaCount=0
+            var normalOutput:LocalAudioOutputProvider.PcmOutput?=null
             main {
                 mediaCount=player.mediaItemCount
+                normalOutput=productionOutput?.pcmOutput
                 productionOutput?.preferAndroidUsb=true
                 check(reprepareForAudioRoute(player)){"Playing route reprepare was skipped"}
             }
@@ -134,7 +136,16 @@ object SeekChecks {
             if(variant=="production")main {
                 val usb=context.getSystemService(android.media.AudioManager::class.java).getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
                     .any{it.type==android.media.AudioDeviceInfo.TYPE_USB_DEVICE||it.type==android.media.AudioDeviceInfo.TYPE_USB_HEADSET}
-                if(!usb)check(productionOutput?.pcmOutput?.strategy=="Normal buffering"){"USB preference changed output without a USB device"}
+                if(!usb) {
+                    val normal=requireNotNull(normalOutput)
+                    val fallback=requireNotNull(productionOutput?.pcmOutput)
+                    check(fallback.copy(strategy=normal.strategy,fallbackReason=normal.fallbackReason)==normal) {
+                        "No-DAC fallback changed the requested buffer or AudioTrack format: $normal -> $fallback"
+                    }
+                    check(fallback.preferredDevice==null&&fallback.fallbackReason=="No USB DAC connected") {
+                        "No-DAC fallback did not explain why Android kept its standard output"
+                    }
+                }
             }
             output.append("playing route reprepare retained media items and position; no-USB fallback checked\n")
             main { player.pause();player.seekTo(95000) }
