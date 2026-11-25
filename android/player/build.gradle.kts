@@ -4,6 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 val experimentalDirectUsb=providers.gradleProperty("experimentalDirectUsb").orNull=="true"
+val soulseek=providers.gradleProperty("soulseek").orNull=="true"
 android {
     namespace = "com.localmusic.player"
     compileSdk = 36
@@ -78,7 +79,11 @@ android {
     ndkVersion = "27.2.12479018"
     externalNativeBuild { cmake { path = rootProject.file("native-tags/CMakeLists.txt"); version = "3.22.1" } }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-tags/notices"))
-    sourceSets.getByName("main").jniLibs.srcDir(rootProject.file(".tools/peer-test/jniLibs"))
+    // Soulseek appears only when its native library is packaged (SoulseekFixture.available).
+    // The normal app leaves it out unless built with -Psoulseek=true; Peer Test builds always carry it.
+    val peerLibs = rootProject.file(".tools/peer-test/jniLibs")
+    (if (soulseek) listOf("main") else listOf("peerTest", "peerPublicTest"))
+        .forEach { sourceSets.getByName(it).jniLibs.srcDir(peerLibs) }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
     sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
     sourceSets.getByName("peerPublicTest") {
