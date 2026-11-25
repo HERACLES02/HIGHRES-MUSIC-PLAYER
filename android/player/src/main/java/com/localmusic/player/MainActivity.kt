@@ -1049,7 +1049,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         Button(onClick = { screen = "Library"; mainScreen = "Library" }) { Text("Browse music") }
                     } else NowPlayingPanel(current, store?.artwork(current.id), playback, controller, ready, preferences.artworkSize, store, library.revision, send, actions,
                         openQueue = { queueFromPlaying = true; screen = "Queue" }, details = { details = current },
-                        openAudio={toolsReturn="Playing";screen="Audio controls"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"},openAlbum={category="Albums";search="";group=current.tags.album ?: "Unknown album";mainScreen="Library";screen="Library"},clock=clock)
+                        openAudio={toolsReturn="Playing";screen="Audio controls"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"},openAlbum={category="Albums";search="";group=current.tags.album ?: "Unknown album";mainScreen="Library";screen="Library"},openNative={nativeBatch=it},clock=clock)
                 }
             }
         }
@@ -1134,7 +1134,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
     if (licenses) {
         val context = androidx.compose.ui.platform.LocalContext.current
         var notice by remember { mutableStateOf("Loading notices…") }
-        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt", "CYBERPUNK-FONTS-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
+        LaunchedEffect(Unit) { notice = withContext(Dispatchers.IO) { listOf("NOTICE.txt", "COPYING.MPL", "COPYING.LGPL", "UTFCPP-LICENSE", "MATERIAL-SYMBOLS-NOTICE.txt", "CYBERPUNK-FONTS-NOTICE.txt", "KUROMOJI-NOTICE.txt").joinToString("\n\n") { name -> context.assets.open(name).bufferedReader().use { it.readText() } } } }
         AlertDialog(onDismissRequest = { licenses = false }, title = { Text("Open-source notices") }, text = { Text(notice, Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { licenses = false }) { Text("Close") } })
     }

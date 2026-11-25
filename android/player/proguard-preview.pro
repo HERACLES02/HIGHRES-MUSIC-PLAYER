@@ -6,3 +6,6 @@
 -keep class com.localmusic.player.SoulseekFixture {
     native <methods>;
 }
+
+# Kuromoji loads its dictionary files relative to its own class names.
+-keep class com.atilika.kuromoji.** { *; }

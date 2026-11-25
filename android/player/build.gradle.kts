@@ -87,6 +87,8 @@ android {
     (if (soulseek) listOf("main") else listOf("peerTest", "peerPublicTest"))
         .forEach { sourceSets.getByName(it).jniLibs.srcDir(peerLibs) }
     sourceSets.getByName("main").assets.srcDir(rootProject.file("native-usb/notices"))
+    // Both Kuromoji jars carry these files; their text ships as assets/KUROMOJI-NOTICE.txt.
+    packaging.resources.excludes += listOf("META-INF/CONTRIBUTORS.md", "META-INF/LICENSE.md", "META-INF/NOTICE.md")
     sourceSets.getByName("main").java.srcDir(rootProject.file("direct-usb/src/main/java"))
     sourceSets.getByName("peerPublicTest") {
         manifest.srcFile("src/peerTest/AndroidManifest.xml")

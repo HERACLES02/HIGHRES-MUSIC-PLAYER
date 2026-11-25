@@ -9,3 +9,8 @@ tasks.register<JavaExec>("selfTest") {
     mainClass.set("com.localmusic.core.CoreChecksKt")
 }
 tasks.check { dependsOn("selfTest") }
+
+dependencies {
+    // Offline Japanese word splitting and readings for romaji (Apache-2.0).
+    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
+}

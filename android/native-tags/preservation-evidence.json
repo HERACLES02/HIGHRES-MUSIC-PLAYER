@@ -75,7 +75,7 @@
   ],
   "malformedRejected": 5,
   "verifiedSources": {
-    "native-tags/tags.cpp": "51409957bd3e954ccf47a2dc6f84e3ddabc47ae2bd3434cb3576ade1b3d5104e",
+    "native-tags/tags.cpp": "9b15f67ca42cdbf94378f4eb7608049e1546625cb9db0212fd6ed11688bb5b5a",
     "native-tags/tags.hpp": "f704cf54d1f5fb8330cbacd3abfe6de4da1dfb3655eb079d2bc465f953fbc02c",
     "native-tags/jni.cpp": "7dcf69803332c6f314f026231de2eaf43d2245286b3840ccba7ee3e78cd827cd",
     "player-core/src/main/java/com/localmusic/core/AudioPayloadDigest.java": "d7e6005c664ff77c66c28a9c72986fcb6a3fee08a14de59379b5f212bc679302"

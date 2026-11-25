@@ -3,9 +3,9 @@ package com.localmusic.core
 /** Absent fields stay untouched. An included empty string explicitly clears that field. */
 data class TagPatch(val fields: Map<String, String>) {
     init {
-        require(fields.keys.all { it in KEYS })
-        require(fields.values.all { it.length <= 64000 && '\u0000' !in it })
-        require(fields.filterKeys { it != "ARTIST" && it != "COMMENT" }.values.none { '\n' in it || '\r' in it }) { "Only artists and comments can contain line breaks." }
+        require(fields.keys.all { it in KEYS || it == LYRICS })
+        require(fields.values.all { it.length <= 64000 && '\u0000' !in it }) { "Text is too long to write into the file (limit 64,000 characters)." }
+        require(fields.filterKeys { it != "ARTIST" && it != "COMMENT" && it != LYRICS }.values.none { '\n' in it || '\r' in it }) { "Only artists, comments and lyrics can contain line breaks." }
         for (key in listOf("TRACKNUMBER", "DISCNUMBER")) fields[key]?.takeIf { it.isNotEmpty() }?.let { require(it.toIntOrNull()?.let { n -> n in 1..99999 } == true) { "$key must be a positive number" } }
     }
     fun valuesFor(key: String): List<String> {
@@ -22,5 +22,9 @@ data class TagPatch(val fields: Map<String, String>) {
             discNumber = if ("DISCNUMBER" in fields) fields["DISCNUMBER"]?.toIntOrNull() else old.discNumber,
             date = optional("DATE", old.date), genre = optional("GENRE", old.genre), comment = optional("COMMENT", old.comment))
     }
-    companion object { val KEYS = listOf("TITLE", "ARTIST", "ALBUMARTIST", "ALBUM", "TRACKNUMBER", "DISCNUMBER", "DATE", "GENRE", "COMMENT") }
+    companion object {
+        val KEYS = listOf("TITLE", "ARTIST", "ALBUMARTIST", "ALBUM", "TRACKNUMBER", "DISCNUMBER", "DATE", "GENRE", "COMMENT")
+        /** Written only by "Embed in file" on the lyrics screen; kept out of KEYS so the tag editor does not list it. */
+        const val LYRICS = "LYRICS"
+    }
 }

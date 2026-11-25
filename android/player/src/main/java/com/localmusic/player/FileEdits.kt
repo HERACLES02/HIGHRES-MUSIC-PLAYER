@@ -28,19 +28,32 @@ class FileEdits(private val context: Context, private val store: MusicStore) {
             (file.name.startsWith("original.") || file.name.startsWith("staged."))) { "Invalid edit backup path" }
         return file
     }
+    private fun editSource(track: Track) = track.sources.sortedByDescending { it.kind == SourceKind.DOCUMENT }.firstOrNull { source ->
+        source.kind != SourceKind.DOCUMENT || resolver.persistedUriPermissions.any { p -> p.isReadPermission && store.state.value.folders.any { it.id == source.folderGrantId && it.treeUri == p.uri.toString() } }
+    }
+    private fun displayName(track: Track, source: TrackSource): String {
+        var name = track.tags.title
+        resolver.query(Uri.parse(source.uri), arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) name = c.getString(0) ?: name }
+        return name
+    }
+    /** Why this song's file cannot take a tag write, or null. Shared-storage (media) files ask Android for write access when saving. */
+    suspend fun writeBlockReason(track: Track): String? = withContext(Dispatchers.IO) {
+        val source = editSource(track) ?: return@withContext "The music file is not available."
+        if (displayName(track, source).substringAfterLast('.', "").lowercase() !in EDITABLE) return@withContext "This file type can't be edited."
+        if (source.kind == SourceKind.DOCUMENT && resolver.persistedUriPermissions.none { p -> p.isWritePermission && store.state.value.folders.any { it.id == source.folderGrantId && it.treeUri == p.uri.toString() } })
+            "No write permission for this music folder. Choose the folder again to allow changes."
+        else null
+    }
     suspend fun prepare(batch: String, ids: List<TrackId>, patch: TagPatch, coverMode: Int, coverPath: String): Unit = withContext(Dispatchers.IO) {
         require(ids.size in 1..50 && coverMode in 0..2)
         for (id in ids.distinct()) {
             currentCoroutineContext().ensureActive()
             val track = requireNotNull(repo().track(id))
-            val source = track.sources.sortedByDescending { it.kind == SourceKind.DOCUMENT }.firstOrNull { source ->
-                source.kind != SourceKind.DOCUMENT || resolver.persistedUriPermissions.any { p -> p.isReadPermission && store.state.value.folders.any { it.id == source.folderGrantId && it.treeUri == p.uri.toString() } }
-            } ?: error("Song source unavailable")
+            val source = editSource(track) ?: error("Song source unavailable")
             val uri = Uri.parse(source.uri)
-            var name = track.tags.title
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) name = c.getString(0) ?: name }
+            val name = displayName(track, source)
             val ext = name.substringAfterLast('.', "").lowercase()
-            require(ext in setOf("mp3", "flac", "m4a", "ogg", "oga", "opus")) { "$name: embedded editing is not enabled for this container. Use app-only editing." }
+            require(ext in EDITABLE) { "$name: embedded editing is not enabled for this container. Use app-only editing." }
             val editId = UUID.randomUUID().toString(); val directory = File(root, editId).apply { mkdirs() }
             val backup = File(directory, "original.$ext"); val staged = File(directory, "staged.$ext")
             val now = System.currentTimeMillis()
@@ -212,6 +225,7 @@ class FileEdits(private val context: Context, private val store: MusicStore) {
         } finally { art.delete() }
     }
     companion object {
+        private val EDITABLE = setOf("mp3", "flac", "m4a", "ogg", "oga", "opus")
         private fun syncDirectory(directory: File) {
             check(directory.isDirectory)
             val fd = Os.open(directory.path, OsConstants.O_RDONLY, 0)

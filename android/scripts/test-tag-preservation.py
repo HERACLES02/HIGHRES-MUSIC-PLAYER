@@ -62,6 +62,15 @@ for ext,codec,source in fixtures:
     credits=read(path)['properties']
     assert credits['ARTIST']==['Singer A','Singer B'] and credits['COMMENT']==['Line one\nLine two'],(ext,'multi-artist or multiline comment failed',credits)
     assert digest(path)==payload and packets(path)==encoded,(ext,'credits/comment changed audio')
+    lyrics='[ar:Singer]\n[00:01.25]第一行 🎵\n\n[00:02.50]Line two'
+    lyrics_file=work/'lyrics.txt'; lyrics_file.write_bytes(lyrics.encode('utf-8'))
+    run(cli,'edit',path,'LYRICS','@'+str(lyrics_file))
+    embedded=read(path)['properties']
+    assert embedded.get('LYRICS')==[lyrics],(ext,'embedded lyrics must replace the old ones as one value with line breaks',embedded)
+    assert embedded.get('COMMENT')==['Line one\nLine two'] and embedded.get('TITLE')==credits.get('TITLE'),(ext,'lyrics changed other fields')
+    assert digest(path)==payload and packets(path)==encoded,(ext,'lyrics changed audio')
+    run(cli,'edit',path,'LYRICS','')
+    assert not read(path)['properties'].get('LYRICS'),(ext,'clearing lyrics failed')
     run(cli,'cover',path,'1',cover);run(cli,'back',path,cover)
     attached=read(path)['pictureFingerprints'];assert len(attached)==2,ext
     run(cli,'edit',path,'TITLE','Artwork retained')

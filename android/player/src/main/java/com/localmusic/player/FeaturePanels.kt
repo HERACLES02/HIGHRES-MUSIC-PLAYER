@@ -23,10 +23,12 @@ import androidx.media3.session.MediaController
 import coil3.compose.AsyncImage
 import com.localmusic.core.*
 import com.localmusic.data.FileEditRow
+import com.localmusic.data.LibraryExtras
 import com.localmusic.data.LyricsSource
 import com.localmusic.data.RecordingCandidate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import org.json.JSONObject
 import java.io.File
@@ -46,7 +48,13 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
 }
 
 @Composable fun LyricsPanel(track: Track, store: MusicStore?, revision: Long, positionMs: Long, controller: MediaController?,
-    send: (String, Bundle) -> Unit, actions: FeatureActions, expanded: Boolean = false, beforeImport: () -> Unit = {}) {
+    send: (String, Bundle) -> Unit, actions: FeatureActions, openNative: (String) -> Unit, expanded: Boolean = false, beforeImport: () -> Unit = {}) {
+    fun embed(text: String) {
+        val batch = UUID.randomUUID().toString()
+        send(PlaybackService.EDIT_PREPARE, Bundle().apply { putString("batch", batch); putStringArrayList("ids", arrayListOf(track.id.value.toString()))
+            putString("patch", JSONObject(mapOf(TagPatch.LYRICS to text)).toString()); putInt("coverMode", 0) })
+        openNative(batch)
+    }
     var versions by remember(track.id) { mutableStateOf(emptyList<SavedLyrics>()) }
     var selected by remember(track.id) { mutableStateOf<SavedLyrics?>(null) }
     var loadError by remember(track.id) { mutableStateOf("") }
@@ -54,21 +62,54 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
     var showVersions by rememberSaveable(track.id) { mutableStateOf(false) }
     var showTools by rememberSaveable(track.id) { mutableStateOf(!expanded) }
     var search by rememberSaveable(track.id) { mutableStateOf(false) }
+    var fileBlock by remember(track.id) { mutableStateOf<String?>("Checking the music file…") }
+    var confirmEmbed by remember(track.id) { mutableStateOf<String?>(null) }
+    var details by remember(track.id) { mutableStateOf<LibraryExtras?>(null) }
+    val context = LocalContext.current
     LaunchedEffect(track.id, revision) {
         try {
-            val repo = store?.repository() ?: return@LaunchedEffect
-            versions = repo.lyricVersions(track.id); selected = repo.selectedLyrics(track.id)
+            val music = store ?: return@LaunchedEffect
+            val repo = music.repository()
+            versions = repo.lyricVersions(track.id); selected = repo.selectedLyrics(track.id); details = repo.extra(track.id)
+            fileBlock = runCatching { FileEdits(context, music).writeBlockReason(track) }.getOrElse { if (it is CancellationException) throw it; "Cannot check the music file: ${it.message}" }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { loadError = "Cannot load lyrics: ${e.message}" }
     }
     val lyrics = remember(selected) { selected?.let { runCatching { LrcParser.parse(it.originalText, it.instrumental) }.getOrNull() } }
-    val adjustment = store?.state?.value?.details?.get(track.id)?.lyricsAdjustmentMs ?: selected?.timingAdjustmentMs ?: 0
+    val adjustment = details?.lyricsAdjustmentMs ?: selected?.timingAdjustmentMs ?: 0
+    val embedText = remember(selected, adjustment) { selected?.let { saved ->
+        runCatching { LyricsEmbed.text(saved, adjustment).also { TagPatch(mapOf(TagPatch.LYRICS to it)) } }
+    } }
+    val embedBlock = fileBlock ?: embedText?.exceptionOrNull()?.message
     val timeline = remember(lyrics, adjustment) { lyrics?.let { LyricsTimeline(it, adjustment) } }
     val active = timeline?.activeIndices(positionMs).orEmpty()
+    val language = remember(lyrics) { lyrics?.let(LyricsRomaji::language) }
+    val mode = store?.romajiMode?.collectAsState()?.value ?: RomajiMode.ORIGINAL
+    val wantsRomaji = language != null && mode != RomajiMode.ORIGINAL
+    var romaji by remember(lyrics) { mutableStateOf<List<String>?>(null) }
+    var romajiError by remember(lyrics) { mutableStateOf("") }
+    // Built only when first shown; the hidden copy is reused after that.
+    LaunchedEffect(lyrics, wantsRomaji) {
+        val saved = selected; val parsed = lyrics; val music = store
+        if (!wantsRomaji || saved == null || parsed == null || music == null || romaji != null) return@LaunchedEffect
+        try { romaji = music.romaji.lines(saved, parsed, language) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { romajiError = "Romaji is unavailable: ${e.message}" }
+    }
+    val shownRomaji = romaji.takeIf { wantsRomaji }
+    val scope = rememberCoroutineScope()
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text("Lyrics", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         if (expanded) IconButton(onClick = { showTools = !showTools }) { Icon(PlayerGlyph.More, "Lyrics actions and timing") }
     }
+    if (language != null && store != null) PlayerActions() {
+        RomajiMode.entries.forEach { item ->
+            FilterChip(mode == item, { scope.launch {
+                try { store.setRomajiMode(item) } catch (e: CancellationException) { throw e } catch (e: Exception) { loadError = "Cannot save the lyrics display choice: ${e.message}" }
+            } }, label = { Text(when (item) { RomajiMode.ORIGINAL -> "Original"; RomajiMode.ROMAJI -> "Romaji"; RomajiMode.BOTH -> "Both" }) })
+        }
+    }
+    if (wantsRomaji && romaji == null) Text(romajiError.ifBlank { "Making romaji…" }, style = MaterialTheme.typography.bodySmall)
     if (loadError.isNotBlank()) Text(loadError, color = MaterialTheme.colorScheme.error)
     if (showTools) PlayerActions() {
         TextButton(onClick = { edit = true }) { Text("Paste / edit") }
@@ -76,6 +117,17 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
         TextButton(onClick = { search = true }) { Text("Find lyrics…") }
         if (versions.isNotEmpty()) TextButton(onClick = { showVersions = !showVersions }) { Text("Versions (${versions.size})") }
         selected?.let { value -> TextButton(onClick = { actions.exportLyrics(track, value.originalText) }) { Text("Export") } }
+        embedText?.let { result -> TextButton(enabled = embedBlock == null && store?.state?.value?.scanning != true, onClick = {
+            val text = result.getOrNull() ?: return@TextButton
+            if (details?.embeddedVersion != null || versions.any { it.origin == LyricsOrigin.EMBEDDED }) confirmEmbed = text else embed(text)
+        }) { Text("Embed in file") } }
+    }
+    if (showTools && embedText != null && embedBlock != null) Text("Embed in file: $embedBlock", style = MaterialTheme.typography.bodySmall)
+    confirmEmbed?.let { text ->
+        AlertDialog(onDismissRequest = { confirmEmbed = null }, title = { Text("Replace lyrics in the file?") },
+            text = { Text("This replaces the lyrics inside the file. You can undo.") },
+            confirmButton = { TextButton(onClick = { confirmEmbed = null; embed(text) }) { Text("Replace") } },
+            dismissButton = { TextButton(onClick = { confirmEmbed = null }) { Text("Cancel") } })
     }
     if (showVersions) Column {
         TextButton(onClick = { send(PlaybackService.LYRICS_SELECT, Bundle().apply { putString("id", track.id.value.toString()) }) }) { Text("Use automatic source priority") }
@@ -85,18 +137,29 @@ data class FeatureActions(val pickFolder: () -> Unit, val pickCover: (List<Track
             LyricsOrigin.USER_SELECTED -> "Saved / imported"; LyricsOrigin.NEIGHBORING_LRC -> "Neighboring LRC"; LyricsOrigin.EMBEDDED -> "Embedded"
         } + " · " + value.originalText.lineSequence().firstOrNull().orEmpty().take(55)) } }
     }
+    val lineStyle = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge
+    val romajiStyle = if (expanded) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium
+    // "Both" puts the romaji, smaller, under its original line; lines that need no romaji show once.
+    fun shown(original: String, index: Int) = shownRomaji?.getOrNull(index)?.takeIf { mode == RomajiMode.ROMAJI } ?: original
+    fun under(original: String, index: Int) = shownRomaji?.getOrNull(index)?.takeIf { mode == RomajiMode.BOTH && it.isNotBlank() && it != original }
     when (lyrics?.kind) {
         LyricsKind.INSTRUMENTAL -> Text("Instrumental")
-        LyricsKind.PLAIN -> Text(lyrics.plainLines.joinToString("\n"), style = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
+        LyricsKind.PLAIN -> if (shownRomaji == null) Text(lyrics.plainLines.joinToString("\n"), style = lineStyle)
+            else Column { lyrics.plainLines.forEachIndexed { index, line ->
+                Text(shown(line, index), style = lineStyle)
+                under(line, index)?.let { Text(it, style = romajiStyle, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            } }
         LyricsKind.SYNCHRONIZED -> {
             val list = rememberLazyListState()
             LaunchedEffect(active.firstOrNull()) { active.firstOrNull()?.let { list.animateScrollToItem((it - 2).coerceAtLeast(0)) } }
             LazyColumn(Modifier.fillMaxWidth().height(if (expanded) 400.dp else 300.dp), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(lyrics.lines) { index, line ->
-                    Text(line.text.ifBlank { "…" }, modifier = Modifier.fillMaxWidth().clickable { controller?.seekTo(timeline!!.seekPosition(index)) }.padding(vertical = 8.dp),
-                        color = if (index in active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (index in active) FontWeight.Bold else FontWeight.Normal,
-                        style = if (expanded) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
+                    val color = if (index in active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(Modifier.fillMaxWidth().clickable { controller?.seekTo(timeline!!.seekPosition(index)) }.padding(vertical = 8.dp)) {
+                        Text(shown(line.text, index).ifBlank { "…" }, color = color,
+                            fontWeight = if (index in active) FontWeight.Bold else FontWeight.Normal, style = lineStyle)
+                        under(line.text, index)?.let { Text(it, color = color, style = romajiStyle) }
+                    }
                 }
             }
             val offset = adjustment
@@ -499,6 +562,7 @@ private fun CandidateThumbnail(url: String?, title: String, store: MusicStore?, 
                     val old = runCatching { JSONObject(row.beforeJson).getJSONObject("properties") }.getOrDefault(JSONObject())
                     val next = runCatching { JSONObject(row.afterJson).getJSONObject("properties") }.getOrDefault(JSONObject())
                     patch.keys().asSequence().filter { it in TagPatch.KEYS }.forEach { key -> Text("$key: ${old.optJSONArray(key) ?: "(empty)"} → ${next.optJSONArray(key) ?: "(clear)"}") }
+                    if (patch.has(TagPatch.LYRICS)) Text("Lyrics: ${if (old.has(TagPatch.LYRICS)) "replace the lyrics in the file" else "add lyrics to the file"} (${patch.getString(TagPatch.LYRICS).lines().size} lines)")
                     if (row.coverMode != 0) Text(if (row.coverMode == 1) "Replace front cover" else "Remove front cover")
                     Text("Encoded audio/configuration verified unchanged in the staged copy.", style = MaterialTheme.typography.bodySmall)
                 }

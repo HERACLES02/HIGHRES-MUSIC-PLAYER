@@ -85,6 +85,38 @@ object LrcParser {
         require(positionMs in 0..59_999_999_999L); require(!line.contains('\n') && !line.contains('\r'))
         return "[%02d:%02d.%03d]%s".format(java.util.Locale.ROOT, positionMs / 60000, positionMs / 1000 % 60, positionMs % 1000, line)
     }
+
+    /** Moves every line timestamp by [deltaMs] as `[mm:ss.xx]`. Words, metadata tags and line endings are kept. */
+    fun shift(text: String, deltaMs: Long): String {
+        require(deltaMs in -MAX_ADJUSTMENT_MS..MAX_ADJUSTMENT_MS)
+        if (deltaMs == 0L) return text
+        return text.removePrefix("﻿").split('\n').joinToString("\n") { line ->
+            val head = prefix.find(line)?.value ?: return@joinToString line
+            token.replace(head) { tag ->
+                val time = timestamp.matchEntire(tag.groupValues[1]) ?: return@replace tag.value
+                val ms = time.groupValues[1].toLong() * 60000 + time.groupValues[2].toLong() * 1000 + time.groupValues[3].padEnd(3, '0').ifEmpty { "000" }.toLong()
+                val cs = ((ms + deltaMs).coerceIn(0, 59_999_999_999L) + 5) / 10
+                val clamped = cs.coerceAtMost(5_999_999_999L)
+                "[%02d:%02d.%02d]".format(java.util.Locale.ROOT, clamped / 6000, clamped / 100 % 60, clamped % 100)
+            } + line.substring(head.length)
+        }
+    }
+}
+
+/** What "Embed in file" writes: the original lyrics, with the in-app timing adjustment built into synced timestamps. */
+object LyricsEmbed {
+    fun text(lyrics: SavedLyrics, adjustmentMs: Long): String {
+        require(!lyrics.instrumental) { "Instrumental versions have no lyrics to embed." }
+        val parsed = LrcParser.parse(lyrics.originalText)
+        require(parsed.kind != LyricsKind.EMPTY && lyrics.originalText.isNotBlank()) { "These lyrics are empty." }
+        return if (parsed.kind == LyricsKind.SYNCHRONIZED) LrcParser.shift(lyrics.originalText, adjustmentMs) else lyrics.originalText
+    }
+
+    /** The saved version a file's lyrics came from, so a rescan after embedding adds no duplicate. */
+    fun sameLyrics(fileText: String, versions: List<SavedLyrics>, trackAdjustmentMs: Long?): SavedLyrics? = versions.firstOrNull { version ->
+        !version.instrumental && (version.originalText == fileText ||
+            runCatching { text(version, trackAdjustmentMs ?: version.timingAdjustmentMs) }.getOrNull() == fileText)
+    }
 }
 
 /** File offset positive = earlier; app adjustment positive = later. Both leave original text intact. */

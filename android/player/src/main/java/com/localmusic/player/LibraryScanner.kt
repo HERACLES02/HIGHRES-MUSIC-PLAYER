@@ -153,7 +153,10 @@ class LibraryScanner(private val context: Context, private val store: MusicStore
     private suspend fun saveDiscoveredLyrics(id: TrackId, text: String, origin: LyricsOrigin, source: String) {
         LrcParser.parse(text)
         val repo = store.repository()
-        val exists = repo.lyricVersions(id).firstOrNull { it.origin == origin && it.originalText == text && it.sourceUrl == source }
+        val versions = repo.lyricVersions(id)
+        // After "Embed in file", the file's lyrics are a saved version's text; point at that version instead of adding a duplicate.
+        val exists = versions.firstOrNull { it.origin == origin && it.originalText == text && it.sourceUrl == source }
+            ?: if (origin == LyricsOrigin.EMBEDDED) LyricsEmbed.sameLyrics(text, versions, repo.extra(id).lyricsAdjustmentMs) else null
         val version = exists?.id ?: UUID.randomUUID()
         if (exists == null) repo.saveLyrics(SavedLyrics(version, id, text, origin, sourceUrl = source))
         repo.updateExtra(id) { if (origin == LyricsOrigin.NEIGHBORING_LRC) it.copy(sidecarVersion = version.toString()) else it.copy(embeddedVersion = version.toString()) }

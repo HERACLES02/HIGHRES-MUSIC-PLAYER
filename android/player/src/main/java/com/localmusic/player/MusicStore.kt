@@ -117,6 +117,12 @@ class MusicStore(private val context: Context, private val scope: CoroutineScope
         context.musicPreferences.edit { it[stringPreferencesKey("appearance")] = appearance; it[booleanPreferencesKey("autoScan")] = autoScan }
     }
     suspend fun setHomeGrid(grid:Boolean){AppBackups(context,this).recoverPreferences();context.musicPreferences.edit{it[booleanPreferencesKey("homeGrid")]=grid}}
+    val romaji by lazy { LyricsRomajiCache(context) }
+    /** One app-wide lyrics display choice for songs that can be romanized. */
+    val romajiMode = context.musicPreferences.data.catch { emit(emptyPreferences()) }.map { values ->
+        RomajiMode.entries.firstOrNull { it.name == values[stringPreferencesKey("lyricsRomaji")] } ?: RomajiMode.ORIGINAL
+    }.stateIn(scope, SharingStarted.Eagerly, RomajiMode.ORIGINAL)
+    suspend fun setRomajiMode(mode:RomajiMode){AppBackups(context,this).recoverPreferences();context.musicPreferences.edit{it[stringPreferencesKey("lyricsRomaji")]=mode.name}}
     suspend fun backupPreferences(): BackupPreferences {
         return readPreferences(context.musicPreferences.data.first())
     }

@@ -312,6 +312,84 @@ private fun identityChecks() {
     failure { ContentStamp(-1, null) }; failure { ContentStamp(2, null, "bad hash") }
 }
 
+private fun lyricsEmbedChecks() {
+    val lyrics = "Line one\nLine two"
+    val patch = TagPatch(mapOf(TagPatch.LYRICS to lyrics))
+    expect(patch.valuesFor(TagPatch.LYRICS) == listOf(lyrics), "Embedded lyrics stay one value with line breaks")
+    expect(TagPatch.LYRICS !in TagPatch.KEYS, "Lyrics are not a field in the tag editor")
+    failure { TagPatch(mapOf("TITLE" to "a\nb")) }
+    fun saved(text: String, instrumental: Boolean = false, adjustment: Long = 0, origin: LyricsOrigin = LyricsOrigin.USER_SELECTED) =
+        SavedLyrics(UUID.randomUUID(), track(1), text, origin, adjustment, instrumental = instrumental)
+    val synced = "[ar:Singer]\n[offset:100]\n[00:01.00][00:03.50]Hello\n[00:02.25]World\r\nplain note"
+    expect(LyricsEmbed.text(saved(synced), 0) == synced, "No adjustment writes the original text unchanged")
+    expect(LyricsEmbed.text(saved(synced), 250) == "[ar:Singer]\n[offset:100]\n[00:01.25][00:03.75]Hello\n[00:02.50]World\r\nplain note",
+        "Later adjustment is built into every timestamp; tags, file offset and line endings kept")
+    expect(LyricsEmbed.text(saved("[00:00.10]Intro\n[01:59.999]Edge"), -500) == "[00:00.00]Intro\n[01:59.50]Edge",
+        "Earlier adjustment clamps at zero and writes centiseconds")
+    val shifted = LrcParser.parse(LyricsEmbed.text(saved(synced), 250))
+    val original = LrcParser.parse(synced)
+    expect(shifted.lines.indices.all { LyricsTimeline(shifted).seekPosition(it) == LyricsTimeline(original, 250).seekPosition(it) },
+        "Embedded timing plays like the adjusted in-app timing")
+    expect(LyricsEmbed.text(saved("Plain words\n[not a time]"), 750) == "Plain words\n[not a time]", "Plain lyrics are written as-is")
+    failure { LyricsEmbed.text(saved("", instrumental = true), 0) }
+    failure { LyricsEmbed.text(saved("   \n"), 0) }
+    val chosen = saved(synced, adjustment = 250)
+    val versions = listOf(saved("Other"), chosen)
+    expect(LyricsEmbed.sameLyrics(synced, versions, null) == chosen, "Rescan recognizes an unadjusted embedded copy")
+    expect(LyricsEmbed.sameLyrics(LyricsEmbed.text(chosen, 250), versions, null) == chosen, "Rescan recognizes a copy with the version's adjustment built in")
+    expect(LyricsEmbed.sameLyrics(LyricsEmbed.text(chosen, -250), versions, -250) == chosen, "Track-wide adjustment wins over the version's own")
+    expect(LyricsEmbed.sameLyrics("Different words", versions, null) == null, "Unrelated file lyrics are a new version")
+}
+
+private fun koreanRomajiChecks() {
+    mapOf("같이" to "gachi", "한국말" to "hangungmal", "감사합니다" to "gamsahamnida", "사랑해 baby" to "saranghae baby",
+        "좋아" to "joa", "좋다" to "jota", "있어" to "isseo", "읽어" to "ilgeo", "신라" to "silla", "설날" to "seollal",
+        "독립" to "dongnip", "안녕" to "annyeong", "보고 싶어" to "bogo sipeo", "놓는" to "nonneun", "잃어" to "ireo",
+        "없어" to "eopseo", "밖에" to "bakke", "굳이" to "guji", "학교" to "hakgyo", "백마" to "baengma",
+        "깨끗하다" to "kkaekkeutada", "Oh 너는, 나의 별!" to "Oh neoneun, naui byeol!", "ㅋㅋ 3시" to "ㅋㅋ 3si"
+    ).forEach { (hangul, romaji) -> expect(KoreanRomanizer.line(hangul) == romaji, "$hangul -> $romaji (got ${KoreanRomanizer.line(hangul)})") }
+
+    fun parse(text: String, instrumental: Boolean = false) = LrcParser.parse(text, instrumental)
+    expect(LyricsRomaji.language(parse("[00:01]Hello\n[00:02]사랑해")) == RomajiLanguage.KOREAN, "Any Hangul means Korean")
+    expect(LyricsRomaji.language(parse("君の声が\n사랑")) == RomajiLanguage.KOREAN, "Hangul wins over kana")
+    expect(LyricsRomaji.language(parse("君の声が聞こえる")) == RomajiLanguage.JAPANESE, "Kana means Japanese")
+    expect(LyricsRomaji.language(parse("我爱你\n月亮代表我的心")) == null, "Han characters without kana are left alone as Chinese")
+    expect(LyricsRomaji.language(parse("我爱你・ー")) == null, "Katakana middle dot and long mark alone are not Japanese")
+    expect(LyricsRomaji.language(parse("Just English")) == null, "Latin lyrics are not romanizable")
+    expect(LyricsRomaji.language(parse("사랑", instrumental = true)) == null, "Instrumental versions have nothing to romanize")
+    expect(LyricsRomaji.language(parse("[ar:가수]\n[00:01]Hello")) == null, "Metadata tags do not decide the language")
+
+    val synced = parse("[ti:노래]\n[00:01.00]같이 가자\n[00:03.50]\n[00:05.00]Love 한국말")
+    val romaji = LyricsRomaji.romanize(synced, RomajiLanguage.KOREAN)
+    expect(romaji == listOf("gachi gaja", "", "Love hangungmal"), "One romaji line per timed line, blank lines kept (got $romaji)")
+    expect(LyricsRomaji.romanize(parse("하나\n둘"), RomajiLanguage.KOREAN) == listOf("hana", "dul"), "Plain lyrics romanize line by line")
+
+    val stored = LyricsRomaji.encode(synced, romaji)
+    expect(LyricsRomaji.decode(stored, synced) == romaji, "Saved copy reads back for the same lyrics")
+    expect(LyricsRomaji.decode(stored, parse("[ti:노래]\n[00:01.10]같이 가자\n[00:03.50]\n[00:05.00]Love 한국말")) == null,
+        "Changed timing in the original rebuilds the copy")
+    expect(LyricsRomaji.decode(stored, parse("[00:01.00]다른 노래")) == null, "Changed words rebuild the copy")
+    expect(LyricsRomaji.decode(stored.replaceFirst("v${LyricsRomaji.VERSION}", "v0"), synced) == null, "Older romanizer copy is rebuilt")
+    expect(LyricsRomaji.decode("garbage", synced) == null && LyricsRomaji.decode("", synced) == null, "Damaged copy is rebuilt")
+    expect(LyricsRomaji.decode(stored.substringBeforeLast('\n'), synced) == null, "Copy with a missing line is rebuilt")
+}
+
+private fun japaneseRomajiChecks() {
+    mapOf("君の声が聞こえる" to "kimi no koe ga kikoeru", "私は" to "watashi wa", "君を待つ" to "kimi o matsu",
+        "東京へ行く" to "toukyou e iku", "今日" to "kyou", "さようなら" to "sayounara", "ありがとう" to "arigatou",
+        "ラーメン" to "raamen", "ちょっと待って" to "chotto matte", "行かない" to "ikanai", "見たい" to "mitai",
+        "行った" to "itta", "君だ" to "kimi da", "こんにちは" to "konnichiwa", "恋愛" to "ren'ai", "君、好き。" to "kimi, suki.",
+        "Love you 君が好き" to "Love you kimi ga suki", "ジャンプ" to "janpu", "パーティー" to "paatii"
+    ).forEach { (japanese, romaji) -> expect(JapaneseRomanizer.line(japanese) == romaji, "$japanese -> $romaji (got ${JapaneseRomanizer.line(japanese)})") }
+    listOf("Don't stop me now", "I love you, baby!", "Oh-oh, yeah (yeah)", "It's 2 a.m. and I'm OK", "Hey  hey...")
+        .forEach { english -> expect(JapaneseRomanizer.line(english) == english, "English line stays exactly as written: '$english' (got '${JapaneseRomanizer.line(english)}')") }
+    expect(JapaneseRomanizer.line("Don't go, 君が好き!") == "Don't go, kimi ga suki!", "English inside a Japanese line is kept exactly (got '${JapaneseRomanizer.line("Don't go, 君が好き!")}')")
+    expect(JapaneseRomanizer.line("Love君") == "Love kimi", "A space separates romaji from touching English (got '${JapaneseRomanizer.line("Love君")}')")
+    val synced = LrcParser.parse("[00:01]君の声が\n[00:02]\n[00:03]聞こえる")
+    expect(LyricsRomaji.language(synced) == RomajiLanguage.JAPANESE, "Japanese song detected")
+    expect(LyricsRomaji.romanize(synced, RomajiLanguage.JAPANESE) == listOf("kimi no koe ga", "", "kikoeru"), "Japanese romaji keeps one line per timed line")
+}
+
 fun main() {
     for(bits in listOf(16,24))for(rate in listOf(44100,48000,88200,96000))
         expect(DirectUsbFormat.supported(AudioProperties(6000,"audio/flac",rate,2,bits)),"Direct preserves supported stereo source rate/depth")
@@ -330,6 +408,6 @@ fun main() {
     expect(!delayed.isRetired(),"Overflowed retirement evidence fails closed")
     val unknown=OutputRetirement();unknown.remember{error("unavailable")}
     expect(!unknown.isRetired(),"Unknown retirement does not permit takeover")
-    queueChecks(); lyricChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks(); libraryFavoritesChecks(); libraryBrowseChecks(); themeStyleChecks()
+    queueChecks(); lyricChecks(); lyricsEmbedChecks(); koreanRomajiChecks(); japaneseRomajiChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks(); libraryFavoritesChecks(); libraryBrowseChecks(); themeStyleChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

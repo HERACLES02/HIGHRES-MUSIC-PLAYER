@@ -13,6 +13,7 @@
 #include <id3v2tag.h>
 #include <textidentificationframe.h>
 #include <commentsframe.h>
+#include <unsynchronizedlyricsframe.h>
 #include <id3v1tag.h>
 #include <fstream>
 #include <sstream>
@@ -105,14 +106,15 @@ std::string readDescriptor(int descriptor,const std::string& artworkPath) {
 }
 #endif
 void edit(const std::string& path,const std::vector<std::pair<std::string,std::string>>& fields,int coverMode,const std::string& coverPath,const std::string& mime) {
-  const std::set<std::string> allowed={"TITLE","ARTIST","ALBUMARTIST","ALBUM","TRACKNUMBER","DISCNUMBER","DATE","GENRE","COMMENT"};
+  const std::set<std::string> allowed={"TITLE","ARTIST","ALBUMARTIST","ALBUM","TRACKNUMBER","DISCNUMBER","DATE","GENRE","COMMENT","LYRICS"};
   TagLib::FileRef f(path.c_str()); valid(f);
   auto mpeg=dynamic_cast<TagLib::MPEG::File*>(f.file());
   auto properties=f.properties();
   for(const auto& field:fields) {
     if(!allowed.count(field.first))throw std::runtime_error("Unsupported edit field");
     TagLib::StringList values;
-    if(field.first=="COMMENT") { if(!field.second.empty())values.append(str(field.second)); }
+    // Comments and lyrics stay one value whose line breaks are content; other fields split lines into values.
+    if(field.first=="COMMENT"||field.first=="LYRICS") { if(!field.second.empty())values.append(str(field.second)); }
     else {
       std::istringstream parts(field.second);std::string value;
       while(std::getline(parts,value)) if(!value.empty())values.append(str(value));
@@ -124,6 +126,7 @@ void edit(const std::string& path,const std::vector<std::pair<std::string,std::s
         bool matches=false;
         if(auto text=dynamic_cast<TagLib::ID3v2::TextIdentificationFrame*>(frame))matches=text->asProperties().contains(str(field.first));
         if(auto comment=dynamic_cast<TagLib::ID3v2::CommentsFrame*>(frame))matches=comment->asProperties().contains(str(field.first));
+        if(auto lyrics=dynamic_cast<TagLib::ID3v2::UnsynchronizedLyricsFrame*>(frame))matches=lyrics->asProperties().contains(str(field.first));
         if(matches)tag->removeFrame(frame,true);
       }
       if(auto legacy=mpeg->ID3v1Tag()) {
@@ -138,6 +141,9 @@ void edit(const std::string& path,const std::vector<std::pair<std::string,std::s
       }
       if(field.first=="COMMENT") {
         if(!values.isEmpty()) { auto comment=new TagLib::ID3v2::CommentsFrame(TagLib::String::UTF8);comment->setText(values.toString("\n"));tag->addFrame(comment); }
+      } else if(field.first=="LYRICS") {
+        // ID3v1 has no lyrics field. USLT frames with their own description read back as LYRICS:<description> and are kept.
+        if(!values.isEmpty()) { auto lyrics=new TagLib::ID3v2::UnsynchronizedLyricsFrame(TagLib::String::UTF8);lyrics->setText(values.front());tag->addFrame(lyrics); }
       } else {
         const std::map<std::string,std::string> frames={{"TITLE","TIT2"},{"ARTIST","TPE1"},{"ALBUMARTIST","TPE2"},{"ALBUM","TALB"},{"TRACKNUMBER","TRCK"},{"DISCNUMBER","TPOS"},{"DATE","TDRC"},{"GENRE","TCON"}};
         auto id=frames.at(field.first); TagLib::ByteVector frameId(id.data(),id.size());tag->removeFrames(frameId);

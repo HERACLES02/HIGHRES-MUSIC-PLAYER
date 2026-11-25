@@ -57,7 +57,7 @@ internal fun nowPlayingBackground(): Modifier {
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
-    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,clock:PlaybackUiState?=null) {
+    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,openNative:(String)->Unit,clock:PlaybackUiState?=null) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
@@ -191,7 +191,7 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
                 IconButton(onClick = { lyricsOpen = false }) { Icon(PlayerGlyph.Close, "Close lyrics") }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                LyricsPanel(track, store, revision, position, controller, send, actions, expanded = true, beforeImport = { lyricsOpen = false })
+                LyricsPanel(track, store, revision, position, controller, send, actions, openNative, expanded = true, beforeImport = { lyricsOpen = false })
             }
             if (LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
