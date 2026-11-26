@@ -62,6 +62,31 @@ fun usbRoutePolicyChecks() {
     verify(resRejectNonDefault is RouteSelectionResult.Fallback,
         "Multi-channel or non-default mixer behavior rejected")
 
+    // 4b. Only a missing exact rate counts as the DAC refusing the rate (drives the "rate unsupported" badge)
+    verify(res88 is RouteSelectionResult.Fallback && res88.rateRefused, "Android 14 exact-rate miss is a rate refusal")
+    verify(res16For24Source is RouteSelectionResult.Fallback && !res16For24Source.rateRefused, "16-bit rejection is not a rate refusal")
+    val resNoFormats = UsbRoutePolicy.selectPreferredFormat(emptyList(), rate, sourceBitDepth = 24)
+    verify(resNoFormats is RouteSelectionResult.Fallback && !resNoFormats.rateRefused, "No reported formats is not a rate refusal")
+    verify(resRejectNonDefault is RouteSelectionResult.Fallback && !resRejectNonDefault.rateRefused,
+        "Non-stereo/non-default rejection is not a rate refusal")
+
+    // 4c. Android 11–13 legacy route
+    var platformAsked = false
+    for (low in listOf(44100, 48000)) {
+        val res = UsbRoutePolicy.selectLegacyRoute(low, { platformAsked = true; true }, { platformAsked = true; true })
+        verify(res is RouteSelectionResult.Fallback && !res.rateRefused && res.reason.contains("<= 48 kHz"),
+            "Legacy $low Hz stays on the normal route and is not a rate refusal")
+    }
+    verify(!platformAsked, "Legacy <= 48 kHz never queries the platform")
+    val legacy192 = UsbRoutePolicy.selectLegacyRoute(192000, { false }, { true })
+    verify(legacy192 is RouteSelectionResult.Fallback && legacy192.rateRefused, "Legacy rate not listed by the DAC is a rate refusal")
+    val legacyNoDirect = UsbRoutePolicy.selectLegacyRoute(96000, { true }, { false })
+    verify(legacyNoDirect is RouteSelectionResult.Fallback && !legacyNoDirect.rateRefused,
+        "Legacy direct playback unsupported is not a rate refusal")
+    val legacy96 = UsbRoutePolicy.selectLegacyRoute(96000, { true }, { true })
+    verify(legacy96 == RouteSelectionResult.Selected(RouteFormatCandidate(96000, 2, PcmTargetEncoding.PCM_FLOAT)),
+        "Legacy 96 kHz listed with direct playback selects 96 kHz float")
+
     // 5. Device count evaluation
     verify(UsbRoutePolicy.evaluateDevices(emptyList<String>()) is UsbDeviceEvaluation.NoDevice, "0 USB devices -> NoDevice")
     val single = UsbRoutePolicy.evaluateDevices(listOf("DAC1"))

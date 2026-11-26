@@ -1,6 +1,7 @@
 package com.localmusic.player
 
 import androidx.compose.runtime.*
+import com.localmusic.core.AppResample
 import com.localmusic.core.OutputDeviceKind
 import com.localmusic.core.OutputFacts
 import com.localmusic.core.OutputRoute
@@ -48,7 +49,8 @@ data class PlaybackSnapshot(
             output = OutputRoute.entries.firstOrNull { it.name == json.optString("outputRoute") }?.let { route ->
                 OutputFacts(route, json.optInt("outputRateHz"),
                     PcmTargetEncoding.entries.firstOrNull { it.name == json.optString("outputEncoding") },
-                    OutputDeviceKind.entries.firstOrNull { it.name == json.optString("outputDevice") })
+                    OutputDeviceKind.entries.firstOrNull { it.name == json.optString("outputDevice") },
+                    json.optInt("outputResampledToHz").takeIf { it > 0 }?.let { AppResample(json.optInt("outputResampledFromHz"), it) })
             },
         )
     }

@@ -60,6 +60,7 @@ fun AudioInfoPanel(controller:MediaController?,currentId:String) {
                     "${rate(pcm.optInt("sampleRateHz"))} · ${channels(pcm.optInt("channelCount"))}\n${encoding(pcm.optInt("inputEncoding"))} → ${encoding(pcm.optInt("outputEncoding"))}")
                 InfoLine("EQ",if(snapshot.optBoolean("eqEnabled"))"On · ${snapshot.optString("preset")}" else "Off")
                 InfoLine("ReplayGain",snapshot.optString("replayGain","OFF").lowercase().replaceFirstChar{it.uppercase()})
+                snapshot.optString("appResampling").takeIf{it.isNotBlank()&&it!="null"}?.let{InfoLine("App resampling",it)}
                 Text("EQ and ReplayGain use Double arithmetic. Float PCM has about 24 significant bits of precision.",style=MaterialTheme.typography.bodySmall)
             }}
             item{InfoCard("Output requested") {

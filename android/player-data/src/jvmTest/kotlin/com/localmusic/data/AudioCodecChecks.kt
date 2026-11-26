@@ -28,6 +28,12 @@ fun audioCodecChecks(){
     verify(PreferenceCodec.decode(PreferenceCodec.encode(BackupPreferences(audio=usbSettings))).audio==usbSettings,
         "backup preferences retain USB mode and saved crossfade choice")
     verify(!AudioCodec.settings(AudioCodec.settings(settings)).preferAndroidUsb,"legacy settings retain Normal output")
+    val noFit=usbSettings.copy(matchDacRate=false)
+    verify(AudioCodec.settings(AudioCodec.settings(noFit))==noFit,"Match DAC rate off survives persistence")
+    verify(AudioCodec.settings(AudioCodec.settings(settings.copy(matchDacRate=false))).matchDacRate==false,"Match DAC rate off is kept while the USB preference is off")
+    verify(AudioCodec.settings(AudioCodec.settings(usbSettings)).matchDacRate,"settings saved before the switch existed keep Match DAC rate on")
+    var rejectedFit=false;try{AudioCodec.settings(AudioCodec.settings(noFit).replace("\"matchDacRate\":false","\"matchDacRate\":\"false\""))}catch(_:Exception){rejectedFit=true}
+    verify(rejectedFit,"malformed Match DAC rate setting rejected")
     for(bad in listOf(AudioCodec.settings(usbSettings).replace("\"preferAndroidUsb\":true","\"preferAndroidUsb\":\"true\""),
         AudioCodec.settings(usbSettings).replace("\"version\":2","\"version\":1"))){
         var rejected=false;try{AudioCodec.settings(bad)}catch(_:Exception){rejected=true};verify(rejected,"malformed route setting rejected")

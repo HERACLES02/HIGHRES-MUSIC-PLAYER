@@ -7,6 +7,7 @@ fun audioEffectsChecks(){
     androidUsbRulesChecks()
     pcmOutputConverterChecks()
     usbRoutePolicyChecks()
+    rateFitChecks()
     clippingFeedbackChecks()
     var count=0
     fun verify(ok:Boolean,label:String){count++;check(ok){"Audio effects: $label"}}

@@ -401,7 +401,17 @@ private fun signalBadgeChecks() {
     same(SignalBadge.text(flac2496, wired, direct = false), "FLAC 24/96 → Android mixer · Wired")
     same(SignalBadge.text(flac2496, usb96, direct = false), "FLAC 24/96 → Android 96 kHz float · USB")
     same(SignalBadge.text(flac1644, unsupported, direct = false), "FLAC 16/44.1 → Android mixer · rate unsupported")
+    same(SignalBadge.text(flac1644, OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.USB), direct = false),
+        "FLAC 16/44.1 → Android mixer · USB")
     same(SignalBadge.text(flac2496, null, direct = false), "FLAC 24/96")
+    val flac24192 = audio("audio/flac", 192000, 24)
+    same(SignalBadge.text(flac24192, usb96.copy(appResample = AppResample(192000, 96000)), direct = false),
+        "FLAC 24/192 → 96 kHz (app) → Android float · USB")
+    same(SignalBadge.text(flac24192, OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.USB, appResample = AppResample(192000, 96000)), direct = false),
+        "FLAC 24/192 → 96 kHz (app) → Android mixer · USB")
+    same(SignalBadge.text(flac1644, OutputFacts(OutputRoute.ANDROID_ACCEPTED, 88200, PcmTargetEncoding.PCM_FLOAT, OutputDeviceKind.USB,
+        AppResample(44100, 88200)), direct = false), "FLAC 16/44.1 → 88.2 kHz (app) → Android float · USB")
+    same(SignalBadge.text(flac24192, unsupported, direct = false), "FLAC 24/192 → Android mixer · rate unsupported")
     same(SignalBadge.text(audio("audio/mpeg", 44100, 16), OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.BLUETOOTH), direct = false),
         "MP3 44.1 → Android mixer · Bluetooth")
     same(SignalBadge.text(audio("audio/alac", 48000, 24), OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.SPEAKER), direct = false),

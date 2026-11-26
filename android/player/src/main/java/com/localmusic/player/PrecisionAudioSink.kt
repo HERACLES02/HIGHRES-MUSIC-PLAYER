@@ -8,11 +8,16 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.exoplayer.audio.AudioOffloadSupport
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
+import com.localmusic.core.AppResample
+import com.localmusic.core.PcmRateConverter
+import com.localmusic.core.RateFit
 import java.nio.ByteBuffer
 
-/** EQ runs before Media3's float sink, keeping its trimming, mapping and clocking.
+/** EQ runs before Media3's float sink, keeping its trimming, mapping and clocking. When [fitRate] picks another
+ * rate, a halfband converter runs after EQ (EQ stays at the source rate) and Media3 is configured at that rate.
  * All methods except published processor controls run on the playback thread. */
-internal class PrecisionAudioSink(sink:AudioSink,private val processor:MusicAudioProcessor):ForwardingAudioSink(sink) {
+internal class PrecisionAudioSink(sink:AudioSink,private val processor:MusicAudioProcessor,
+    private val fitRate:(Format)->Int={it.sampleRate}):ForwardingAudioSink(sink) {
     private data class Configuration(val format:Format,val bufferSize:Int,val channels:IntArray?)
     private var nextConfiguration:Configuration?=null
     private var configured=false
@@ -21,6 +26,8 @@ internal class PrecisionAudioSink(sink:AudioSink,private val processor:MusicAudi
     private var pendingTimeUs=0L
     private var pendingAccessUnits=0
     private var discontinuity=false
+    private var converter:PcmRateConverter?=null
+    private var converterKey:List<Int>?=null
 
     init { processor.outputAsFloat=true }
 
@@ -50,16 +57,23 @@ internal class PrecisionAudioSink(sink:AudioSink,private val processor:MusicAudi
                 processor.configure(AudioProcessor.AudioFormat(f.sampleRate,f.channelCount,f.pcmEncoding))
             }catch(e:AudioProcessor.UnhandledAudioFormatException){throw AudioSink.ConfigurationException(e,f)}
             processor.flush()
-            // Encoder delay/padding and channel mapping remain in Media3, where
-            // they operate on float frames without changing the sample rate.
-            super.configure(f.buildUpon().setPcmEncoding(C.ENCODING_PCM_FLOAT).build(),configuration.bufferSize,configuration.channels)
+            // Decided here, when the new format's audio starts, so the badge follows the song actually playing.
+            val target=fitRate(f)
+            val key=listOf(f.sampleRate,target,f.channelCount)
+            // Same fit again (next gapless song): keep the filter history so the songs join like one file.
+            if(target==f.sampleRate){converter=null;converterKey=null}
+            else if(key!=converterKey){converter=RateFit.converter(AppResample(f.sampleRate,target),f.channelCount);converterKey=key}
+            // Encoder delay/padding and channel mapping remain in Media3, where they operate on float frames at the
+            // configured rate. RateFit never resamples formats that carry delay/padding, so their frame counts stay exact.
+            super.configure(f.buildUpon().setPcmEncoding(C.ENCODING_PCM_FLOAT).setSampleRate(target).build(),configuration.bufferSize,configuration.channels)
             nextConfiguration=null;configured=true;discontinuity=false
         }
         check(configured){"Configure PCM before submitting a buffer"}
         if(discontinuity){processor.flush();discontinuity=false}
         processor.queueInput(buffer)
         input=buffer
-        pending=processor.output
+        val processed=processor.output
+        pending=converter?.process(processed)?:processed
         pendingTimeUs=presentationTimeUs;pendingAccessUnits=encodedAccessUnitCount
         if(!writePending())return false
         input=null
@@ -77,10 +91,12 @@ internal class PrecisionAudioSink(sink:AudioSink,private val processor:MusicAudi
     override fun playToEndOfStream(){if(writePending())super.playToEndOfStream()}
     override fun hasPendingData()=pending!=null||super.hasPendingData()
     override fun isEnded()=pending==null&&super.isEnded()
+    // Media3 calls this at every new stream, including gapless song changes. The converter keeps its history here:
+    // resetting it would drop the frames still inside its filter and leave a hole. Seeks and stops reach flush() instead.
     override fun handleDiscontinuity(){discontinuity=true;super.handleDiscontinuity()}
-    override fun flush(){input=null;pending=null;discontinuity=false;processor.flush();super.flush()}
-    override fun reset(){input=null;pending=null;nextConfiguration=null;configured=false;discontinuity=false;processor.reset();super.reset()}
-    override fun release(){input=null;pending=null;nextConfiguration=null;processor.reset();super.release()}
+    override fun flush(){input=null;pending=null;discontinuity=false;processor.flush();converter?.reset();super.flush()}
+    override fun reset(){input=null;pending=null;nextConfiguration=null;configured=false;discontinuity=false;converter=null;converterKey=null;processor.reset();super.reset()}
+    override fun release(){input=null;pending=null;nextConfiguration=null;converter=null;converterKey=null;processor.reset();super.release()}
 
     companion object {
         val PCM_ENCODINGS=setOf(C.ENCODING_PCM_8BIT,C.ENCODING_PCM_16BIT,C.ENCODING_PCM_16BIT_BIG_ENDIAN,

@@ -4,7 +4,7 @@ package com.localmusic.core
 enum class OutputRoute { ANDROID_MIXER, ANDROID_ACCEPTED, RATE_UNSUPPORTED }
 enum class OutputDeviceKind(val label: String) { USB("USB"), WIRED("Wired"), BLUETOOTH("Bluetooth"), SPEAKER("Speaker") }
 data class OutputFacts(val route: OutputRoute, val acceptedRateHz: Int = 0, val acceptedEncoding: PcmTargetEncoding? = null,
-                       val device: OutputDeviceKind? = null)
+                       val device: OutputDeviceKind? = null, val appResample: AppResample? = null)
 data class RememberedOutput(val trackId: String, val facts: OutputFacts)
 
 /** The one-line Now Playing badge: the file's format, then what Android did with the sound. */
@@ -22,13 +22,16 @@ object SignalBadge {
     fun text(audio: AudioProperties, output: OutputFacts?, direct: Boolean): String {
         if (direct || PlaybackPresentation.codec(audio) == "Audio") return PlaybackPresentation.quality(audio)
         output ?: return source(audio)
+        val start = source(audio) + (output.appResample?.let { " → ${PlaybackPresentation.khz(it.toHz)} kHz (app)" } ?: "")
         val end = when (output.route) {
-            OutputRoute.RATE_UNSUPPORTED -> return "${source(audio)} → Android mixer · rate unsupported"
-            OutputRoute.ANDROID_ACCEPTED -> if (output.acceptedRateHz > 0) "Android ${PlaybackPresentation.khz(output.acceptedRateHz)} kHz" +
+            OutputRoute.RATE_UNSUPPORTED -> return "$start → Android mixer · rate unsupported"
+            // After app resampling the rate is already in the app segment, so Android's end shows only the encoding.
+            OutputRoute.ANDROID_ACCEPTED -> if (output.appResample != null) "Android" + (output.acceptedEncoding?.let { " " + encoding(it) } ?: "")
+                else if (output.acceptedRateHz > 0) "Android ${PlaybackPresentation.khz(output.acceptedRateHz)} kHz" +
                 (output.acceptedEncoding?.let { " " + encoding(it) } ?: "") else "Android mixer"
             OutputRoute.ANDROID_MIXER -> "Android mixer"
         }
-        return "${source(audio)} → $end" + (output.device?.let { " · ${it.label}" } ?: "")
+        return "$start → $end" + (output.device?.let { " · ${it.label}" } ?: "")
     }
 
     /** Android reports no routed device while paused (and briefly on resume), so the same song keeps its last known

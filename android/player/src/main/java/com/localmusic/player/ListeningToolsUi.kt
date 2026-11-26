@@ -88,6 +88,10 @@ fun AudioControls(settings:AudioSettings,ready:Boolean,store:MusicStore?,track:T
                     modifier=Modifier.semantics{contentDescription="Prefer Android USB high-resolution route"})}
             Text("Tries the phone-managed USB route for supported stereo formats above 48 kHz. At 44.1/48 kHz, Normal buffering is retained. Switching keeps your position and pause state.",style=MaterialTheme.typography.bodySmall)
             Text("Actual mixer format still needs verification. This uses Android's driver; experimental Direct USB remains separate.",style=MaterialTheme.typography.bodySmall)
+            Row(Modifier.padding(top=12.dp),verticalAlignment=Alignment.CenterVertically){Text("Match DAC rate (app resampling)",Modifier.weight(1f),style=MaterialTheme.typography.titleSmall)
+                Switch(settings.matchDacRate,{send(PlaybackService.AUDIO_SETTINGS,audioArgs(settings.copy(matchDacRate=it)))},enabled=ready&&settings.preferAndroidUsb,
+                    modifier=Modifier.semantics{contentDescription="Match DAC rate (app resampling)"})}
+            Text("Hands Android a rate the USB DAC lists so it can use the USB route: the app halves high rates (192 → 96 kHz, 176.4 → 88.2 kHz) and, on Android 11–13, doubles 44.1/48 kHz (→ 88.2/96 kHz). This changes the samples; turn it off for no app resampling.",style=MaterialTheme.typography.bodySmall)
         }}}
         item{ElevatedCard(onClick=openEq){Column(Modifier.fillMaxWidth().padding(18.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Equalizer",style=MaterialTheme.typography.titleLarge);Text(settings.preset.name)}

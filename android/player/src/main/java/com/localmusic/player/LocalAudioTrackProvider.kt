@@ -8,6 +8,7 @@ import android.media.AudioTrack
 import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.util.Clock
 import androidx.media3.exoplayer.audio.AudioOutput
 import androidx.media3.exoplayer.audio.AudioOutputProvider
@@ -17,10 +18,12 @@ import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioOutput
 import com.localmusic.core.AndroidUsbBufferRules
+import com.localmusic.core.AppResample
 import com.localmusic.core.OutputRetirement
 import com.localmusic.core.PcmOutputConverter
 import com.localmusic.core.PcmOutputSession
 import com.localmusic.core.PcmTargetEncoding
+import com.localmusic.core.RateFit
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 import java.nio.ByteBuffer
@@ -54,6 +57,21 @@ class LocalAudioOutputProvider(
         }
 
     var sourceBitDepthProvider: (() -> Int?)? = null
+
+    /** "Match DAC rate (app resampling)"; only acts while [preferAndroidUsb] is on. */
+    @Volatile var matchDacRate = true
+
+    /** Written on the playback thread when a format starts playing; read by the badge tick and Audio info. */
+    @Volatile var appResample: AppResample? = null
+        private set
+
+    /** Called by [PrecisionAudioSink] when a format is applied: the rate Media3 should be configured with. */
+    fun fitRate(format: Format): Int {
+        val target = if (preferAndroidUsb && matchDacRate) RateFit.target(format.sampleRate, routeManager.fitRates(), routeManager.sdkInt,
+            format.channelCount, format.encoderDelay > 0 || format.encoderPadding > 0) else format.sampleRate
+        appResample = if (target != format.sampleRate) AppResample(format.sampleRate, target) else null
+        return target
+    }
 
     private var lastTrack = WeakReference<AudioTrack>(null)
     val retirement = OutputRetirement()

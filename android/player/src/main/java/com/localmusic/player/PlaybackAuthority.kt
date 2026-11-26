@@ -76,6 +76,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         processors[value]=processor
         outputProviders[value]=output
         if(attach)output.preferAndroidUsb=audioSettings.preferAndroidUsb
+        if(attach)output.matchDacRate=audioSettings.matchDacRate
         if(attach)listen(value)
         return value
     }
@@ -153,7 +154,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             if (destroyed) return
             if (!ready) { handler.postDelayed(this, 1000); return }
             if(!direct.selected){val playing=engine.isPlaying
-                badgeOutput=SignalBadge.remember(badgeOutput,queue.current?.trackId?.value?.toString().orEmpty(),playing,if(playing)routeManager.outputFacts()else null)}
+                badgeOutput=SignalBadge.remember(badgeOutput,queue.current?.trackId?.value?.toString().orEmpty(),playing,if(playing)routeManager.outputFacts().copy(appResample=outputProviders[engine]?.appResample)else null)}
             observePosition(); player.refresh(); changed()
             checkCrossfade()
             checkClippingState()
@@ -227,7 +228,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
         store = value
         seekIndexes.coordinateFileOperations(value.operationMutex)
         audioSettings=value.preferences.value.audio
-        outputProviders.values.forEach{it.preferAndroidUsb=audioSettings.preferAndroidUsb}
+        outputProviders.values.forEach{it.preferAndroidUsb=audioSettings.preferAndroidUsb;it.matchDacRate=audioSettings.matchDacRate}
         when (val saved = withContext(Dispatchers.IO) { value.repository().loadSession() }) {
             is SessionLoad.Restored -> { queue = saved.queue; load(queue.selection, false)
                 restoreEvidence = JSONObject().put("result", "restored_paused").put("savedAtMs", saved.savedAtMs).put("usedPrevious", saved.usedPrevious).put("positionMs", queue.positionMs).put("autoplay", false) }
@@ -541,6 +542,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             update();return
         }
         val routeChanged=value.preferAndroidUsb!=audioSettings.preferAndroidUsb
+        // The fit is chosen when Media3 configures the sink, so a flip of the switch needs the same reprepare.
+        val fitChanged=value.preferAndroidUsb&&value.matchDacRate!=audioSettings.matchDacRate
         val transportChanged=value.crossfadeSeconds!=audioSettings.crossfadeSeconds||routeChanged
         audioSettings=value
         processors.values.forEach { it.resetClipping() }
@@ -548,13 +551,14 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             clippingActive = false
         }
         if(transportChanged){finishFade();discardStandby();rejectedFade=null}
-        outputProviders.values.forEach{it.preferAndroidUsb=value.preferAndroidUsb}
+        outputProviders.values.forEach{it.preferAndroidUsb=value.preferAndroidUsb;it.matchDacRate=value.matchDacRate}
         if(!value.preferAndroidUsb){routeManager.clearRouteOwned()}
         for((deck,id)in deckTracks)configureDeck(deck,id)
-        if(routeChanged&&ready&&fileClosedForEdit==null){
+        if((routeChanged||fitChanged)&&ready&&fileClosedForEdit==null){
             reconciling=true
             try{seekDetails=null;reprepareForAudioRoute(engine)}finally{reconciling=false}
-            event("android_usb_preference_changed",JSONObject().put("enabled",value.preferAndroidUsb))
+            if(routeChanged)event("android_usb_preference_changed",JSONObject().put("enabled",value.preferAndroidUsb))
+            if(fitChanged)event("match_dac_rate_changed",JSONObject().put("enabled",value.matchDacRate))
         }
         if(ready)update()
     }
@@ -651,6 +655,7 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("fallbackReason", routeInfo.opt("fallbackReason"))
             .put("routedDevice", routeInfo.optString("routedDevice"))
             .put("routeStrategy", routeInfo.optString("strategy"))
+            .put("appResampling", outputProviders[engine]?.appResample?.let(RateFit::describe) ?: JSONObject.NULL)
     }
     fun report(): String {
         observePosition()
@@ -679,9 +684,11 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("processing",JSONObject().put("eqEnabled",audioSettings.eqEnabled).put("preset",audioSettings.preset.name)
                 .put("replayGain",audioSettings.replayGain.name).put("crossfadeSeconds",audioSettings.effectiveCrossfadeSeconds).put("crossfading",fadingOut!=null)
                 .put("preferAndroidUsb",audioSettings.preferAndroidUsb).put("savedCrossfadeSeconds",audioSettings.crossfadeSeconds)
+                .put("matchDacRate",audioSettings.matchDacRate)
+                .put("appResampling",outputProviders[engine]?.appResample?.let{JSONObject().put("fromHz",it.fromHz).put("toHz",it.toHz).put("description",RateFit.describe(it))}?:JSONObject.NULL)
                 .put("pcm",processors[engine]?.lastPcm?.let{JSONObject().put("sampleRateHz",it.sampleRateHz).put("channelCount",it.channelCount)
                     .put("inputEncoding",it.inputEncoding).put("outputEncoding",it.outputEncoding)}?:JSONObject.NULL)
-                .put("limits","Normal decoded PCM: Double EQ/ReplayGain, then float PCM into Media3. Float has about 24 significant binary bits, not 32-bit integer precision. Android may resample or change precision; no physical DAC or bit-perfect measurement."))
+                .put("limits","Normal decoded PCM: Double EQ/ReplayGain, then (when appResampling is set) a Double halfband FIR at an integer ratio, then float PCM into Media3. Float has about 24 significant binary bits, not 32-bit integer precision. Android may resample or change precision; no physical DAC or bit-perfect measurement."))
             .put("buffering",JSONObject().put("startAndSeekPrefillMs",START_BUFFER_MS)
                 .put("starvationRecoveryPrefillMs",DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
                 .put("limits","Prefill is media duration, not a guaranteed wall-clock seek latency. State events do not measure the time sound reaches the listener."))
@@ -704,7 +711,8 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("clipping", clippingActive)
             .apply { badgeOutput?.takeIf { !direct.selected && it.trackId == queue.current?.trackId?.value?.toString() }?.facts?.let { f ->
                 put("outputRoute", f.route.name).put("outputRateHz", f.acceptedRateHz)
-                f.acceptedEncoding?.let { put("outputEncoding", it.name) }; f.device?.let { put("outputDevice", it.name) } } }
+                f.acceptedEncoding?.let { put("outputEncoding", it.name) }; f.device?.let { put("outputDevice", it.name) }
+                f.appResample?.let { put("outputResampledFromHz", it.fromHz).put("outputResampledToHz", it.toHz) } } }
             .put("manual", JSONArray(snapshot.manual.take(60).map { it.trackId.value.toString() }))
             .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)

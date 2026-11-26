@@ -194,6 +194,24 @@ object UsbRouteChecks {
             val d11LowRate = mgr11.applyRoute(preferAndroidUsb = true, sampleRateHz = 44100, sourceBitDepth = 16)
             verify(!d11LowRate.isUsbActive && d11LowRate.fallbackReason?.contains("<= 48 kHz") == true,
                 "Android 11–13 falls back for rates <= 48 kHz")
+            verify(mgr11.outputFacts().route == OutputRoute.ANDROID_MIXER, "Android 11–13 <= 48 kHz fallback badge is the mixer, not rate unsupported")
+
+            // Badge route: only a rate the DAC does not list is "rate unsupported"
+            fakeRouter.sampleRateSupported = false
+            mgr11.applyRoute(preferAndroidUsb = true, sampleRateHz = 192000, sourceBitDepth = 24)
+            verify(mgr11.outputFacts().route == OutputRoute.RATE_UNSUPPORTED, "Android 11–13 rate not listed by the DAC is rate unsupported")
+            fakeRouter.sampleRateSupported = true
+            fakeRouter.directPlaybackSupported = false
+            mgr11.applyRoute(preferAndroidUsb = true, sampleRateHz = 96000, sourceBitDepth = 24)
+            verify(mgr11.outputFacts().route == OutputRoute.ANDROID_MIXER, "Android 11–13 direct playback unsupported is the mixer")
+            fakeRouter.directPlaybackSupported = true
+            mgr11.applyRoute(preferAndroidUsb = true, sampleRateHz = 96000, sourceBitDepth = 24)
+            verify(mgr11.outputFacts().route == OutputRoute.ANDROID_ACCEPTED, "Android 11–13 96 kHz accepted")
+            fakeRouter.sampleRateSupported = false
+            mgr11.applyRoute(preferAndroidUsb = true, sampleRateHz = 192000, sourceBitDepth = 24)
+            fakeRouter.sampleRateSupported = true
+            mgr11.fallbackToNormal("USB output initialization failed")
+            verify(mgr11.outputFacts().route == OutputRoute.ANDROID_MIXER, "A later output fallback is the mixer, not rate unsupported")
         }
 
         // ==========================================

@@ -28,7 +28,9 @@ data class EqPreset(val name:String="Flat", val preampDb:Double=0.0, val gains:L
     }
 }
 data class AudioSettings(val eqEnabled:Boolean=false,val preset:EqPreset=EqPreset(),val presets:List<EqPreset> = emptyList(),
-    val replayGain:ReplayGainMode=ReplayGainMode.OFF,val crossfadeSeconds:Int=0,val preferAndroidUsb:Boolean=false) {
+    val replayGain:ReplayGainMode=ReplayGainMode.OFF,val crossfadeSeconds:Int=0,val preferAndroidUsb:Boolean=false,
+    /** App resampling to a rate the USB DAC lists; only acts while [preferAndroidUsb] is on. */
+    val matchDacRate:Boolean=true) {
     init { require(crossfadeSeconds in 0..6);require(presets.size<=100&&presets.map{it.name.lowercase(Locale.ROOT)}.distinct().size==presets.size) }
     val effectiveCrossfadeSeconds:Int get()=if(preferAndroidUsb)0 else crossfadeSeconds
 }

@@ -9,7 +9,8 @@ data class RouteFormatCandidate(
 
 sealed interface RouteSelectionResult {
     data class Selected(val candidate: RouteFormatCandidate) : RouteSelectionResult
-    data class Fallback(val reason: String) : RouteSelectionResult
+    /** [rateRefused] is true only when the DAC itself does not offer this sample rate; the badge relies on it. */
+    data class Fallback(val reason: String, val rateRefused: Boolean = false) : RouteSelectionResult
 }
 
 object UsbRoutePolicy {
@@ -28,7 +29,7 @@ object UsbRoutePolicy {
 
         val exactRate = candidates.filter { it.sampleRateHz == targetRateHz }
         if (exactRate.isEmpty()) {
-            return RouteSelectionResult.Fallback("No exact-rate format for $targetRateHz Hz")
+            return RouteSelectionResult.Fallback("No exact-rate format for $targetRateHz Hz", rateRefused = true)
         }
 
         val stereoDefault = exactRate.filter { it.channelCount == 2 && it.isDefaultBehavior }
@@ -56,6 +57,22 @@ object UsbRoutePolicy {
         } ?: return RouteSelectionResult.Fallback("No eligible format found")
 
         return RouteSelectionResult.Selected(best)
+    }
+
+    /**
+     * Android 11–13 route: no mixer attributes, only a preferred device. Rates <= 48 kHz stay on the normal route
+     * without asking the platform; the two queries run lazily, in this order.
+     */
+    fun selectLegacyRoute(
+        sampleRateHz: Int,
+        deviceListsRate: () -> Boolean,
+        directSupported: () -> Boolean
+    ): RouteSelectionResult = when {
+        !AndroidUsbBufferRules.eligibleRate(sampleRateHz) ->
+            RouteSelectionResult.Fallback("Standard Android route (rate <= 48 kHz on Android < 14)")
+        !deviceListsRate() -> RouteSelectionResult.Fallback("Sample rate $sampleRateHz not supported by USB device", rateRefused = true)
+        !directSupported() -> RouteSelectionResult.Fallback("Direct playback unsupported by platform")
+        else -> RouteSelectionResult.Selected(RouteFormatCandidate(sampleRateHz, 2, PcmTargetEncoding.PCM_FLOAT))
     }
 
     fun <T> evaluateDevices(usbDevices: List<T>): UsbDeviceEvaluation<T> {

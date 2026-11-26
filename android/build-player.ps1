@@ -38,7 +38,7 @@ try {
         Write-Host "Unsigned beta APK: $apk"
         return
     }
-    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.5-direct-coverage' } else { 'local-music-0.14.5' }
+    $releaseName = if ($ExperimentalDirectUsb) { 'local-music-0.14.8-direct-coverage' } else { 'local-music-0.14.8' }
     $apkName = if ($OptimizedPreview) { "$releaseName-optimized-preview.apk" } else { "$releaseName-debug.apk" }
     $apk = Join-Path $projectRoot "releases/$apkName"
     Copy-Item -LiteralPath (Join-Path $projectRoot "player/build/outputs/apk/$variantName/player-$variantName.apk") -Destination $apk -Force

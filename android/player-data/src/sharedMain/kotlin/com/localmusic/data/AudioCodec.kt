@@ -141,13 +141,19 @@ object AudioCodec {
             require(version==2&&!it.isString){"Android USB preference needs settings v2 and a boolean."}
             requireNotNull(it.booleanOrNull){"Android USB preference must be a boolean."}
         }?:false
+        // Absent (settings saved before the switch existed) means on, the default.
+        val matchDacRate=o["matchDacRate"]?.jsonPrimitive?.let{
+            require(version==2&&!it.isString){"Match DAC rate needs settings v2 and a boolean."}
+            requireNotNull(it.booleanOrNull){"Match DAC rate must be a boolean."}
+        }?:true
         return AudioSettings(o.getValue("enabled").jsonPrimitive.boolean,preset(o.getValue("preset").toString()),
             o.getValue("presets").jsonArray.also{require(it.size<=100)}.map{preset(it.toString())},
-            ReplayGainMode.valueOf(o.getValue("replayGain").jsonPrimitive.content),o.getValue("crossfade").jsonPrimitive.int,preferUsb)
+            ReplayGainMode.valueOf(o.getValue("replayGain").jsonPrimitive.content),o.getValue("crossfade").jsonPrimitive.int,preferUsb,matchDacRate)
     }
     fun settings(value:AudioSettings):String=buildJsonObject{
-        put("version",if(value.preferAndroidUsb)2 else 1);put("enabled",value.eqEnabled);put("preset",Json.parseToJsonElement(preset(value.preset)))
+        put("version",if(value.preferAndroidUsb||!value.matchDacRate)2 else 1);put("enabled",value.eqEnabled);put("preset",Json.parseToJsonElement(preset(value.preset)))
         if(value.preferAndroidUsb)put("preferAndroidUsb",true)
+        if(!value.matchDacRate)put("matchDacRate",false)
         put("presets",JsonArray(value.presets.map{Json.parseToJsonElement(preset(it))}));put("replayGain",value.replayGain.name);put("crossfade",value.crossfadeSeconds)
     }.toString()
 }

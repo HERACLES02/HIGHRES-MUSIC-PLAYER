@@ -123,7 +123,7 @@ class MusicRenderers(context:Context,private val processor:MusicAudioProcessor,
     public override fun buildAudioSink(context:Context,enableFloatOutput:Boolean,enableAudioTrackPlaybackParams:Boolean):AudioSink {
         val sink=DefaultAudioSink.Builder(context).setEnableFloatOutput(true)
             .setAudioOutputProvider(output).build()
-        return PrecisionAudioSink(sink,processor)
+        return PrecisionAudioSink(sink,processor,output::fitRate)
     }
 }
 

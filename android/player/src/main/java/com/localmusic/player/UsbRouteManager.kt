@@ -14,7 +14,6 @@ import com.localmusic.core.RouteFormatCandidate
 import com.localmusic.core.RouteSelectionResult
 import com.localmusic.core.UsbDeviceEvaluation
 import com.localmusic.core.UsbRoutePolicy
-import com.localmusic.core.AndroidUsbBufferRules
 import com.localmusic.core.OutputDeviceKind
 import com.localmusic.core.OutputFacts
 import com.localmusic.core.OutputRoute
@@ -92,7 +91,8 @@ data class UsbRouteDecision(
     val fallbackReason: String? = null,
     val usbDeviceName: String? = null,
     val strategy: String = "Normal route",
-    val targetUsbDevice: AudioDeviceInfo? = null
+    val targetUsbDevice: AudioDeviceInfo? = null,
+    val rateRefused: Boolean = false
 ) {
     fun acceptedDescription(): String {
         if (!isUsbActive) {
@@ -148,7 +148,8 @@ class UsbRouteManager(
             targetEncoding = PcmTargetEncoding.PCM_FLOAT,
             fallbackReason = reason,
             strategy = "Standard Android route",
-            targetUsbDevice = null
+            targetUsbDevice = null,
+            rateRefused = false
         )
     }
 
@@ -310,7 +311,8 @@ class UsbRouteManager(
                     channelMask = channelMask,
                     fallbackReason = res.reason,
                     usbDeviceName = usbDevice.productName?.toString(),
-                    strategy = "Standard Android route"
+                    strategy = "Standard Android route",
+                    rateRefused = res.rateRefused
                 )
             }
             is RouteSelectionResult.Selected -> {
@@ -384,58 +386,64 @@ class UsbRouteManager(
         sampleRateHz: Int,
         channelMask: Int = AudioFormat.CHANNEL_OUT_STEREO
     ): UsbRouteDecision {
-        if (!AndroidUsbBufferRules.eligibleRate(sampleRateHz)) {
-            clearRouteOwned()
-            return UsbRouteDecision(
-                preferAndroidUsb = true,
-                isUsbActive = false,
-                acceptedEncoding = AudioFormat.ENCODING_PCM_FLOAT,
-                targetEncoding = PcmTargetEncoding.PCM_FLOAT,
-                sampleRateHz = sampleRateHz,
-                channelMask = channelMask,
-                fallbackReason = "Standard Android route (rate <= 48 kHz on Android < 14)",
-                usbDeviceName = usbDevice.productName?.toString(),
-                strategy = "Standard Android route"
-            )
-        }
-
-        val rateSupported = router.isSampleRateSupported(usbDevice, sampleRateHz)
-        val directSupported = router.isDirectPlaybackSupported(
-            AudioFormat.Builder()
-                .setSampleRate(sampleRateHz)
-                .setChannelMask(channelMask)
-                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                .build()
+        val result = UsbRoutePolicy.selectLegacyRoute(
+            sampleRateHz,
+            deviceListsRate = { router.isSampleRateSupported(usbDevice, sampleRateHz) },
+            directSupported = {
+                router.isDirectPlaybackSupported(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRateHz)
+                        .setChannelMask(channelMask)
+                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .build()
+                )
+            }
         )
-
-        if (rateSupported && directSupported) {
-            activeDevice = usbDevice
-            return UsbRouteDecision(
-                preferAndroidUsb = true,
-                isUsbActive = true,
-                acceptedEncoding = AudioFormat.ENCODING_PCM_FLOAT,
-                targetEncoding = PcmTargetEncoding.PCM_FLOAT,
-                sampleRateHz = sampleRateHz,
-                channelMask = channelMask,
-                fallbackReason = null,
-                usbDeviceName = usbDevice.productName?.toString(),
-                strategy = "Preferred Android USB (Android 11–13)",
-                targetUsbDevice = usbDevice
-            )
-        } else {
-            clearRouteOwned()
-            return UsbRouteDecision(
-                preferAndroidUsb = true,
-                isUsbActive = false,
-                acceptedEncoding = AudioFormat.ENCODING_PCM_FLOAT,
-                targetEncoding = PcmTargetEncoding.PCM_FLOAT,
-                sampleRateHz = sampleRateHz,
-                channelMask = channelMask,
-                fallbackReason = if (!rateSupported) "Sample rate $sampleRateHz not supported by USB device" else "Direct playback unsupported by platform",
-                usbDeviceName = usbDevice.productName?.toString(),
-                strategy = "Standard Android route"
-            )
+        return when (result) {
+            is RouteSelectionResult.Selected -> {
+                activeDevice = usbDevice
+                UsbRouteDecision(
+                    preferAndroidUsb = true,
+                    isUsbActive = true,
+                    acceptedEncoding = AudioFormat.ENCODING_PCM_FLOAT,
+                    targetEncoding = PcmTargetEncoding.PCM_FLOAT,
+                    sampleRateHz = sampleRateHz,
+                    channelMask = channelMask,
+                    fallbackReason = null,
+                    usbDeviceName = usbDevice.productName?.toString(),
+                    strategy = "Preferred Android USB (Android 11–13)",
+                    targetUsbDevice = usbDevice
+                )
+            }
+            is RouteSelectionResult.Fallback -> {
+                clearRouteOwned()
+                UsbRouteDecision(
+                    preferAndroidUsb = true,
+                    isUsbActive = false,
+                    acceptedEncoding = AudioFormat.ENCODING_PCM_FLOAT,
+                    targetEncoding = PcmTargetEncoding.PCM_FLOAT,
+                    sampleRateHz = sampleRateHz,
+                    channelMask = channelMask,
+                    fallbackReason = result.reason,
+                    usbDeviceName = usbDevice.productName?.toString(),
+                    strategy = "Standard Android route",
+                    rateRefused = result.rateRefused
+                )
+            }
         }
+    }
+
+    /** Rates the one connected USB DAC offers: listed to Android (sdk 30–33) or as stereo default-behaviour mixer
+     *  attributes (sdk 34+). Empty with no USB DAC or several, so the app never resamples for an unknown device. */
+    @Synchronized
+    fun fitRates(): Set<Int> {
+        val device = (UsbRoutePolicy.evaluateDevices(router.getConnectedUsbOutputs()) as? UsbDeviceEvaluation.Single)?.device
+            ?: return emptySet()
+        return if (Build.VERSION.SDK_INT >= 34 && sdkInt >= 34) {
+            router.getSupportedMixerAttributes(device)
+                .filter { it.format.channelMask == AudioFormat.CHANNEL_OUT_STEREO && it.mixerBehavior == AudioMixerAttributes.MIXER_BEHAVIOR_DEFAULT }
+                .map { it.format.sampleRate }.toSet()
+        } else device.sampleRates.toSet()
     }
 
     fun getRoutedDeviceName(): String {
@@ -476,9 +484,9 @@ class UsbRouteManager(
         }
         return when {
             decision.isUsbActive -> OutputFacts(OutputRoute.ANDROID_ACCEPTED, decision.sampleRateHz, decision.targetEncoding, kind)
-            // A USB device was evaluated but its rate/format was refused; "no USB device" is not a rate problem.
-            decision.preferAndroidUsb && decision.fallbackReason != null && decision.usbDeviceName != null ->
-                OutputFacts(OutputRoute.RATE_UNSUPPORTED, device = kind)
+            // Only the DAC refusing this rate is "rate unsupported"; every other fallback (the app's <= 48 kHz rule,
+            // no direct playback, mixer attributes rejected, buffer or init failures) is the plain mixer with its device.
+            decision.rateRefused -> OutputFacts(OutputRoute.RATE_UNSUPPORTED, device = kind)
             else -> OutputFacts(OutputRoute.ANDROID_MIXER, device = kind)
         }
     }
