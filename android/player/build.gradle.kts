@@ -15,8 +15,8 @@ android {
         targetSdk = 35
         testInstrumentationRunner = "com.localmusic.player.AudioProcessorChecks"
         buildConfigField("boolean", "PUBLIC_SOULSEEK", publicSoulseek.toString())
-        versionCode = 52
-        versionName = if(experimentalDirectUsb)"0.14.4-direct-coverage" else "0.14.4"
+        versionCode = 53
+        versionName = if(experimentalDirectUsb)"0.14.5-direct-coverage" else "0.14.5"
         buildConfigField("boolean","DIRECT_USB_ENABLED",experimentalDirectUsb.toString())
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         externalNativeBuild { cmake {

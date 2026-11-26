@@ -1,6 +1,10 @@
 package com.localmusic.player
 
 import androidx.compose.runtime.*
+import com.localmusic.core.OutputDeviceKind
+import com.localmusic.core.OutputFacts
+import com.localmusic.core.OutputRoute
+import com.localmusic.core.PcmTargetEncoding
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -24,6 +28,8 @@ data class PlaybackSnapshot(
     val sequenceIds: List<String> = emptyList(),
     val sequenceCount: Int = 0,
     val sleepMode: String = "OFF",
+    val direct: Boolean = false,
+    val output: OutputFacts? = null,
 ) {
     companion object {
         private fun JSONObject.strings(key: String): List<String> =
@@ -38,6 +44,12 @@ data class PlaybackSnapshot(
             manual = json.strings("manual"), manualIds = json.strings("manualIds"), manualCount = json.optInt("manualCount"),
             sequence = json.strings("sequence"), sequenceIds = json.strings("sequenceIds"), sequenceCount = json.optInt("sequenceCount"),
             sleepMode = json.optString("sleepMode", "OFF"),
+            direct = json.optString("outputMode") == "Direct USB",
+            output = OutputRoute.entries.firstOrNull { it.name == json.optString("outputRoute") }?.let { route ->
+                OutputFacts(route, json.optInt("outputRateHz"),
+                    PcmTargetEncoding.entries.firstOrNull { it.name == json.optString("outputEncoding") },
+                    OutputDeviceKind.entries.firstOrNull { it.name == json.optString("outputDevice") })
+            },
         )
     }
 }

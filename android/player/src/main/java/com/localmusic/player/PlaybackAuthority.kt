@@ -145,12 +145,15 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             }
         }
     }
+    private var badgeOutput: RememberedOutput? = null
     private var lastPersistAt = 0L
     private var seekDetails: JSONObject? = null
     private val tick = object : Runnable {
         override fun run() {
             if (destroyed) return
             if (!ready) { handler.postDelayed(this, 1000); return }
+            if(!direct.selected){val playing=engine.isPlaying
+                badgeOutput=SignalBadge.remember(badgeOutput,queue.current?.trackId?.value?.toString().orEmpty(),playing,if(playing)routeManager.outputFacts()else null)}
             observePosition(); player.refresh(); changed()
             checkCrossfade()
             checkClippingState()
@@ -699,6 +702,9 @@ class PlaybackAuthority(private val context: Context, private val changed: () ->
             .put("collectionLabel", presentation.label)
             .put("collectionNumber", presentation.number ?: 0).put("collectionTotal", presentation.total ?: 0)
             .put("clipping", clippingActive)
+            .apply { badgeOutput?.takeIf { !direct.selected && it.trackId == queue.current?.trackId?.value?.toString() }?.facts?.let { f ->
+                put("outputRoute", f.route.name).put("outputRateHz", f.acceptedRateHz)
+                f.acceptedEncoding?.let { put("outputEncoding", it.name) }; f.device?.let { put("outputDevice", it.name) } } }
             .put("manual", JSONArray(snapshot.manual.take(60).map { it.trackId.value.toString() }))
             .put("manualIds", JSONArray(snapshot.manual.take(60).map { it.id.value.toString() }))
             .put("manualCount", snapshot.manual.size)

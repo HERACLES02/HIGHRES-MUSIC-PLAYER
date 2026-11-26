@@ -16,22 +16,24 @@ object PlaybackPresentation {
             else PlaybackPosition("Queue", null, null)
     }
 
+    internal fun codec(audio: AudioProperties) = when (audio.mimeType.lowercase()) {
+        "audio/flac", "audio/x-flac" -> "FLAC"
+        "audio/mpeg" -> "MP3"
+        "audio/alac", "audio/x-alac" -> "ALAC"
+        "audio/opus" -> "Opus"
+        "audio/ogg", "application/ogg" -> "Ogg"
+        "audio/wav", "audio/x-wav", "audio/wave" -> "WAV"
+        "audio/mp4", "audio/mp4a-latm" -> "MP4 audio"
+        "audio/aac" -> "AAC"
+        else -> "Audio"
+    }
+
+    internal fun khz(hz: Int): String = java.math.BigDecimal(hz).divide(java.math.BigDecimal(1000)).stripTrailingZeros().toPlainString()
+
     fun quality(audio: AudioProperties): String {
-        val codec = when (audio.mimeType.lowercase()) {
-            "audio/flac", "audio/x-flac" -> "FLAC"
-            "audio/mpeg" -> "MP3"
-            "audio/alac", "audio/x-alac" -> "ALAC"
-            "audio/opus" -> "Opus"
-            "audio/ogg", "application/ogg" -> "Ogg"
-            "audio/wav", "audio/x-wav", "audio/wave" -> "WAV"
-            "audio/mp4", "audio/mp4a-latm" -> "MP4 audio"
-            "audio/aac" -> "AAC"
-            else -> "Audio"
-        }
+        val codec = codec(audio)
         val bits = audio.meaningfulBits?.takeIf { it > 0 }?.let { "$it-bit" }
-        val rate = audio.sampleRateHz?.takeIf { it > 0 }?.let {
-            java.math.BigDecimal(it).divide(java.math.BigDecimal(1000)).stripTrailingZeros().toPlainString() + " kHz"
-        }
+        val rate = audio.sampleRateHz?.takeIf { it > 0 }?.let { khz(it) + " kHz" }
         return codec + " · " + listOfNotNull(bits, rate).takeIf { it.isNotEmpty() }?.joinToString(" / ").orEmpty().ifEmpty { "details unknown" }
     }
 }

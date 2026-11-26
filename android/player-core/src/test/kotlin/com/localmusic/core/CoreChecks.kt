@@ -390,6 +390,38 @@ private fun japaneseRomajiChecks() {
     expect(LyricsRomaji.romanize(synced, RomajiLanguage.JAPANESE) == listOf("kimi no koe ga", "", "kikoeru"), "Japanese romaji keeps one line per timed line")
 }
 
+private fun signalBadgeChecks() {
+    fun audio(mime: String, rate: Int?, bits: Int?) = AudioProperties(1000, mime, rate, 2, bits)
+    val flac2496 = audio("audio/flac", 96000, 24)
+    val flac1644 = audio("audio/flac", 44100, 16)
+    val wired = OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.WIRED)
+    val usb96 = OutputFacts(OutputRoute.ANDROID_ACCEPTED, 96000, PcmTargetEncoding.PCM_FLOAT, OutputDeviceKind.USB)
+    val unsupported = OutputFacts(OutputRoute.RATE_UNSUPPORTED, device = OutputDeviceKind.USB)
+    fun same(got: String, want: String) = expect(got == want, "Signal badge: want '$want', got '$got'")
+    same(SignalBadge.text(flac2496, wired, direct = false), "FLAC 24/96 → Android mixer · Wired")
+    same(SignalBadge.text(flac2496, usb96, direct = false), "FLAC 24/96 → Android 96 kHz float · USB")
+    same(SignalBadge.text(flac1644, unsupported, direct = false), "FLAC 16/44.1 → Android mixer · rate unsupported")
+    same(SignalBadge.text(flac2496, null, direct = false), "FLAC 24/96")
+    same(SignalBadge.text(audio("audio/mpeg", 44100, 16), OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.BLUETOOTH), direct = false),
+        "MP3 44.1 → Android mixer · Bluetooth")
+    same(SignalBadge.text(audio("audio/alac", 48000, 24), OutputFacts(OutputRoute.ANDROID_MIXER, device = OutputDeviceKind.SPEAKER), direct = false),
+        "ALAC 24/48 → Android mixer · Speaker")
+    same(SignalBadge.text(audio("audio/x-unknown", null, null), wired, direct = false), "Audio · details unknown")
+    same(SignalBadge.text(flac2496, usb96, direct = true), "FLAC · 24-bit / 96 kHz")
+    same(SignalBadge.text(flac2496, OutputFacts(OutputRoute.ANDROID_MIXER), direct = false), "FLAC 24/96 → Android mixer")
+    same(SignalBadge.text(audio("audio/flac", 44100, null), OutputFacts(OutputRoute.ANDROID_ACCEPTED, 88200, PcmTargetEncoding.PCM_24BIT_PACKED, OutputDeviceKind.USB), direct = false),
+        "FLAC 44.1 → Android 88.2 kHz 24-bit · USB")
+    val playingA = SignalBadge.remember(null, "a", playing = true, observed = usb96)
+    expect(playingA?.facts == usb96, "Playing records the output end")
+    expect(SignalBadge.remember(playingA, "a", playing = false, observed = null)?.facts == usb96,
+        "Paused on the same song keeps the last output end (no flicker to source only)")
+    expect(SignalBadge.remember(playingA, "a", playing = true, observed = wired)?.facts == wired, "Output-device change while playing updates the end")
+    expect(SignalBadge.remember(playingA, "a", playing = true, observed = usb96.copy(device = null))?.facts == usb96,
+        "On resume Android may not report the device for a moment; the known tag stays")
+    expect(SignalBadge.remember(playingA, "b", playing = false, observed = null) == null, "A new song shows the source side only until it plays")
+    expect(SignalBadge.remember(playingA, "b", playing = true, observed = wired) == RememberedOutput("b", wired), "The new song's output appears once it plays")
+}
+
 fun main() {
     for(bits in listOf(16,24))for(rate in listOf(44100,48000,88200,96000))
         expect(DirectUsbFormat.supported(AudioProperties(6000,"audio/flac",rate,2,bits)),"Direct preserves supported stereo source rate/depth")
@@ -408,6 +440,6 @@ fun main() {
     expect(!delayed.isRetired(),"Overflowed retirement evidence fails closed")
     val unknown=OutputRetirement();unknown.remember{error("unavailable")}
     expect(!unknown.isRetired(),"Unknown retirement does not permit takeover")
-    queueChecks(); lyricChecks(); lyricsEmbedChecks(); koreanRomajiChecks(); japaneseRomajiChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks(); libraryFavoritesChecks(); libraryBrowseChecks(); themeStyleChecks()
+    queueChecks(); lyricChecks(); lyricsEmbedChecks(); koreanRomajiChecks(); japaneseRomajiChecks(); identityChecks(); playlistChecks(); sleepTimerChecks(); scanIdentityChecks(); verifiedWriteChecks(); playlistFileChecks(); playbackPresentationChecks(); gaplessChecks(); audioEffectsChecks(); smartPlaylistsChecks(); peerSearchChecks(); libraryFavoritesChecks(); libraryBrowseChecks(); themeStyleChecks(); signalBadgeChecks()
     println("Player core checks passed: $checks assertions (queue/resume/history/shuffle/sleep, LRC/timing/fuzz, playlists, identities).")
 }

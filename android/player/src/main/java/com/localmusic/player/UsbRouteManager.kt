@@ -15,6 +15,9 @@ import com.localmusic.core.RouteSelectionResult
 import com.localmusic.core.UsbDeviceEvaluation
 import com.localmusic.core.UsbRoutePolicy
 import com.localmusic.core.AndroidUsbBufferRules
+import com.localmusic.core.OutputDeviceKind
+import com.localmusic.core.OutputFacts
+import com.localmusic.core.OutputRoute
 import org.json.JSONObject
 import java.lang.ref.WeakReference
 
@@ -456,6 +459,27 @@ class UsbRouteManager(
             }
         } catch (_: Exception) {
             "Route unavailable"
+        }
+    }
+
+    /** Reads only what the route decision and the active AudioTrack already report; never opens or reconfigures output. */
+    fun outputFacts(): OutputFacts {
+        val decision = activeDecision
+        val device = try { lastTrack.get()?.routedDevice?.type } catch (_: Exception) { null }
+        val kind = when (device) {
+            AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_ACCESSORY -> OutputDeviceKind.USB
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_LINE_ANALOG -> OutputDeviceKind.WIRED
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_SPEAKER, AudioDeviceInfo.TYPE_BLE_BROADCAST -> OutputDeviceKind.BLUETOOTH
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER_SAFE -> OutputDeviceKind.SPEAKER
+            else -> null
+        }
+        return when {
+            decision.isUsbActive -> OutputFacts(OutputRoute.ANDROID_ACCEPTED, decision.sampleRateHz, decision.targetEncoding, kind)
+            // A USB device was evaluated but its rate/format was refused; "no USB device" is not a rate problem.
+            decision.preferAndroidUsb && decision.fallbackReason != null && decision.usbDeviceName != null ->
+                OutputFacts(OutputRoute.RATE_UNSUPPORTED, device = kind)
+            else -> OutputFacts(OutputRoute.ANDROID_MIXER, device = kind)
         }
     }
 

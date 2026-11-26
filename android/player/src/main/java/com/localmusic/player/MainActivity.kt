@@ -1049,7 +1049,7 @@ private fun MusicScreen(listeningUi:ListeningToolsUi,backupUi: BackupUiState, pl
                         Button(onClick = { screen = "Library"; mainScreen = "Library" }) { Text("Browse music") }
                     } else NowPlayingPanel(current, store?.artwork(current.id), playback, controller, ready, preferences.artworkSize, store, library.revision, send, actions,
                         openQueue = { queueFromPlaying = true; screen = "Queue" }, details = { details = current },
-                        openAudio={toolsReturn="Playing";screen="Audio controls"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"},openAlbum={category="Albums";search="";group=current.tags.album ?: "Unknown album";mainScreen="Library";screen="Library"},openNative={nativeBatch=it},clock=clock)
+                        openAudio={toolsReturn="Playing";screen="Audio controls"},openAudioInfo={toolsReturn="Playing";screen="Audio info"},openArtist={category="Artists";search="";group=artist(current);mainScreen="Library";screen="Library"},openAlbum={category="Albums";search="";group=current.tags.album ?: "Unknown album";mainScreen="Library";screen="Library"},openNative={nativeBatch=it},clock=clock)
                 }
             }
         }

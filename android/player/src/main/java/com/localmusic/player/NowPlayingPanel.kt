@@ -54,10 +54,18 @@ internal fun nowPlayingBackground(): Modifier {
         base.background(Brush.verticalGradient(0f to MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f), 0.5f to Color.Transparent)) else base
 }
 
+/** One line that never wraps: shrinks a little when too wide, then cuts the end (the device tag) with "…". */
+@Composable
+private fun SignalBadgeText(text: String, style: androidx.compose.ui.text.TextStyle) {
+    var shrink by remember(text) { mutableStateOf(false) }
+    Text(text, style = if (shrink) style.copy(fontSize = style.fontSize * 0.88f) else style, maxLines = 1, softWrap = false,
+        overflow = TextOverflow.Ellipsis, onTextLayout = { if (it.hasVisualOverflow && !shrink) shrink = true })
+}
+
 @Composable
 fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, controller: MediaController?, ready: Boolean,
     artworkSizePreference: String, store: MusicStore?, revision: Long, send: (String, Bundle) -> Unit, actions: FeatureActions,
-    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,openNative:(String)->Unit,clock:PlaybackUiState?=null) {
+    openQueue: () -> Unit, details: () -> Unit,openAudio:()->Unit,openAudioInfo:()->Unit,openArtist:()->Unit,openAlbum:()->Unit,openNative:(String)->Unit,clock:PlaybackUiState?=null) {
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
     var timerOpen by rememberSaveable { mutableStateOf(false) }
@@ -138,7 +146,9 @@ fun NowPlayingPanel(track: Track, art: String?, playback: PlaybackSnapshot, cont
         }
         val controls: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = details, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) { Text(PlaybackPresentation.quality(track.audio), style = readoutStyle(MaterialTheme.typography.labelMedium)) }
+            TextButton(onClick = openAudioInfo, colors = ButtonDefaults.textButtonColors(contentColor = infoColor(MaterialTheme.colorScheme.primary))) {
+                SignalBadgeText(SignalBadge.text(track.audio, playback.output, playback.direct), readoutStyle(MaterialTheme.typography.labelMedium))
+            }
             SeekControls(track.id, position, duration, ready) { controller?.seekTo(it) }
             PlaybackButtons(playing, ready, { controller?.seekToPrevious() }, toggle, { controller?.seekToNext() },prominent=true)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
